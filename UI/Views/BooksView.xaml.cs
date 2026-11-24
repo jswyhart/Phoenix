@@ -110,6 +110,7 @@ public partial class BooksView : UserControl
 
     /// <summary>For the self-test: rows of covers built right now.</summary>
     public int BuiltRows => Tiles.BuiltRows;
+    public ScrollViewer TileArea => Tiles.ScrollArea;
 
     void Author_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

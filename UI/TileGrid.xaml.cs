@@ -29,6 +29,7 @@ public partial class TileGrid : UserControl
     bool _stale;    // items changed while the grid was hidden or had no size yet: lay out when it is next shown
     /// <summary>Rows built right now (for the self-test): only what is on screen, never the whole list.</summary>
     public int BuiltRows => _rows.Count;
+    public ScrollViewer ScrollArea => Scroller;
     readonly Dictionary<int, FrameworkElement> _rows = new();
 
     public event Action<object>? ItemClicked;
@@ -123,8 +124,9 @@ public partial class TileGrid : UserControl
         if (_rowH <= 0) return;
         var rows = (_cells.Count + _cols - 1) / _cols;
         var view = Scroller.ViewportHeight > 0 ? Scroller.ViewportHeight : ActualHeight;
-        var first = Math.Max(0, (int)(Scroller.VerticalOffset / _rowH) - 1);
-        var last = Math.Min(rows - 1, (int)((Scroller.VerticalOffset + view) / _rowH) + 1);
+        // two rows either side of the screen are kept built, so a row is ready before it glides into view
+        var first = Math.Max(0, (int)(Scroller.VerticalOffset / _rowH) - 2);
+        var last = Math.Min(rows - 1, (int)((Scroller.VerticalOffset + view) / _rowH) + 2);
         last = Math.Min(last, first + 60);   // never more than a few screens' worth, whatever the measurements say
         foreach (var i in _rows.Keys.Where(i => i < first || i > last).ToList())
         {

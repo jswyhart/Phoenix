@@ -24,6 +24,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        SmoothScroll.Enable();   // the mouse wheel glides at the display's refresh rate instead of jumping
         // Let WPF render on the GPU (the default); never fall back to software unless the driver forces it.
         System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
         var smoke = Array.IndexOf(e.Args, "--smoke");

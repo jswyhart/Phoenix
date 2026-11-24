@@ -710,6 +710,22 @@ public static class Smoke
             await Application.Current.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             var booksFirstMs = visit.ElapsedMilliseconds;
             var rowsShown = win.Page<BooksView>("books").BuiltRows;
+
+            // the wheel glides: one click moves the list over many frames, and ends exactly one step on
+            var area = win.Page<BooksView>("books").TileArea;
+            var startAt = area.VerticalOffset;
+            var framesBefore = SmoothScroll.Frames;
+            SmoothScroll.Wheel(area, -120);
+            await Task.Delay(40);
+            var midway = area.VerticalOffset;
+            await Task.Delay(900);
+            Check("a wheel click glides over many frames to exactly one step on", Math.Abs(area.VerticalOffset - startAt - SmoothScroll.Step) < 0.6 && midway > startAt && midway < startAt + SmoothScroll.Step && SmoothScroll.Frames - framesBefore > 8,
+                $"moved {area.VerticalOffset - startAt:0.#} px in {SmoothScroll.Frames - framesBefore} frames, {midway - startAt:0.#} px after 40 ms");
+            SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120);
+            await Task.Delay(1000);
+            Check("quick clicks add up", Math.Abs(area.VerticalOffset - startAt - 4 * SmoothScroll.Step) < 0.6, $"{area.VerticalOffset - startAt:0.#} px");
+            SmoothScroll.Wheel(area, 480);
+            await Task.Delay(1000);
             win.Navigate("quickplay");
             lib.NotifyChanged();     // the list changes while the page is hidden
             visit.Restart();

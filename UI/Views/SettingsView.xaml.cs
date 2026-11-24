@@ -14,6 +14,8 @@ public partial class SettingsView : UserControl
     /// <summary>The folder lists would otherwise swallow the mouse wheel; pass it to the page unless the list itself can still scroll that way.</summary>
     void Page_Wheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
+        // SmoothScroll now passes the wheel on from a list that cannot scroll to the page around it, and glides
+        if (!e.Handled) return;
         for (var d = e.OriginalSource as DependencyObject; d != null && d != PageScroll; d = System.Windows.Media.VisualTreeHelper.GetParent(d))
         {
             if (d is not ScrollViewer inner) continue;
