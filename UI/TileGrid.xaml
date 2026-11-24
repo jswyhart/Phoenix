@@ -1,0 +1,29 @@
+<UserControl x:Class="Halcyon.UI.TileGrid"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI">
+    <UserControl.Resources>
+        <!-- one tile: the caller's template inside a hover/selection frame -->
+        <DataTemplate x:Key="Cell">
+            <Border x:Name="B" Background="Transparent" Padding="6" Cursor="Hand"
+                    Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=ui:TileGrid}}"
+                    MouseLeftButtonDown="Cell_Down" MouseRightButtonUp="Cell_Right">
+                <ContentPresenter Content="{Binding Item}"
+                                  ContentTemplate="{Binding TileTemplate, RelativeSource={RelativeSource AncestorType=ui:TileGrid}}"/>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="B" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="B" Property="Background" Value="{DynamicResource Hover}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="B" Property="Background" Value="{DynamicResource Selected}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+    <!-- A grid of tiles that only builds the rows on screen (plus one either side), so it stays quick with thousands of items. -->
+    <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                  ScrollChanged="Scroller_ScrollChanged">
+        <Grid x:Name="Surface" VerticalAlignment="Top"/>
+    </ScrollViewer>
+</UserControl>

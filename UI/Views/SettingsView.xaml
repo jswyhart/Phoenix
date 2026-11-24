@@ -1,0 +1,359 @@
+<UserControl x:Class="Halcyon.UI.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgDim}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,8,0,3"/>
+        </Style>
+        <Style x:Key="Note" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgDim}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Status" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock" BasedOn="{StaticResource H2}">
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Laid out like the Zune software's settings: SOFTWARE / PHONE / SERVERS across the top, a list of
+         categories down the left, the chosen category's options on the right, and OK at the bottom. -->
+    <Grid Margin="28,6,28,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,18">
+            <RadioButton x:Name="PivotSoftware" Style="{StaticResource NavTab}" Content="SOFTWARE" Tag="software" GroupName="settingsPivot" Click="Pivot_Click" FontSize="15" FontFamily="Segoe UI Semibold"/>
+            <RadioButton x:Name="PivotPhone" Style="{StaticResource NavTab}" Content="PHONE" Tag="phone" GroupName="settingsPivot" Click="Pivot_Click" FontSize="15" FontFamily="Segoe UI Semibold"/>
+            <RadioButton x:Name="PivotServers" Style="{StaticResource NavTab}" Content="SERVERS" Tag="servers" GroupName="settingsPivot" Click="Pivot_Click" FontSize="15" FontFamily="Segoe UI Semibold"/>
+        </StackPanel>
+
+        <!-- categories -->
+        <ListBox x:Name="CategoryList" Grid.Row="1" Margin="-8,0,24,0" SelectionChanged="Category_SelectionChanged">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="15" Height="34" Padding="0,7,0,0"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- the chosen category -->
+        <ScrollViewer x:Name="PageScroll" Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" Focusable="False" PreviewMouseWheel="Page_Wheel">
+            <Grid MaxWidth="600" HorizontalAlignment="Left" Margin="0,0,18,36">
+
+                <!-- SOFTWARE / Collection -->
+                <StackPanel x:Name="PanelCollection">
+                    <TextBlock Text="collection" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."/>
+
+                    <TextBlock Style="{StaticResource Label}" Text="MUSIC FOLDERS"/>
+                    <ListBox x:Name="MusicFolders" Height="84" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="music" Click="AddFolder_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="music" Click="RemoveFolder_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Label}" Text="VIDEO FOLDERS"/>
+                    <ListBox x:Name="VideoFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="video" Click="AddFolder_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="video" Click="RemoveFolder_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Label}" Text="PICTURE FOLDERS"/>
+                    <ListBox x:Name="PictureFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="picture" Click="AddFolder_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="picture" Click="RemoveFolder_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Label}" Text="BOOK FOLDERS (AUDIOBOOKS, EBOOKS AND COMICS)"/>
+                    <ListBox x:Name="BookFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="book" Click="AddFolder_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="book" Click="RemoveFolder_Click"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <Button x:Name="RescanBtn" Style="{StaticResource PillBtn}" Content="RESCAN COLLECTION NOW" Click="Rescan_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ScanStatus" Style="{StaticResource Status}"/>
+                </StackPanel>
+
+                <!-- SOFTWARE / Rip -->
+                <StackPanel x:Name="PanelRip" Visibility="Collapsed">
+                    <TextBlock Text="rip" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Ripping copies the songs from an audio CD into your collection. Put a CD in the drive, click the disc icon in the lower left, then START RIP. Songs are saved in your first music folder."/>
+                    <TextBlock Style="{StaticResource Label}" Text="AUDIO FORMAT AND QUALITY"/>
+                    <StackPanel x:Name="RipFormats" Margin="0,4,0,0"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,14,0,0" Text="MP3 plays everywhere. AAC is a little smaller at the same quality. WAV is an exact copy of the disc and much larger."/>
+                </StackPanel>
+
+                <!-- SOFTWARE / Burn -->
+                <StackPanel x:Name="PanelBurn" Visibility="Collapsed">
+                    <TextBlock Text="burn" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="To burn a disc, drag songs, albums or playlists from your collection to the disc icon in the lower left. That builds your burn list. Then click the disc icon, put a blank CD in the drive and choose START BURN."/>
+                    <TextBlock Style="{StaticResource Label}" Text="DISC FORMAT"/>
+                    <RadioButton Content="Audio CD (plays in any CD player; holds about 80 minutes)" IsChecked="True" Foreground="{DynamicResource Fg}" Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="VIEW BURN LIST" Click="ViewBurnList_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- SOFTWARE / Metadata -->
+                <StackPanel x:Name="PanelMetadata" Visibility="Collapsed">
+                    <TextBlock Text="metadata" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Album details, track names and cover art can come from several places. Switch on the ones you want and give each a weight: when Phoenix fills in missing info it asks the highest weight first and moves down the list for whatever is still missing. Right-click an album to tie it to one source, or to look it up yourself. Every source except the folder pictures is sent the artist and album names."/>
+                    <TextBlock Style="{StaticResource Label}" Text="SOURCES"/>
+                    <StackPanel x:Name="SourcesPanel" Margin="0,6,0,0"/>
+                    <TextBlock x:Name="SourceOrder" Foreground="{DynamicResource FgDim}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <CheckBox x:Name="WriteTags" Content="Also write changed info and cover art into my music files" Margin="0,10,0,4" Click="WriteTags_Click"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="AutoMatchBtn" Style="{StaticResource PillBtn}" Content="fill in albums missing info" Click="AutoMatch_Click"
+                                ToolTip="Asks your sources, by weight, about every album that has no cover, year or genre"/>
+                    </StackPanel>
+                    <TextBlock x:Name="DiscogsStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="IDENTIFY SONGS BY SOUND (ACOUSTID)" Margin="0,22,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="For songs with missing or wrong names: Phoenix listens to the file and looks it up. This needs a free application key from acoustid.org and the fpcalc program from acoustid.org/chromaprint, which you download yourself. Then right-click a song and choose “Identify by sound…”."/>
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="key" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center"/>
+                        <PasswordBox x:Name="AcoustKey" Grid.Column="1" Width="260" HorizontalAlignment="Left" LostFocus="AcoustSave"/>
+                        <TextBlock Grid.Row="1" Text="fpcalc.exe" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="0,8,0,0"/>
+                        <TextBox x:Name="FpcalcBox" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" LostFocus="AcoustSave"/>
+                        <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource PillBtn}" Content="BROWSE" Margin="10,8,0,0" Click="FpcalcBrowse_Click"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- SOFTWARE / Display -->
+                <StackPanel x:Name="PanelDisplay" Visibility="Collapsed">
+                    <TextBlock Text="display" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="BACKGROUND"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <RadioButton x:Name="ThemeLight" Content="light" GroupName="theme" Foreground="{DynamicResource Fg}" Margin="0,0,18,0" Click="Theme_Click"/>
+                        <RadioButton x:Name="ThemeDark" Content="dark" GroupName="theme" Foreground="{DynamicResource Fg}" Click="Theme_Click"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="QUICKPLAY" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="QuickplayPlaysBox" Content="Clicking an album in quickplay plays it straight away" Margin="0,4,0,0" Click="QuickplayPlays_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: a click opens the album in your collection; right-click a tile to play it."/>
+                    <TextBlock Style="{StaticResource Label}" Text="NOW PLAYING VISUALIZER" Margin="0,22,0,3"/>
+                    <ComboBox x:Name="VizStyle" Width="260" HorizontalAlignment="Left" SelectionChanged="Viz_Changed"/>
+                    <TextBlock Style="{StaticResource Label}" Text="VISUALIZER COLOURS"/>
+                    <ComboBox x:Name="VizColour" Width="260" HorizontalAlignment="Left" SelectionChanged="Viz_Changed"/>
+                    <TextBlock Style="{StaticResource Label}" Text="VISUALIZER SENSITIVITY"/>
+                    <ComboBox x:Name="VizSensitivity" Width="260" HorizontalAlignment="Left" SelectionChanged="Viz_Changed"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelPlayback" Visibility="Collapsed">
+                    <TextBlock Text="playback" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Music plays through a built-in audio engine, so one song runs into the next with no gap, songs can blend into each other, and the equalizer can shape the sound. Videos, podcasts and audiobooks are not affected."/>
+                    <CheckBox x:Name="EngineOn" Content="Use the built-in audio engine for music" Margin="0,8,0,4" Click="Engine_Click"/>
+                    <TextBlock Style="{StaticResource Label}" Text="CROSSFADE"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Slider x:Name="CrossfadeSlider" Width="260" Minimum="0" Maximum="12" SmallChange="1" LargeChange="2" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" ValueChanged="Crossfade_Changed"/>
+                        <TextBlock x:Name="CrossfadeText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource FgDim}"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="EQUALIZER" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="EqOn" Content="Use the equalizer" Margin="0,4,0,8" Click="Eq_Click"/>
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="EqPreset" Width="200" HorizontalAlignment="Left" SelectionChanged="EqPreset_Changed"/>
+                        <Button x:Name="EqResetBtn" Style="{StaticResource PillBtn}" Content="RESET" Margin="10,0,0,0" Click="EqReset_Click"/>
+                    </StackPanel>
+                    <StackPanel x:Name="EqBands" Orientation="Horizontal" Margin="-6,14,0,0" HorizontalAlignment="Left"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelPodcasts" Visibility="Collapsed">
+                    <TextBlock Text="podcasts" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Subscribe to a podcast from collection → podcasts with its RSS feed address. New episodes are marked in the series list until you play them."/>
+                    <CheckBox x:Name="PodcastAuto" Content="Look for new episodes when the app starts and every hour" Margin="0,8,0,4" Click="PodcastAuto_Click"/>
+                    <TextBlock Style="{StaticResource Label}" Text="KEEP DOWNLOADED"/>
+                    <ComboBox x:Name="PodcastKeep" Width="380" HorizontalAlignment="Left" SelectionChanged="PodcastKeep_Changed"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="This applies to every series; right-click a series on the podcasts page to give it its own choice, to download all its unplayed episodes, or to remove its downloads. An episode you download yourself is kept until you play it or remove it."/>
+                    <CheckBox x:Name="PodcastRemovePlayed" Content="Remove a download once its episode has been played" Margin="0,10,0,4" Click="PodcastRemovePlayed_Click"/>
+                    <TextBlock Style="{StaticResource Label}" Text="DOWNLOAD FOLDER"/>
+                    <DockPanel Margin="0,4,0,0">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Style="{StaticResource PillBtn}" Content="BROWSE" Margin="10,0,0,0" Click="PodcastFolderBrowse_Click"/>
+                            <Button Style="{StaticResource PillBtn}" Content="DEFAULT" Margin="6,0,0,0" Click="PodcastFolderDefault_Click" ToolTip="Back to the folder inside Phoenix's own data"/>
+                        </StackPanel>
+                        <TextBox x:Name="PodcastFolderBox" IsReadOnly="True"/>
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Each series gets its own folder there, with episodes named by date and title, so other players and devices can use them too. Changing the folder affects new downloads; episodes already downloaded stay where they are."/>
+                    <TextBlock x:Name="PodcastUsage" Foreground="{DynamicResource FgDim}" Margin="0,10,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="OPEN FOLDER" Margin="0" Click="PodcastFolderOpen_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE ALL DOWNLOADS" Margin="10,0,0,0" Click="PodcastRemoveAll_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelTranslation" Visibility="Collapsed">
+                    <TextBlock Text="translation and lyrics" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a translation beside song, artist and album names that are written in another language, in a quieter colour after the original. Each name is translated once and remembered. The names are sent to the service you choose."/>
+                    <CheckBox x:Name="TranslateOnBox" Content="Show translated names beside the originals" Margin="0,8,0,4" Click="TranslationChanged"/>
+                    <TextBlock Style="{StaticResource Label}" Text="TRANSLATE INTO"/>
+                    <ComboBox x:Name="TranslateLang" Width="260" HorizontalAlignment="Left" SelectionChanged="TranslationSelection"/>
+                    <TextBlock Style="{StaticResource Label}" Text="SERVICE"/>
+                    <ComboBox x:Name="TranslateService" Width="420" HorizontalAlignment="Left" SelectionChanged="TranslationSelection"/>
+                    <StackPanel x:Name="TranslateKeyRow" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="key" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
+                        <PasswordBox x:Name="TranslateKey" Width="300" LostFocus="TranslationChanged"/>
+                    </StackPanel>
+                    <StackPanel x:Name="LibreRow" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="server" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
+                        <TextBox x:Name="LibreUrlBox" Width="300" LostFocus="TranslationChanged"/>
+                    </StackPanel>
+                    <TextBlock x:Name="TranslateHelp" Foreground="{DynamicResource FgFaint}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <StackPanel x:Name="LocalPanel" Visibility="Collapsed" Margin="0,6,0,0">
+                        <TextBlock Style="{StaticResource Note}" Text="Translating on this PC sends nothing anywhere. It uses the translation engine from Firefox with language packs you download once (about 35 to 55 MB each, from Mozilla). It can tell Japanese, Korean, Chinese, Russian, Ukrainian, Arabic, Hebrew, Greek, Thai and Hindi names by their script; names in Latin letters are left as they are."/>
+                        <TextBlock Style="{StaticResource Label}" Text="LANGUAGE PACKS"/>
+                        <StackPanel x:Name="PackList" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="PackStatus" Style="{StaticResource Status}"/>
+                        <TextBlock Style="{StaticResource Label}" Text="LANGUAGE PACK FOLDER"/>
+                        <DockPanel Margin="0,4,0,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Style="{StaticResource PillBtn}" Content="MOVE" Margin="10,0,0,0" Click="PackFolderMove_Click"/>
+                                <Button Style="{StaticResource PillBtn}" Content="DEFAULT" Margin="6,0,0,0" Click="PackFolderDefault_Click" ToolTip="Back inside Phoenix's data folder"/>
+                            </StackPanel>
+                            <TextBox x:Name="PackFolderBox" IsReadOnly="True"/>
+                        </DockPanel>
+                        <TextBlock x:Name="PackUsage" Foreground="{DynamicResource FgDim}" Margin="0,8,0,0"/>
+                    </StackPanel>
+                    <CheckBox x:Name="TranslateLatinBox" Content="Also translate names written in Latin letters" Margin="0,10,0,0" Click="TranslationChanged"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: only names in other scripts (Japanese, Korean, Russian, Arabic…) are sent. On: every name is sent, which uses a free service's daily limit quickly."/>
+                    <TextBlock x:Name="TranslateStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="LYRICS" Margin="0,22,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="In now playing, the lyrics tab can find lyrics on LRCLIB (a free, open lyrics database, often with timing), take them from a .lrc or .txt file, or from the clipboard. Lyrics you import are kept in Phoenix's data folder, not in your music folders."/>
+                    <CheckBox x:Name="LyricsAutoBox" Content="Look lyrics up on LRCLIB by itself when a song has none" Margin="0,8,0,4" Click="TranslationChanged"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelStorage" Visibility="Collapsed">
+                    <TextBlock Text="storage" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="This folder holds Phoenix's library database, settings, album covers, picture and artwork caches, imported lyrics, podcast downloads (unless you gave them their own folder) and the Spotify sign-in. Your music, videos, pictures and books stay where they are."/>
+                    <TextBlock Style="{StaticResource Label}" Text="DATA FOLDER"/>
+                    <TextBox x:Name="StorageBox" IsReadOnly="True"/>
+                    <TextBlock x:Name="StorageUsage" Foreground="{DynamicResource FgDim}" Margin="0,8,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="StorageChangeBtn" Style="{StaticResource PillBtn}" Content="MOVE TO ANOTHER FOLDER" Margin="0" Click="StorageChange_Click"/>
+                        <Button x:Name="StorageDefaultBtn" Style="{StaticResource PillBtn}" Content="BACK TO THE STANDARD FOLDER" Margin="10,0,0,0" Click="StorageDefault_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="OPEN" Margin="10,0,0,0" Click="StorageOpen_Click"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0" Text="Moving copies everything to the new folder, restarts Phoenix from there and then removes the old copies. If the folder you pick already holds a Phoenix library, that library is used instead and nothing is copied."/>
+                    <TextBlock x:Name="StorageStatus" Style="{StaticResource Status}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelWeb" Visibility="Collapsed">
+                    <TextBlock Text="streaming services" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a streaming service's own web player in its window. Music services get a tab after playlists; video services get a link on the videos page. You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the equalizer and visualizer do not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."/>
+                    <TextBlock Style="{StaticResource Label}" Text="MUSIC"/>
+                    <StackPanel x:Name="WebMusicPanel" Margin="0,4,0,0"/>
+                    <TextBlock Style="{StaticResource Label}" Text="VIDEO" Margin="0,18,0,3"/>
+                    <StackPanel x:Name="WebVideoPanel" Margin="0,4,0,0"/>
+                    <TextBlock Style="{StaticResource Label}" Text="YOUR OWN" Margin="0,18,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Any web address, or an HTML file on this PC (for example C:\apps\player\index.html)."/>
+                    <StackPanel x:Name="WebCustomPanel" Margin="0,6,0,0"/>
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="WebNameBox" ToolTip="A name for the tab"/>
+                        <TextBox x:Name="WebUrlBox" Grid.Column="1" Margin="8,0,0,0" ToolTip="Web address or path to an HTML file"/>
+                        <ComboBox x:Name="WebKindBox" Grid.Column="2" Width="90" Margin="8,0,0,0" SelectedIndex="0">
+                            <ComboBoxItem Content="music"/>
+                            <ComboBoxItem Content="video"/>
+                        </ComboBox>
+                        <Button Grid.Column="3" Style="{StaticResource PillBtn}" Content="ADD" Margin="8,0,0,0" Click="WebAdd_Click"/>
+                    </Grid>
+                    <TextBlock x:Name="WebStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Pages are shown with the browser engine built into Windows (Microsoft Edge WebView2), which can play protected streams. Firefox cannot be placed inside another program's window, so it could not be used here. Some services limit picture quality in browsers, or may refuse an embedded browser."/>
+                </StackPanel>
+
+                <!-- PHONE / Sync options -->
+                <StackPanel x:Name="PanelPhone" Visibility="Collapsed">
+                    <TextBlock Text="sync options" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="The companion app on your Android phone copies music, likes and playlists from this PC while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below."/>
+                    <CheckBox x:Name="SyncEnabled" Content="Let my phone sync with this PC" Margin="0,8,0,4" Click="SyncEnabled_Click"/>
+                    <TextBlock x:Name="SyncStatus" Style="{StaticResource Status}" TextWrapping="Wrap"/>
+                    <Button x:Name="SyncNewCodeBtn" Style="{StaticResource PillBtn}" Content="NEW CODE" HorizontalAlignment="Left" Margin="0,8,0,0" Click="SyncNewCode_Click"
+                            ToolTip="Replaces the pairing code; phones paired with the old code must enter the new one"/>
+                    <TextBlock Style="{StaticResource Label}" Text="ITEMS I CHOOSE" Margin="0,24,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Drag songs, albums, artists or playlists from your collection to the phone icon in the lower left. They are added to your phone sync list and copied the next time the phone syncs."/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource PillBtn}" Content="VIEW PHONE SYNC LIST" Click="ViewPhone_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- SERVERS / Jellyfin -->
+                <StackPanel x:Name="PanelJellyfin" Visibility="Collapsed">
+                    <TextBlock Text="jellyfin" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Add a Jellyfin server to your collection like a folder: its music, movies, shows, collections, photos and books appear alongside your own and stream from the server."/>
+                    <TextBlock Style="{StaticResource Label}" Text="SERVER ADDRESS"/>
+                    <TextBox x:Name="JfUrl"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Label}" Text="USER NAME"/>
+                            <TextBox x:Name="JfUser"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource Label}" Text="PASSWORD"/>
+                            <PasswordBox x:Name="JfPassword"/>
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="JfConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="JfConnect_Click"/>
+                        <Button x:Name="JfSyncBtn" Style="{StaticResource PillBtn}" Content="SYNC NOW" Click="JfSync_Click"/>
+                        <Button x:Name="JfDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="JfDisconnect_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="JfStatus" Style="{StaticResource Status}"/>
+                </StackPanel>
+
+                <!-- SERVERS / Plex -->
+                <StackPanel x:Name="PanelPlex" Visibility="Collapsed">
+                    <TextBlock Text="plex" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Add a Plex Media Server to your collection like a folder. Sign in with Plex to find your servers, or enter an address and token yourself."/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="PlexSignInBtn" Style="{StaticResource PillBtn}" Content="SIGN IN WITH PLEX…" Click="PlexSignIn_Click"/>
+                    </StackPanel>
+                    <ComboBox x:Name="PlexServers" Margin="0,8,0,0" Visibility="Collapsed" SelectionChanged="PlexServers_SelectionChanged"/>
+                    <TextBlock Style="{StaticResource Label}" Text="SERVER ADDRESS"/>
+                    <TextBox x:Name="PlexUrl"/>
+                    <TextBlock Style="{StaticResource Label}" Text="TOKEN"/>
+                    <PasswordBox x:Name="PlexToken"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="PlexConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="PlexConnect_Click"/>
+                        <Button x:Name="PlexDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="PlexDisconnect_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="PlexStatus" Style="{StaticResource Status}"/>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Style="{StaticResource PillBtn}" Content="OK" MinWidth="96" Margin="0" Click="Ok_Click" ToolTip="Changes are saved as you make them"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

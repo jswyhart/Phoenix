@@ -1,0 +1,12 @@
+Offline translation engine
+
+translator.js and the files in worker\ are from the npm package @browsermt/bergamot-translator, version 0.4.9
+(https://www.npmjs.com/package/@browsermt/bergamot-translator), the Bergamot translation engine by the
+Bergamot project and Mozilla. They are licensed under the Mozilla Public License 2.0
+(https://www.mozilla.org/MPL/2.0/) and are included here unmodified.
+
+host.html is part of Phoenix.
+
+Language packs are not included. Phoenix downloads the ones you ask for from Mozilla's Firefox Translations
+models (https://github.com/mozilla/firefox-translations-models), which are published under the
+Creative Commons Attribution-ShareAlike 4.0 licence.

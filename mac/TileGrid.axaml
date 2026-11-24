@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="clr-namespace:Halcyon.Desktop"
+             x:Class="Halcyon.Desktop.TileGrid">
+    <!-- A virtualized grid of tiles: items are chunked into rows so only visible rows are realized. The rows are a plain
+         ItemsControl (not a list), so nothing can highlight or select a whole row; only a tile shows hover and selection. -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <ItemsControl Name="RowList" Focusable="False">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <ItemsControl ItemsSource="{Binding}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Classes="tile" Classes.sel="{Binding IsSelected}" Width="{Binding $parent[d:TileGrid].TileWidth}">
+                                <ContentControl Content="{Binding Item}" ContentTemplate="{Binding $parent[d:TileGrid].TileTemplate}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    </ScrollViewer>
+</UserControl>

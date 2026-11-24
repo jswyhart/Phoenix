@@ -1,0 +1,21 @@
+{
+  "name": "phoenix",
+  "productName": "Phoenix",
+  "version": "1.0.0",
+  "description": "Phoenix media player for macOS and Linux (Electron window over the .NET helper)",
+  "main": "build/main.js",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit -p .",
+    "backend": "dotnet build backend -c Debug -v q",
+    "start": "node build.mjs && electron .",
+    "smoke": "node build.mjs && electron . --smoke"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.4.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

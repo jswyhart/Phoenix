@@ -1,0 +1,105 @@
+<UserControl x:Class="Halcyon.UI.VideosView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI">
+    <UserControl.Resources>
+        <DataTemplate x:Key="PosterTile">
+            <StackPanel>
+                <Grid Width="150" Height="225" Background="{DynamicResource BgAlt}" HorizontalAlignment="Left">
+                    <TextBlock Text="&#xE714;" FontFamily="{StaticResource Icons}" FontSize="30" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Image ui:Art.Path="{Binding ArtPath}" ui:Art.Size="320" Stretch="UniformToFill"/>
+                </Grid>
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                <TextBlock Text="{Binding Caption}" Foreground="{DynamicResource FgDim}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="WideTile">
+            <StackPanel>
+                <Grid Width="208" Height="117" Background="{DynamicResource BgAlt}" HorizontalAlignment="Left">
+                    <TextBlock Text="&#xE714;" FontFamily="{StaticResource Icons}" FontSize="30" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Image ui:Art.Path="{Binding ArtPath}" Stretch="UniformToFill"/>
+                </Grid>
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                <TextBlock Text="{Binding Caption}" Foreground="{DynamicResource FgDim}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="20,8,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel x:Name="TabStrip" Orientation="Horizontal" Margin="8,0,0,12">
+            <RadioButton x:Name="TabMovies" Style="{StaticResource NavTab}" Content="movies" Tag="movies" GroupName="videoTabs" Click="Tab_Click"/>
+            <RadioButton x:Name="TabShows" Style="{StaticResource NavTab}" Content="tv shows" Tag="shows" GroupName="videoTabs" Click="Tab_Click"/>
+            <RadioButton x:Name="TabCollections" Style="{StaticResource NavTab}" Content="collections" Tag="collections" GroupName="videoTabs" Click="Tab_Click"/>
+            <RadioButton x:Name="TabFolders" Style="{StaticResource NavTab}" Content="other videos" Tag="folders" GroupName="videoTabs" Click="Tab_Click"/>
+            <RadioButton x:Name="TabAll" Style="{StaticResource NavTab}" Content="all" Tag="all" GroupName="videoTabs" Click="Tab_Click"/>
+            <TextBlock x:Name="CountText" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="18,2,0,0"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="ColLeft" Width="300"/>
+                <ColumnDefinition x:Name="ColSeason" Width="150"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel x:Name="LeftPane">
+                <TextBlock x:Name="LeftCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="SERIES"/>
+                <ListBox x:Name="GroupList" SelectionChanged="Group_SelectionChanged" MouseDoubleClick="Group_DoubleClick" MouseRightButtonUp="Group_RightClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Height="{Binding RowHeight}">
+                                <Grid x:Name="Poster" DockPanel.Dock="Left" Width="40" Height="60" Background="{DynamicResource BgAlt}" Margin="0,0,12,0">
+                                    <Image ui:Art.Path="{Binding Art}" ui:Art.Size="120" Stretch="UniformToFill"/>
+                                </Grid>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource FgFaint}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding HasArt}" Value="False"><Setter TargetName="Poster" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <DockPanel x:Name="SeasonPane" Grid.Column="1" Margin="10,0,0,0">
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="SEASONS"/>
+                <ListBox x:Name="SeasonList" SelectionChanged="Season_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Name}" FontSize="14" Height="30" Padding="0,5,0,0"/></DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <DockPanel Grid.Column="2" Margin="10,0,0,0">
+                <TextBlock x:Name="RightCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="VIDEOS"/>
+                <Grid>
+                    <ui:TileGrid x:Name="Tiles" TileWidth="162" TileTemplate="{StaticResource PosterTile}"/>
+                    <ListBox x:Name="RowList" SelectionMode="Extended" MouseDoubleClick="Row_DoubleClick" MouseRightButtonUp="Row_RightClick" Visibility="Collapsed">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Height="64">
+                                    <Grid DockPanel.Dock="Left" Width="96" Height="54" Background="{DynamicResource BgAlt}" Margin="0,0,14,0">
+                                        <Image ui:Art.Path="{Binding ArtPath}" ui:Art.Size="200" Stretch="UniformToFill"/>
+                                    </Grid>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding DurationText}" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Margin="12,0,18,0"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding RowTitle}" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding EpisodeCode}" Foreground="{DynamicResource FgFaint}" FontSize="12"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </DockPanel>
+
+            <TextBlock x:Name="EmptyText" Grid.ColumnSpan="3" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Text="Nothing here yet. Add video folders or connect a server in settings." Visibility="Collapsed"/>
+        </Grid>
+    </Grid>
+</UserControl>

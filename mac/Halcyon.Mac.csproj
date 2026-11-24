@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Halcyon for macOS: Avalonia UI over the shared Halcyon.Core logic, VLC's engine (libVLC) for playback.
+       The same project also runs on Windows, which is how it is tested from this PC. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Halcyon.Desktop</RootNamespace>
+    <AssemblyName>Halcyon</AssemblyName>
+    <Version>1.0.0</Version>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- Selawik (SIL Open Font License; Microsoft's open stand-in for Segoe UI) is built into the app, so every
+       Mac and Linux build carries the same type as the Windows app. Licence: Assets/Fonts/Selawik-LICENSE.txt -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Fonts\*.ttf" />
+    <None Include="Assets\Fonts\Selawik-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\android\Halcyon.Core\Halcyon.Core.csproj" />
+    <PackageReference Include="Avalonia" Version="11.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.*" />
+    <PackageReference Include="LibVLCSharp" Version="3.*" />
+    <PackageReference Include="LibVLCSharp.Avalonia" Version="3.*" />
+    <!-- libVLC itself: the Windows build for running here, the macOS build when packaging with -p:Mac=true (or -p:Linux=true for Linux, which uses the system libVLC) -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.*" Condition="'$(Mac)' != 'true' and '$(Linux)' != 'true'" />
+    <!-- The bundled macOS libVLC is Intel-only. The Apple Silicon build (-p:BundleVlc=false) uses the VLC app the user has installed; Linux uses the system's VLC. -->
+    <PackageReference Include="VideoLAN.LibVLC.Mac" Version="3.*" Condition="'$(Mac)' == 'true' and '$(BundleVlc)' != 'false'" />
+  </ItemGroup>
+
+</Project>

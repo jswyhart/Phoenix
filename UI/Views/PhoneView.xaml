@@ -1,0 +1,38 @@
+<UserControl x:Class="Halcyon.UI.PhoneView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI">
+    <!-- The phone's summary page, reached from the phone icon in the lower left as the device page is in the Zune software. -->
+    <Grid Margin="28,8,28,10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Margin="0,0,30,0">
+            <TextBlock Text="phone" Style="{StaticResource H2}" FontSize="34"/>
+            <Grid Width="120" Height="200" HorizontalAlignment="Left" Margin="0,6,0,18">
+                <Border BorderBrush="{DynamicResource FgFaint}" BorderThickness="3" CornerRadius="14" Background="{DynamicResource BgAlt}"/>
+                <Border Background="{StaticResource AccentGrad}" Margin="11,22,11,30"/>
+                <Ellipse Width="12" Height="12" Stroke="{DynamicResource FgFaint}" StrokeThickness="2" VerticalAlignment="Bottom" Margin="0,0,0,9"/>
+            </Grid>
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource Accent}"/>
+            <TextBlock x:Name="DetailText" TextWrapping="Wrap" Foreground="{DynamicResource FgDim}" Margin="0,8,0,0"/>
+            <Button Style="{StaticResource PillBtn}" Content="VIEW SYNC OPTIONS" HorizontalAlignment="Left" Margin="0,18,0,0" Click="Options_Click"/>
+        </StackPanel>
+
+        <DockPanel Grid.Column="1">
+            <TextBlock x:Name="ListCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Margin="8,0,0,6" Text="PHONE SYNC LIST"/>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Style="{StaticResource PillBtn}" Content="REMOVE" Click="Remove_Click"/>
+                <Button Style="{StaticResource PillBtn}" Content="CLEAR" Click="Clear_Click"/>
+            </StackPanel>
+            <ui:SongHeader x:Name="SongHdr" DockPanel.Dock="Top"/>
+            <Grid>
+                <ListBox x:Name="SongList" SelectionMode="Extended" ItemTemplate="{StaticResource SongRow}" MouseDoubleClick="Song_DoubleClick" MouseRightButtonUp="Song_RightClick"/>
+                <TextBlock x:Name="EmptyText" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="460" TextAlignment="Center"
+                           Text="Drag and drop things here to sync with your phone: drag songs, albums, artists or playlists from your collection to the phone icon in the lower left."/>
+            </Grid>
+        </DockPanel>
+    </Grid>
+</UserControl>

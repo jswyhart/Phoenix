@@ -1,0 +1,219 @@
+// The window: header navigation, the page in the middle, the now-playing layer, and the transport bar.
+import { call, clock, host, Init, on, PlayerState, time } from "./api";
+import { booksPage } from "./books";
+import { installDialogs } from "./dialogs";
+import { musicPage } from "./music";
+import { NowPlaying } from "./nowplaying";
+import { installPhoneMenu, phonePage } from "./phone";
+import { picturesPage } from "./pictures";
+import { installPlaylistMenu, playlistsPage, searchPage } from "./playlists";
+import { podcastsPage } from "./podcasts";
+import { quickplayPage } from "./quickplay";
+import { settingsPage } from "./settings";
+import { Page, shell } from "./shell";
+import { runSmoke } from "./smoke";
+import { videosPage } from "./videos";
+import { art, bumpArt, h, icon, iconBtn, setArt, setIcon, Slider } from "./ui";
+
+const COLLECTION = ["music", "videos", "pictures", "podcasts", "books", "playlists"];
+
+const makers: Record<string, () => Page> = {
+  quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
+  books: booksPage, playlists: playlistsPage, phone: phonePage, search: searchPage, settings: settingsPage,
+};
+
+async function start() {
+  const init = await call<Init>("init");
+  shell.init = init;
+  shell.settings = init.settings;
+  shell.player = init.player;
+  shell.queue = init.queue;
+  const root = document.getElementById("root")!;
+
+  // ---------- header ----------
+  const backBtn = iconBtn("back", "Back", () => { const p = back.pop(); if (p) navigate(p, false); });
+  backBtn.style.margin = "0 10px 0 -10px";
+  const top = new Map<string, HTMLElement>();
+  const topNav = (key: string, label: string) => {
+    const el = h("div.nav.topnav", { onclick: () => navigate(key === "collection" ? collPage : key) }, label);
+    top.set(key, el);
+    return el;
+  };
+  const status = h("div.status.ell");
+  const search = h("input", { type: "text", placeholder: "search", spellcheck: false });
+  const logo = h("button.logo", { title: "Quickplay", onclick: () => navigate("quickplay"), tabIndex: -1 }, h("img", { src: "phoenix.svg", alt: "", draggable: false }));
+  const sub = new Map<string, HTMLElement>();
+  const subNav = h("div.subnav", ...COLLECTION.map(p => { const el = h("div.nav.section", { onclick: () => navigate(p) }, p); sub.set(p, el); return el; }));
+  const header = h("div.header",
+    h("div.top",
+      h("div", backBtn, topNav("quickplay", "QUICKPLAY"), topNav("collection", "COLLECTION"), topNav("settings", "SETTINGS"), status),
+      h("div", h("div.searchbox", search, icon("search", 12)), logo)),
+    subNav);
+  const hostEl = h("div", { style: { minHeight: "0", position: "relative" } });
+
+  // ---------- navigation ----------
+  const pages = new Map<string, Page>();
+  const back: string[] = [];
+  let collPage = "music";
+
+  function get<T extends Page>(name: string): T {
+    let p = pages.get(name);
+    if (!p) pages.set(name, (p = makers[name]()));
+    return p as T;
+  }
+
+  function navigate(page: string, push = true) {
+    if (now.open) now.show(false);
+    if (page === shell.page) return;
+    if (push && shell.page !== "") back.push(shell.page);
+    shell.page = page;
+    const isColl = COLLECTION.includes(page);
+    if (isColl) collPage = page;
+    const p = get(page);
+    hostEl.replaceChildren(p.el);
+    p.shown?.();
+    top.get("quickplay")!.classList.toggle("on", page === "quickplay");
+    top.get("collection")!.classList.toggle("on", isColl || page === "search" || page === "phone");
+    top.get("settings")!.classList.toggle("on", page === "settings");
+    subNav.classList.toggle("hidden", !isColl);
+    sub.forEach((el, key) => el.classList.toggle("on", key === page));
+    backBtn.disabled = back.length === 0;
+  }
+
+  shell.navigate = navigate;
+  shell.get = get;
+  shell.goBackOr = fallback => { const p = back.pop(); navigate(p ?? fallback, p === undefined); };
+  shell.setStatus = text => { status.textContent = text; status.title = text; };
+  shell.applyTheme = theme => { document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light"; };
+  shell.applyTheme(init.settings.theme);
+  on("status", (s: string) => shell.setStatus(s ?? ""));
+  on("art", () => bumpArt());
+
+  // ---------- transport ----------
+  const barArt = art(null, 120);
+  const barArtBox = h("div.barart", { title: "Now playing", onclick: () => now.show(!now.open) }, icon("note", 18), barArt);
+  const barTitle = h("div.title.ell", "nothing playing"), barArtist = h("div.artist.ell");
+  const words = h("div.words", { title: "Now playing", onclick: () => now.show(!now.open) }, barTitle, barArtist);
+  const bookmarkBtn = iconBtn("bookmark", "Bookmark this spot in the audiobook", async () => {
+    const label = await call<string | null>("book.bookmarkHere");
+    if (label) shell.setStatus(`bookmarked ${label}`);
+  }, "small hidden");
+  const heartBtn = iconBtn("heart", "Like / dislike this song", () => { const id = shell.player.current?.trackId; if (id != null) void call("rate.cycle", { id }); }, "small");
+  const posText = h("div.t"), durText = h("div.t.r");
+  const seek = new Slider();
+  seek.onInput = v => { posText.textContent = clock(v); };
+  seek.onCommit = v => void call("player.seek", { ms: Math.round(v) });
+  const shuffleBtn = iconBtn("shuffle", "Shuffle", () => void call("player.shuffle"));
+  const playBtn = iconBtn("play", "Play / pause (Space)", () => void call("player.toggle"), "filled", 22);
+  playBtn.style.width = "48px";
+  const repeatBtn = iconBtn("repeat", "Repeat", () => void call("player.repeat"));
+  const muteBtn = iconBtn("volume", "Mute", () => void call("player.mute"));
+  muteBtn.style.marginLeft = "6px";
+  const volume = new Slider(84);
+  volume.set(init.player.volume, 1);
+  volume.onInput = v => void call("player.volume", { value: v });
+  volume.onCommit = v => void call("player.volume", { value: v });
+  const transport = h("div.transport",
+    h("div.left",
+      h("button.dropbtn", { title: "Phone. Click to see what syncs with your phone.", onclick: () => navigate("phone"), tabIndex: -1 }, icon("phone", 22, 28)),
+      h("button.dropbtn", { title: "Click to see playlists", onclick: () => navigate("playlists"), tabIndex: -1 }, icon("playlist", 22, 28))),
+    h("div.mid", barArtBox,
+      h("div.info",
+        h("div.titles", words, bookmarkBtn, heartBtn),
+        h("div.seekrow", posText, seek.el, durText))),
+    h("div.right", shuffleBtn,
+      iconBtn("prev", "Previous", () => void call("player.prev"), "filled"), playBtn,
+      iconBtn("next", "Next", () => void call("player.next"), "filled"),
+      repeatBtn, muteBtn, volume.el));
+
+  const now = new NowPlaying(transport);
+  shell.showNow = show => now.show(show);
+  shell.nowOpen = () => now.open;
+  shell.video = now.videoView;
+
+  let lastArt: string | null = null, lastTitle = "";
+  function paintPlayer(s: PlayerState) {
+    const before = shell.player;
+    shell.player = s;
+    const cur = s.current;
+    barTitle.textContent = cur?.title ?? "nothing playing";
+    barArtist.textContent = cur?.subtitle ?? "";
+    if ((cur?.art ?? null) !== lastArt) { lastArt = cur?.art ?? null; setArt(barArt, lastArt, 120); }
+    bookmarkBtn.classList.toggle("hidden", !cur?.isBook);
+    setIcon(playBtn, s.playing ? "pause" : "play");
+    shuffleBtn.classList.toggle("on", s.shuffle);
+    setIcon(repeatBtn, s.repeat === 2 ? "repeatOne" : "repeat");
+    repeatBtn.classList.toggle("on", s.repeat > 0);
+    setIcon(muteBtn, s.muted ? "mute" : "volume");
+    // liked: a filled pink heart; disliked: a faded one; otherwise an outline
+    const rated = cur?.trackId != null ? cur.rating : 0;
+    heartBtn.disabled = cur?.trackId == null;
+    heartBtn.classList.toggle("on", rated !== 0);
+    heartBtn.classList.toggle("heartfull", rated > 0);
+    heartBtn.style.opacity = cur?.trackId == null ? "" : rated < 0 ? "0.45" : "";
+    paintClock(s.pos, s.dur);
+    const changed = (cur?.title ?? "") !== lastTitle || before?.index !== s.index || (before?.current == null) !== (cur == null);
+    lastTitle = cur?.title ?? "";
+    now.playerChanged(s, changed);
+  }
+
+  function paintClock(pos: number, dur: number) {
+    if (!shell.player.current) { posText.textContent = durText.textContent = ""; seek.set(0, 1); return; }
+    durText.textContent = time(dur);
+    if (seek.dragging) return;
+    posText.textContent = clock(pos);
+    seek.set(Math.min(pos, dur > 0 ? dur : 1), dur > 0 ? dur : 1);
+  }
+
+  on("player", paintPlayer);
+  on("tick", (t: { pos: number; dur: number }) => { shell.player.pos = t.pos; shell.player.dur = t.dur; paintClock(t.pos, t.dur); });
+  on("queue", q => { shell.queue = q; now.queueChanged(); });
+
+  root.append(header, hostEl, transport, now.el);
+
+  // ---------- search ----------
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  search.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const q = search.value.trim();
+      if (q === "") { if (shell.page === "search") { const p = back.pop(); if (p) navigate(p, false); } return; }
+      navigate("search");
+      (get("search") as Page & { search?: (q: string) => void }).search?.(q);
+    }, 300);
+  });
+
+  // ---------- keys ----------
+  document.addEventListener("keydown", e => {
+    const t = e.target as HTMLElement;
+    const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t.isContentEditable;
+    const command = e.ctrlKey || e.metaKey;
+    const done = () => { e.preventDefault(); e.stopPropagation(); };
+    if (e.key === " " && !typing) { void call("player.toggle"); done(); }
+    else if (e.key === "MediaPlayPause") { void call("player.toggle"); done(); }
+    else if (e.key === "MediaTrackNext") { void call("player.next"); done(); }
+    else if (e.key === "MediaTrackPrevious") { void call("player.prev"); done(); }
+    else if (e.key === "ArrowRight" && !typing && command) { void call("player.next"); done(); }
+    else if (e.key === "ArrowLeft" && !typing && command) { void call("player.prev"); done(); }
+    else if (e.key === "F11") { if (!now.open) now.show(true); now.toggleFullscreen(); done(); }
+    else if (e.key === "Escape" && now.full) { now.toggleFullscreen(); done(); }
+    else if (e.key === "Escape" && now.open) { now.show(false); done(); }
+    else if (e.key.toLowerCase() === "f" && command) { search.focus(); search.select(); done(); }
+    else if (!typing && now.open) now.key(e);
+  });
+  // dropping a file on the window must not make the page leave itself
+  document.addEventListener("dragover", e => e.preventDefault());
+  document.addEventListener("drop", e => e.preventDefault());
+
+  installPlaylistMenu();
+  installPhoneMenu();
+  installDialogs();
+  navigate("quickplay");
+  paintPlayer(init.player);
+  if (host.smoke) void runSmoke();
+}
+
+start().catch(e => {
+  document.getElementById("root")!.append(h("div.center-note", h("div.h2", "Phoenix couldn't start"), h("div.note", String(e?.message ?? e))));
+  if (host.smoke) void host.smokeDone(`FAIL  app starts  ${e?.message ?? e}\n1 FAILED\n`, 1);
+});

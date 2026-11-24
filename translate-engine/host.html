@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Phoenix offline translator</title>
+<!--
+  Runs Mozilla's Bergamot translation engine (the one Firefox uses for offline translation) for Phoenix.
+  Phoenix sends {id, from, to, text} and gets back {id, text} or {id, error}. Nothing here goes online:
+  the engine and the language packs are files in this folder.
+-->
+<script type="module">
+  import { BatchTranslator } from './engine/translator.js';
+
+  const translator = new BatchTranslator({
+    registryUrl: '/registry.json?' + Date.now(),   // the language packs that are installed
+    pivotLanguage: 'en',                           // two packs through English when there is no direct one
+    workers: 1,
+    downloadTimeout: 0
+  });
+
+  window.chrome.webview.addEventListener('message', async event => {
+    const m = event.data;
+    try {
+      const result = await translator.translate({ from: m.from, to: m.to, text: m.text, html: false });
+      window.chrome.webview.postMessage({ id: m.id, text: result.target.text });
+    } catch (x) {
+      window.chrome.webview.postMessage({ id: m.id, error: String((x && x.message) || x) });
+    }
+  });
+
+  window.chrome.webview.postMessage({ ready: true });
+</script>

@@ -1,0 +1,36 @@
+# build outputs
+bin/
+obj/
+publish/
+publish-*/
+dist/
+*.apk
+*.aab
+*.tar.gz
+electron/build/
+electron/publish/
+electron/node_modules/
+node_modules/
+
+# downloaded tools and third-party binaries (fetched by the scripts that need them)
+vendor/
+_tools/
+
+# editor and OS leftovers
+.vs/
+.idea/
+*.user
+Thumbs.db
+.DS_Store
+$Temp/
+New folder/
+
+# copies a file-sync tool leaves behind
+*(# *conflict*
+*(# Name clash*
+
+# generated previews
+installer/phoenix-512.png
+
+# downloaded Electron runtimes
+electron/.cache/

@@ -1,0 +1,76 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Halcyon.Desktop.HalcyonApp"
+             Name="Halcyon"
+             RequestedThemeVariant="Light">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="Bg">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="BgAlt">#F3F3F3</SolidColorBrush>
+                    <SolidColorBrush x:Key="Fg">#1A1A1A</SolidColorBrush>
+                    <SolidColorBrush x:Key="FgDim">#666666</SolidColorBrush>
+                    <SolidColorBrush x:Key="FgFaint">#A9A9A9</SolidColorBrush>
+                    <SolidColorBrush x:Key="Line">#E2E2E2</SolidColorBrush>
+                    <SolidColorBrush x:Key="Hover">#0E000000</SolidColorBrush>
+                    <SolidColorBrush x:Key="Selected">#1C000000</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackground">#1A1A1A</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver">#1A1A1A</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPressed">#1A1A1A</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFill">#E2E2E2</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFillPointerOver">#E2E2E2</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFillPressed">#E2E2E2</SolidColorBrush>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="Bg">#141414</SolidColorBrush>
+                    <SolidColorBrush x:Key="BgAlt">#1E1E1E</SolidColorBrush>
+                    <SolidColorBrush x:Key="Fg">#F2F2F2</SolidColorBrush>
+                    <SolidColorBrush x:Key="FgDim">#A6A6A6</SolidColorBrush>
+                    <SolidColorBrush x:Key="FgFaint">#6A6A6A</SolidColorBrush>
+                    <SolidColorBrush x:Key="Line">#2E2E2E</SolidColorBrush>
+                    <SolidColorBrush x:Key="Hover">#16FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="Selected">#26FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackground">#F2F2F2</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver">#F2F2F2</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPressed">#F2F2F2</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFill">#2E2E2E</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFillPointerOver">#2E2E2E</SolidColorBrush>
+                    <SolidColorBrush x:Key="SliderTrackFillPressed">#2E2E2E</SolidColorBrush>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <SolidColorBrush x:Key="Accent">#E0447C</SolidColorBrush>
+            <!-- the Windows app's pink instead of the toolkit's default blue, for check boxes, focus and selection -->
+            <Color x:Key="SystemAccentColor">#E0447C</Color>
+            <Color x:Key="SystemAccentColorDark1">#C93A6E</Color>
+            <Color x:Key="SystemAccentColorDark2">#B03060</Color>
+            <Color x:Key="SystemAccentColorDark3">#962652</Color>
+            <Color x:Key="SystemAccentColorLight1">#E85F90</Color>
+            <Color x:Key="SystemAccentColorLight2">#EF7DA5</Color>
+            <Color x:Key="SystemAccentColorLight3">#F59CBB</Color>
+            <!-- thin track, small round thumb, gradient fill: the Windows slider -->
+            <x:Double x:Key="SliderTrackThemeHeight">3</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbWidth">11</x:Double>
+            <x:Double x:Key="SliderHorizontalThumbHeight">11</x:Double>
+            <CornerRadius x:Key="SliderThumbCornerRadius">6</CornerRadius>
+            <LinearGradientBrush x:Key="SliderTrackValueFill" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#F0603A" Offset="0"/>
+                <GradientStop Color="#D5358F" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="SliderTrackValueFillPointerOver" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#F0603A" Offset="0"/>
+                <GradientStop Color="#D5358F" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="SliderTrackValueFillPressed" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#F0603A" Offset="0"/>
+                <GradientStop Color="#D5358F" Offset="1"/>
+            </LinearGradientBrush>
+            <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+        </ResourceDictionary>
+    </Application.Resources>
+    <Application.Styles>
+        <FluentTheme/>
+        <StyleInclude Source="avares://Halcyon/Theme.axaml"/>
+    </Application.Styles>
+</Application>

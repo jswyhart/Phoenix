@@ -1,0 +1,890 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Halcyon.Core;
+using Halcyon.Services;
+
+namespace Halcyon.UI;
+
+public partial class MainWindow : Window
+{
+    static readonly string[] CollectionPages = { "music", "videos", "pictures", "podcasts", "books", "playlists", "disc", "phone" };
+    readonly Dictionary<string, FrameworkElement> _pages = new();
+    readonly Stack<string> _back = new();
+    readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    readonly DispatcherTimer _searchTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
+    readonly DispatcherTimer _idleTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    readonly Smtc _smtc = new();
+    string _page = "";
+    string _collPage = "music";
+    bool _dragging, _settingSeek, _full;
+    WindowState _stateBeforeFull;
+    MiniWindow? _mini;
+
+    static Player P => App.Player;
+    public bool IsNowOpen => NowLayer.Visibility == Visibility.Visible;
+    public string CurrentPage => _page;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        P.Attach(Media);
+        P.CurrentChanged += OnCurrentChanged;
+        P.StateChanged += RefreshTransport;
+        P.Error += SetStatus;
+        QueueList.ItemsSource = P.Queue;
+        Volume.Value = App.Settings.Volume;
+
+        _timer.Tick += (_, _) => Tick();
+        _timer.Start();
+        _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); RunSearch(); };
+        // In full screen the controls and pointer get out of the way until the mouse moves again.
+        _idleTimer.Tick += (_, _) =>
+        {
+            _idleTimer.Stop();
+            if (!_full || Transport.IsMouseOver) return;
+            Transport.Visibility = BackNowBtn.Visibility = VizBtn.Visibility = FullBtn.Visibility = Visibility.Collapsed;
+            Cursor = Cursors.None;
+        };
+        MouseMove += (_, e) =>
+        {
+            if (!_full) return;
+            var pos = e.GetPosition(this);
+            if (pos == _lastMouse) return;      // WPF also raises MouseMove when the layout changes under a still pointer
+            _lastMouse = pos;
+            ShowFullscreenControls();
+        };
+        StateChanged += (_, _) =>
+        {
+            Root.Margin = WindowState == WindowState.Maximized && !_full ? new Thickness(7) : new Thickness(0);
+            MaxBtn.Content = WindowState == WindowState.Maximized ? "" : "";
+        };
+        SourceInitialized += (_, _) => _smtc.Init(new WindowInteropHelper(this).Handle);
+        Closing += (_, _) =>
+        {
+            P.SaveEpisodePosition();
+            App.Settings.Shuffle = P.Shuffle;
+            App.Settings.Repeat = P.Repeat;
+        };
+
+        BuildTaskbarButtons();
+        ShowWebTabs();
+        ShowQueueTab(App.Settings.ShowLyrics);
+        Navigate("quickplay");
+        RefreshTransport();
+    }
+
+    // ---------- taskbar: previous / play / next on the window's thumbnail ----------
+
+    System.Windows.Shell.ThumbButtonInfo? _thumbPlay;
+    ImageSource? _thumbPlayIcon, _thumbPauseIcon;
+
+    ImageSource GlyphIcon(string glyph)
+    {
+        var text = new FormattedText(glyph, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface((FontFamily)FindResource("Icons"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal), 16, Brushes.White, 1.0);
+        var drawing = new GeometryDrawing(Brushes.White, null, text.BuildGeometry(new Point(0, 0)));
+        // a fixed square frame so every glyph sits centred at the same size
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(-2, -2, 20, 20))));
+        group.Children.Add(drawing);
+        var image = new DrawingImage(group);
+        image.Freeze();
+        return image;
+    }
+
+    void BuildTaskbarButtons()
+    {
+        try
+        {
+            _thumbPlayIcon = GlyphIcon("\uE768");
+            _thumbPauseIcon = GlyphIcon("\uE769");
+            var prev = new System.Windows.Shell.ThumbButtonInfo { ImageSource = GlyphIcon("\uE892"), Description = "Previous" };
+            _thumbPlay = new System.Windows.Shell.ThumbButtonInfo { ImageSource = _thumbPlayIcon, Description = "Play" };
+            var next = new System.Windows.Shell.ThumbButtonInfo { ImageSource = GlyphIcon("\uE893"), Description = "Next" };
+            prev.Click += (_, _) => P.Previous();
+            _thumbPlay.Click += (_, _) => P.Toggle();
+            next.Click += (_, _) => P.Next();
+            Taskbar.ThumbButtonInfos = new System.Windows.Shell.ThumbButtonInfoCollection { prev, _thumbPlay, next };
+        }
+        catch { }
+    }
+
+    public int TaskbarButtonCount => Taskbar.ThumbButtonInfos?.Count ?? 0;
+
+    // ---------- now playing: the queue or the lyrics ----------
+
+    Lyrics? _lyrics;
+    PlayItem? _lyricsFor;
+    int _lyricLine = -1;
+
+    void QueueTab_Click(object sender, RoutedEventArgs e) => ShowQueueTab(false);
+    void LyricsTab_Click(object sender, RoutedEventArgs e) => ShowQueueTab(true);
+
+    public void ShowQueueTab(bool lyrics)
+    {
+        App.Settings.ShowLyrics = lyrics;
+        QueueList.Visibility = lyrics ? Visibility.Collapsed : Visibility.Visible;
+        LyricsPane.Visibility = lyrics ? Visibility.Visible : Visibility.Collapsed;
+        QueueTabText.Opacity = lyrics ? 0.4 : 1;
+        LyricsTabText.Opacity = lyrics ? 1 : 0.4;
+        LoadLyrics();
+    }
+
+    public Lyrics? ShownLyrics => _lyrics;
+    public int ShownLyricLine => _lyricLine;
+
+    void LoadLyrics()
+    {
+        if (!App.Settings.ShowLyrics || !IsNowOpen) return;
+        var cur = P.Current;
+        if (ReferenceEquals(cur, _lyricsFor) && cur != null) return;
+        _lyricsFor = cur;
+        _lyricLine = -1;
+        _lyrics = Lyrics.For(cur?.Track);
+        LyricsList.ItemsSource = _lyrics?.Lines;
+        LyricsEmpty.Visibility = _lyrics == null ? Visibility.Visible : Visibility.Collapsed;
+        LyricsEmpty.Text = cur == null ? "" : cur.Track == null ? "Lyrics are shown for songs."
+            : "No lyrics for this song yet.\n\nUse “find online”, “import file” or “paste” below, put a .lrc or .txt file with the same name beside the song, or add lyrics to its tags.";
+        LyricsNote.Text = _lyrics == null ? "" : _lyrics.Synced ? _lyrics.Source + "   ·   double-click a line to jump to it" : _lyrics.Source;
+        var track = cur?.Track;
+        LyricsFindBtn.IsEnabled = LyricsImportBtn.IsEnabled = LyricsPasteBtn.IsEnabled = track != null;
+        LyricsRemoveBtn.Visibility = track != null && Lyrics.HasStored(track) ? Visibility.Visible : Visibility.Collapsed;
+        if (_lyrics is { Lines.Count: > 0 }) LyricsList.ScrollIntoView(_lyrics.Lines[0]);
+        // look it up by itself, if that was asked for in settings (once per song per session)
+        if (_lyrics == null && track != null && App.Settings.LyricsAuto && _lyricsAsked.Add(track.Id)) _ = FindLyricsAsync(track, quiet: true);
+    }
+
+    readonly HashSet<long> _lyricsAsked = new();
+
+    void ReloadLyrics() { _lyricsFor = null; LoadLyrics(); }
+
+    /// <summary>Stores lyrics for the song that is playing and shows them.</summary>
+    public void ImportLyrics(Track track, string text)
+    {
+        if (Lyrics.Parse(text, "imported") == null) { LyricsNote.Text = "that does not look like lyrics"; return; }
+        Lyrics.Save(track, text);
+        if (P.Current?.Track == track) ReloadLyrics();
+    }
+
+    async Task FindLyricsAsync(Track track, bool quiet)
+    {
+        if (!quiet) LyricsNote.Text = "looking on LRCLIB…";
+        try
+        {
+            var text = await Halcyon.Services.LyricsFinder.FindAsync(track);
+            if (text == null) { if (!quiet && P.Current?.Track == track) LyricsNote.Text = "LRCLIB has no lyrics for this song"; return; }
+            ImportLyrics(track, text);
+        }
+        catch (Exception ex) { if (!quiet) LyricsNote.Text = "couldn't reach LRCLIB: " + ex.Message; }
+    }
+
+    async void LyricsFind_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current?.Track is { } track) await FindLyricsAsync(track, quiet: false);
+    }
+
+    void LyricsImport_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current?.Track is not { } track) return;
+        var pick = new Microsoft.Win32.OpenFileDialog { Title = $"Lyrics for “{track.Title}”", Filter = "Lyrics (*.lrc;*.txt)|*.lrc;*.txt|All files|*.*" };
+        if (pick.ShowDialog(this) != true) return;
+        try { ImportLyrics(track, System.IO.File.ReadAllText(pick.FileName)); }
+        catch (Exception ex) { LyricsNote.Text = ex.Message; }
+    }
+
+    void LyricsPaste_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current?.Track is not { } track) return;
+        var text = "";
+        try { text = Clipboard.GetText(); } catch { }
+        if (string.IsNullOrWhiteSpace(text)) { LyricsNote.Text = "the clipboard has no text"; return; }
+        ImportLyrics(track, text);
+    }
+
+    void LyricsRemove_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current?.Track is not { } track) return;
+        Lyrics.Remove(track);
+        ReloadLyrics();
+    }
+
+    void FollowLyrics(double positionMs)
+    {
+        if (_lyrics is not { Synced: true } ly || LyricsPane.Visibility != Visibility.Visible || !IsNowOpen) return;
+        var i = ly.LineAt((long)positionMs + 200);
+        if (i == _lyricLine) return;
+        if (_lyricLine >= 0 && _lyricLine < ly.Lines.Count) ly.Lines[_lyricLine].IsNow = false;
+        _lyricLine = i;
+        if (i < 0) return;
+        ly.Lines[i].IsNow = true;
+        // keep a few lines of what comes next in view below the current one
+        LyricsList.ScrollIntoView(ly.Lines[Math.Min(ly.Lines.Count - 1, i + 4)]);
+        LyricsList.ScrollIntoView(ly.Lines[Math.Max(0, i - 1)]);
+        LyricsList.ScrollIntoView(ly.Lines[i]);
+    }
+
+    void Lyrics_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is LyricLine { Ms: >= 0 } line) P.Seek(TimeSpan.FromMilliseconds(line.Ms));
+        e.Handled = true;
+    }
+
+    // ---------- navigation ----------
+
+    FrameworkElement Create(string page) => page switch
+    {
+        "quickplay" => new QuickplayView(),
+        "music" => new MusicView(),
+        "videos" => new VideosView(),
+        "pictures" => new PicturesView(),
+        "podcasts" => new PodcastsView(),
+        "books" => new BooksView(),
+        "playlists" => new PlaylistsView(),
+        "disc" => new DiscView(),
+        "phone" => new PhoneView(),
+        "search" => new SearchView(),
+        "settings" => new SettingsView(),
+        _ when page.StartsWith("web:") && WebServices.Find(page[4..]) is { } service => HookWeb(new WebServiceView(service)),
+        _ => throw new ArgumentException(page)
+    };
+
+    public T Page<T>(string page) where T : FrameworkElement =>
+        (T)(_pages.TryGetValue(page, out var v) ? v : _pages[page] = Create(page));
+
+    public void Navigate(string page, bool push = true)
+    {
+        if (IsNowOpen) ShowNow(false);
+        if (page == _page) return;
+        if (push && _page != "") _back.Push(_page);
+        _page = page;
+        var web = page.StartsWith("web:") ? WebServices.Find(page[4..]) : null;
+        if (page.StartsWith("web:") && (web == null || !WebServices.IsOn(web))) { page = "music"; web = null; }
+        var isColl = CollectionPages.Contains(page) || web != null;
+        if (isColl) _collPage = page;
+        Host.Content = Page<FrameworkElement>(page);
+
+        NavQuick.IsChecked = page == "quickplay";
+        NavColl.IsChecked = isColl || page == "search";
+        NavSettings.IsChecked = page == "settings";
+        SubNav.Visibility = isColl ? Visibility.Visible : Visibility.Collapsed;
+        var lit = web is { Video: true } ? "videos" : page;
+        foreach (RadioButton rb in SubNav.Children) rb.IsChecked = (string)rb.Tag == lit;
+        BackBtn.IsEnabled = _back.Count > 0;
+    }
+
+    void NavBig_Click(object sender, RoutedEventArgs e)
+    {
+        var tag = (string)((FrameworkElement)sender).Tag;
+        Navigate(tag == "collection" ? _collPage : tag);
+    }
+
+    void Logo_Click(object sender, RoutedEventArgs e) => Navigate("quickplay");
+
+    void NavSub_Click(object sender, RoutedEventArgs e) => Navigate((string)((FrameworkElement)sender).Tag);
+
+    // ---------- the phone / disc / playlist icons ----------
+
+    static string TargetOf(object sender) => ((FrameworkElement)sender).Name switch { "PhoneTarget" => "phone", "DiscTarget" => "disc", _ => "playlist" };
+
+    void DropTarget_Click(object sender, RoutedEventArgs e)
+    {
+        switch (TargetOf(sender))
+        {
+            case "phone": Navigate("phone"); break;
+            case "disc": Navigate("disc"); break;
+            default: Navigate("playlists"); break;
+        }
+    }
+
+    void DropTarget_DragEnter(object sender, DragEventArgs e)
+    {
+        if (TrackDrag.Tracks(e.Data) is not { } tracks) return;
+        ((Button)sender).Tag = "over";
+        DropHint.Text = TargetOf(sender) switch
+        {
+            "phone" => $"sync {Songs(tracks.Count)} with your phone",
+            "disc" => $"add {Songs(tracks.Count)} to the burn list",
+            _ => $"add {Songs(tracks.Count)} to a playlist"
+        };
+    }
+
+    static string Songs(int n) => n == 1 ? "1 song" : $"{n} songs";
+
+    void DropTarget_DragLeave(object sender, DragEventArgs e)
+    {
+        ((Button)sender).Tag = null;
+        DropHint.Text = "";
+    }
+
+    void DropTarget_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = TrackDrag.Tracks(e.Data) != null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    void DropTarget_Drop(object sender, DragEventArgs e)
+    {
+        ((Button)sender).Tag = null;
+        DropHint.Text = "";
+        if (TrackDrag.Tracks(e.Data) is { } tracks) DropOn(TargetOf(sender), tracks, (Button)sender);
+        e.Handled = true;
+    }
+
+    /// <summary>What dropping songs on one of the three icons does.</summary>
+    public void DropOn(string target, List<Track> tracks, UIElement? anchor = null)
+    {
+        switch (target)
+        {
+            case "phone":
+                var added = PhoneView.Add(tracks);
+                var skipped = tracks.Count(t => t.Source != "local");
+                SetStatus(added == 0 && skipped > 0 ? "only music stored on this PC can be copied to the phone"
+                    : added == 0 ? "already on the phone sync list"
+                    : $"{Songs(added)} added to the phone sync list" + (skipped > 0 ? $" ({skipped} on a server left out)" : ""));
+                break;
+            case "disc":
+                foreach (var t in tracks) App.BurnList.Add(t);
+                SetStatus($"{App.BurnList.Count} songs on the burn list");
+                break;
+            default:
+                // choose which playlist, as the Zune software asks when there is more than one
+                var m = new ContextMenu();
+                m.Items.Add(Menus.Item("New playlist…", () =>
+                {
+                    var name = InputDialog.Ask("New playlist", "Playlist name", "");
+                    if (string.IsNullOrWhiteSpace(name)) return;
+                    App.Lib.AddToPlaylist(App.Lib.CreatePlaylist(name.Trim()), tracks);
+                    SetStatus($"{Songs(tracks.Count)} added to “{name.Trim()}”");
+                }));
+                if (App.Lib.Playlists.Count > 0) m.Items.Add(new Separator());
+                foreach (var p in App.Lib.Playlists)
+                {
+                    var playlist = p;
+                    m.Items.Add(Menus.Item(p.Name, () => { App.Lib.AddToPlaylist(playlist, tracks); SetStatus($"{Songs(tracks.Count)} added to “{playlist.Name}”"); }));
+                }
+                Menus.Open(m, anchor ?? PlaylistTarget);
+                break;
+        }
+    }
+
+    /// <summary>Goes back a page, or to <paramref name="fallback"/> when there is nowhere to go back to.</summary>
+    public void GoBackOr(string fallback)
+    {
+        if (_back.Count > 0) Navigate(_back.Pop(), push: false); else Navigate(fallback);
+    }
+
+    void Back_Click(object sender, RoutedEventArgs e)
+    {
+        if (_back.Count > 0) Navigate(_back.Pop(), push: false);
+    }
+
+    public void SetStatus(string text) => StatusText.Text = text;
+
+    /// <summary>Puts a control in the window without showing it (the offline translator's hidden browser view needs a window to live in).</summary>
+    public void AddHidden(UIElement element) => Root.Children.Add(element);
+    public void RemoveHidden(UIElement element) => Root.Children.Remove(element);
+
+    // ---------- streaming services in the player bar ----------
+
+    WebServiceView? _remote;      // the web player that last started playing
+    bool _remoteShown;
+
+    /// <summary>The web player while it is what is being listened to, else null.</summary>
+    WebServiceView? RemoteNow => _remote is { Active: true } ? _remote : null;
+    public bool ShowingWebInBar => _remoteShown;
+    public string BarTitleShown => Tr.Shown(BarTitle);
+    public bool ShuffleShown => ShuffleBtn.Visibility == Visibility.Visible;
+    public string ShuffleTip => ShuffleBtn.ToolTip as string ?? "";
+    public string BarInfoShown => BarInfo.Visibility == Visibility.Visible ? BarInfo.Text : "";
+
+    /// <summary>The small technical line under the artist: format and bitrate, or picture size and frame rate for video.</summary>
+    void ShowInfo(string text)
+    {
+        BarInfo.Text = text;
+        BarInfo.Visibility = text == "" ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    async void ShowLocalInfo(PlayItem? item)
+    {
+        if (item == null) { ShowInfo(""); return; }
+        var text = await Task.Run(() => MediaInfo.For(item));
+        if (ReferenceEquals(P.Current, item) && RemoteNow == null) ShowInfo(text);
+    }
+    public bool RepeatShown => RepeatBtn.Visibility == Visibility.Visible;
+    public bool HeartShown => HeartBtn.Visibility == Visibility.Visible;
+    public bool SeekShown => Seek.Visibility == Visibility.Visible;
+
+    WebServiceView HookWeb(WebServiceView view)
+    {
+        view.Changed += ShowRemote;
+        view.TookOver += taker =>
+        {
+            // one thing plays at a time: the others stop and hand over the controls
+            foreach (var other in _pages.Values.OfType<WebServiceView>().Where(o => !ReferenceEquals(o, taker))) { if (other.IsPlayingAudio) other.Pause(); other.SetActive(false); }
+            _remote = taker;
+            P.Remote = taker;
+            taker.SetVolume(Volume.Value);
+            taker.Muted = P.Muted;
+        };
+        return view;
+    }
+
+    /// <summary>
+    /// Puts the web player's song and state in the player bar while it is playing, showing only the controls it can
+    /// really be worked with, and Phoenix's own back when it is not.
+    /// </summary>
+    void ShowRemote()
+    {
+        if (RemoteNow is not { } web)
+        {
+            if (!_remoteShown) return;
+            _remoteShown = false;
+            Seek.Visibility = ShuffleBtn.Visibility = RepeatBtn.Visibility = HeartBtn.Visibility = Visibility.Visible;
+            OnCurrentChanged();
+            return;
+        }
+        _remoteShown = true;
+        var st = web.State;
+        var name = web.Service.Name;
+        Tr.SetText(BarTitle, st.Title != "" ? st.Title : name);
+        Tr.SetText(BarArtist, string.Join("  ·  ", new[] { st.Artist, name }.Where(x => x != "" && x != st.Title)));
+        Art.SetPath(BarArt, st.Art == "" ? null : st.Art);
+        BookmarkBtn.Visibility = Visibility.Collapsed;
+        ShowInfo(web.BitrateText);
+        // only what this page can do is offered
+        ShuffleBtn.Visibility = st.Shuffle != null ? Visibility.Visible : Visibility.Collapsed;
+        RepeatBtn.Visibility = st.Repeat != null ? Visibility.Visible : Visibility.Collapsed;
+        HeartBtn.Visibility = st.Liked != null ? Visibility.Visible : Visibility.Hidden;
+        Seek.Visibility = st.CanSeek && st.Duration > 0 ? Visibility.Visible : Visibility.Hidden;
+        RefreshTransport();
+        ShowRemoteClock();
+    }
+
+    void ShowRemoteClock()
+    {
+        if (RemoteNow is not { } web || _dragging) return;
+        var st = web.State;
+        PosText.Text = st.Duration > 0 ? (st.Position < 1 ? "0:00" : Fmt.Time((long)(st.Position * 1000))) : "";
+        DurText.Text = st.Duration > 0 ? Fmt.Time((long)(st.Duration * 1000)) : "";
+        _settingSeek = true;
+        Seek.Maximum = st.Duration > 0 ? st.Duration : 1;
+        Seek.Value = Math.Min(st.Position, Seek.Maximum);
+        _settingSeek = false;
+    }
+
+    /// <summary>Shows a tab after playlists for each music streaming service switched on in settings.</summary>
+    public void ShowWebTabs()
+    {
+        foreach (var old in SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && t.StartsWith("web:")).ToList()) SubNav.Children.Remove(old);
+        foreach (var service in WebServices.Enabled(video: false))
+        {
+            var tab = new RadioButton { Content = service.Name.ToLowerInvariant(), Tag = service.Page, GroupName = "sub", Style = (Style)FindResource("NavSection"), IsChecked = _page == service.Page };
+            tab.Click += NavSub_Click;
+            SubNav.Children.Add(tab);
+        }
+        // a service that was switched off stops playing, and its page is left
+        foreach (var (page, view) in _pages.Where(kv => kv.Value is WebServiceView).Select(kv => (kv.Key, (WebServiceView)kv.Value)).ToList())
+        {
+            if (WebServices.Find(page[4..]) is { } still && WebServices.IsOn(still)) continue;
+            if (view.IsPlayingAudio) view.Pause();
+            view.SetActive(false);
+            if (_page == page) Navigate("music");
+            if (_collPage == page) _collPage = "music";
+        }
+        if (_pages.TryGetValue("videos", out var videos)) ((VideosView)videos).ShowServices();
+    }
+
+    public List<string> WebTabs => SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && t.StartsWith("web:")).Select(rb => (string)rb.Tag).ToList();
+
+    bool _webFull;
+    WindowState _stateBeforeWebFull;
+
+    /// <summary>A video in a web page asked for the full screen: the page takes the whole display, without Phoenix's own bars.</summary>
+    public void SetWebFullscreen(bool on)
+    {
+        if (on == _webFull || _full) return;
+        _webFull = on;
+        if (on)
+        {
+            _stateBeforeWebFull = WindowState;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Normal;
+            WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+            WindowState = _stateBeforeWebFull;
+        }
+        HeaderArea.Visibility = Transport.Visibility = Caption.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        Root.Margin = WindowState == WindowState.Maximized && !on ? new Thickness(7) : new Thickness(0);
+    }
+
+    /// <summary>Redraws the names of what is playing (after the translation settings change).</summary>
+    public void RefreshNowText()
+    {
+        foreach (var block in new[] { BarTitle, BarArtist, NowTitle, NowArtist, NowAlbum })
+        {
+            var text = Tr.GetText(block);
+            Tr.SetText(block, null);
+            Tr.SetText(block, text);
+        }
+    }
+
+    /// <summary>Types into the search box (and so runs the search).</summary>
+    public void SearchFor(string text)
+    {
+        SearchBox.Text = text;
+        SearchBox.CaretIndex = text.Length;
+    }
+
+    // ---------- search ----------
+
+    void Search_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    void Search_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { _searchTimer.Stop(); RunSearch(); }
+    }
+
+    void RunSearch()
+    {
+        var q = SearchBox.Text.Trim();
+        if (q == "") { if (_page == "search" && _back.Count > 0) Navigate(_back.Pop(), push: false); return; }
+        Navigate("search");
+        Page<SearchView>("search").Search(q);
+    }
+
+    // ---------- now playing ----------
+
+    public void ShowNow(bool show)
+    {
+        if (!show && _full) ToggleFullscreen();
+        NowLayer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var view in _pages.Values.OfType<WebServiceView>()) view.Covered = show;
+        foreach (Button b in Caption.Children)
+        {
+            if (show) b.Foreground = Brushes.White; else b.ClearValue(ForegroundProperty);
+        }
+        if (show) { BuildMosaic(); QueueList.ScrollIntoView(P.Current); LoadLyrics(); }
+        UpdateVideoSurface();
+    }
+
+    void UpdateVideoSurface()
+    {
+        var video = P.Current?.IsVideo == true;
+        var viz = IsNowOpen && !video && App.Settings.Visualizer > 0;
+        Media.Visibility = video ? Visibility.Visible : Visibility.Hidden;
+        NowInfo.Visibility = MosaicShade.Visibility = video ? Visibility.Hidden : Visibility.Visible;
+        Mosaic.Visibility = video || viz ? Visibility.Hidden : Visibility.Visible;
+        VizBtn.Visibility = video ? Visibility.Collapsed : Visibility.Visible;
+        Viz.Mode = App.Settings.Visualizer;
+        Viz.Palette = App.Settings.VisualizerColor;
+        Viz.Sensitivity = App.Settings.VisualizerSensitivity;
+        // Windowed, the visualizer sits behind the song info; full screen it gets the whole display.
+        Viz.Margin = new Thickness(0, _full ? 0 : 48, 0, 0);
+        Viz.Opacity = _full ? 1 : 0.9;
+        Viz.Visibility = viz ? Visibility.Visible : Visibility.Collapsed;
+        if (viz) Viz.Start(); else Viz.Stop();   // only listens while it is on screen
+    }
+
+    public Visualizer VisualizerControl => Viz;
+
+    async Task UpdateCoverColorAsync(string? art) => Viz.CoverColor = await Visualizer.DominantAsync(art);
+
+    void Viz_Click(object sender, RoutedEventArgs e)
+    {
+        var m = new ContextMenu();
+        for (var i = 0; i < Visualizer.Styles.Length; i++)
+        {
+            var style = i;
+            var item = Menus.Item(Visualizer.Styles[i], () => SetVisualizer(style, App.Settings.VisualizerColor));
+            item.IsChecked = App.Settings.Visualizer == i;
+            m.Items.Add(item);
+            if (i == 0) m.Items.Add(new Separator());
+        }
+        m.Items.Add(new Separator());
+        var colours = new MenuItem { Header = "Colours" };
+        for (var i = 0; i < Visualizer.Palettes.Length; i++)
+        {
+            var palette = i;
+            var item = Menus.Item(Visualizer.Palettes[i], () => SetVisualizer(App.Settings.Visualizer, palette));
+            item.IsChecked = App.Settings.VisualizerColor == i;
+            colours.Items.Add(item);
+        }
+        m.Items.Add(colours);
+        var sensitivity = new MenuItem { Header = "Sensitivity" };
+        for (var i = 0; i < Visualizer.Sensitivities.Length; i++)
+        {
+            var level = i;
+            var item = Menus.Item(Visualizer.Sensitivities[i], () => { App.Settings.VisualizerSensitivity = level; UpdateVideoSurface(); });
+            item.IsChecked = App.Settings.VisualizerSensitivity == i;
+            sensitivity.Items.Add(item);
+        }
+        m.Items.Add(sensitivity);
+        m.Items.Add(new Separator());
+        m.Items.Add(Menus.Item(_full ? "Exit full screen (Esc)" : "Full screen (F11)", ToggleFullscreen));
+        Menus.Open(m, VizBtn);
+    }
+
+    public void SetVisualizer(int style, int palette)
+    {
+        App.Settings.Visualizer = style;
+        App.Settings.VisualizerColor = palette;
+        UpdateVideoSurface();
+    }
+
+    void CycleVisualizer() => SetVisualizer((App.Settings.Visualizer + 1) % Visualizer.Styles.Length, App.Settings.VisualizerColor);
+
+    void BuildMosaic()
+    {
+        var rnd = new Random();
+        var arts = App.Lib.Albums.Where(a => a.ArtPath != "").Select(a => a.ArtPath).Distinct().OrderBy(_ => rnd.Next()).Take(40).ToList();
+        Mosaic.Children.Clear();
+        if (arts.Count == 0) return;
+        for (var i = 0; i < 40; i++)
+        {
+            var img = new Image { Stretch = Stretch.UniformToFill };
+            Art.SetSize(img, 240);
+            Art.SetPath(img, arts[i % arts.Count]);
+            Mosaic.Children.Add(img);
+        }
+    }
+
+    void OpenNow_Click(object sender, RoutedEventArgs e) => ShowNow(!IsNowOpen);
+    void CloseNow_Click(object sender, RoutedEventArgs e) => ShowNow(false);
+
+    void NowLayer_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2 && !QueuePane.IsMouseOver) ToggleFullscreen();
+    }
+
+    void Full_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+
+    Point _lastMouse;
+
+    void ShowFullscreenControls()
+    {
+        Cursor = null;
+        Transport.Visibility = BackNowBtn.Visibility = FullBtn.Visibility = Visibility.Visible;
+        VizBtn.Visibility = P.Current?.IsVideo == true ? Visibility.Collapsed : Visibility.Visible;
+        _idleTimer.Stop();
+        if (_full) _idleTimer.Start();
+    }
+
+    public bool IsFullscreen => _full;
+    public void ToggleFullscreenForTest() => ToggleFullscreen();
+
+    void Queue_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is PlayItem item) P.PlayAt(P.Queue.IndexOf(item));
+    }
+
+    void ToggleFullscreen()
+    {
+        if (!_full)
+        {
+            _full = true;
+            _stateBeforeFull = WindowState;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Normal;
+            WindowState = WindowState.Maximized;
+            Caption.Visibility = Visibility.Collapsed;
+            Grid.SetRowSpan(NowLayer, 3);
+            // Full screen is about the picture or the visualizer: the queue and big text step aside for music.
+            QueuePane.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            _full = false;
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+            WindowState = _stateBeforeFull;
+            Caption.Visibility = Visibility.Visible;
+            Grid.SetRowSpan(NowLayer, 2);
+            QueuePane.Visibility = Visibility.Visible;
+        }
+        Root.Margin = WindowState == WindowState.Maximized && !_full ? new Thickness(7) : new Thickness(0);
+        ShowFullscreenControls();
+        UpdateVideoSurface();
+    }
+
+    // ---------- transport ----------
+
+    void OnCurrentChanged()
+    {
+        var cur = P.Current;
+        BookmarkBtn.Visibility = cur?.Book != null ? Visibility.Visible : Visibility.Collapsed;
+        _ = UpdateCoverColorAsync(cur?.ArtPath);
+        ShowLocalInfo(cur);
+        Tr.SetText(BarTitle, cur?.Title ?? "nothing playing");
+        Tr.SetText(BarArtist, cur?.Subtitle ?? "");
+        Art.SetPath(BarArt, cur?.ArtPath);
+        Tr.SetText(NowTitle, cur?.Title ?? "");
+        Tr.SetText(NowArtist, cur?.Subtitle ?? "");
+        Tr.SetText(NowAlbum, cur?.Album ?? "");
+        Art.SetPath(NowArt, cur?.ArtPath);
+        if (cur?.IsVideo == true && !IsNowOpen && _mini == null) ShowNow(true);
+        else UpdateVideoSurface();
+        if (IsNowOpen && cur != null) QueueList.ScrollIntoView(cur);
+        LoadLyrics();
+        DjText.Visibility = P.DjSeed != null ? Visibility.Visible : Visibility.Collapsed;
+        DjText.Text = P.DjSeed is { } seed ? $"smart dj  ·  music like “{seed.Title}”" : "";
+        _smtc.Update(cur, P.IsPlaying);
+        RefreshTransport();
+    }
+
+    void Bookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current is not { Book: { } book } cur) return;
+        var m = App.Lib.AddBookmark(book, cur.BookPart, Math.Round(P.Position.TotalMilliseconds));
+        SetStatus($"bookmarked {m.Label}");
+    }
+
+    public void RefreshTransport()
+    {
+        // while a web player is what is playing, the buttons show its state
+        var remote = RemoteNow;
+        var playing = remote != null ? remote.State.Playing : P.IsPlaying;
+        var shuffle = remote != null ? (remote.State.Shuffle ?? 0) > 0 : P.Shuffle;
+        var smart = remote?.State.Shuffle == 2;
+        var repeat = remote != null ? remote.State.Repeat ?? 0 : P.Repeat;
+        PlayBtn.Content = playing ? "" : "";
+        // Spotify's third shuffle setting, smart shuffle, shows the arrows with a star beside them
+        ShuffleBtn.Content = smart ? "\uE8B1\uE735" : "\uE8B1";
+        ShuffleBtn.FontSize = smart ? 11 : 14;
+        ShuffleBtn.ToolTip = remote == null ? "Shuffle" : smart ? "Smart shuffle (press for shuffle off)" : shuffle ? "Shuffle (press for smart shuffle)" : "Shuffle off (press for shuffle)";
+        ShuffleBtn.Opacity = shuffle ? 1 : 0.35;
+        ShuffleBtn.SetResourceReference(ForegroundProperty, shuffle ? "Accent" : "Fg");
+        RepeatBtn.Content = repeat == 2 ? "" : "";
+        RepeatBtn.Opacity = repeat > 0 ? 1 : 0.35;
+        RepeatBtn.SetResourceReference(ForegroundProperty, repeat > 0 ? "Accent" : "Fg");
+        MuteBtn.Content = P.Muted ? "" : "";
+        if (remote != null)
+        {
+            HeartBtn.IsEnabled = remote.State.Liked != null;
+            HeartBtn.Content = remote.State.Liked == true ? "\uEB52" : "";
+            HeartBtn.SetResourceReference(ForegroundProperty, remote.State.Liked == true ? "Accent" : "Fg");
+        }
+        else
+        {
+            var t = P.Current?.Track;
+            HeartBtn.IsEnabled = t != null;
+            HeartBtn.Content = t?.RatingGlyph ?? "";
+            HeartBtn.SetResourceReference(ForegroundProperty, t is { Rating: not 0 } ? "Accent" : "Fg");
+        }
+        _smtc.Update(P.Current, P.IsPlaying);
+        if (_thumbPlay != null)
+        {
+            _thumbPlay.ImageSource = P.IsPlaying ? _thumbPauseIcon : _thumbPlayIcon;
+            _thumbPlay.Description = P.IsPlaying ? "Pause" : "Play";
+        }
+    }
+
+    int _ticks;
+
+    void Tick()
+    {
+        // Every ten seconds, note where a playing audiobook or podcast is, so a crash or power cut loses little.
+        if (++_ticks % 40 == 0 && P.IsPlaying) P.SaveEpisodePosition();
+        if (RemoteNow != null) { ShowRemoteClock(); return; }
+        if (P.Current == null)
+        {
+            PosText.Text = DurText.Text = "";
+            if (!_dragging) { _settingSeek = true; Seek.Value = 0; _settingSeek = false; }
+            return;
+        }
+        var dur = P.Duration.TotalSeconds;
+        var pos = P.Position.TotalSeconds;
+        DurText.Text = Fmt.Time((long)(dur * 1000));
+        FollowLyrics(pos * 1000);
+        if (_dragging) return;
+        PosText.Text = pos < 1 ? "0:00" : Fmt.Time((long)(pos * 1000));
+        _settingSeek = true;
+        Seek.Maximum = dur > 0 ? dur : 1;
+        Seek.Value = Math.Min(pos, Seek.Maximum);
+        _settingSeek = false;
+    }
+
+    void Seek_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_settingSeek) return;
+        if (_dragging) PosText.Text = Fmt.Time((long)(Seek.Value * 1000));
+        else if (RemoteNow is { } web) web.SeekTo(Seek.Value);
+        else P.Seek(TimeSpan.FromSeconds(Seek.Value));
+    }
+
+    void Seek_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e) => _dragging = true;
+
+    void Seek_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _dragging = false;
+        if (RemoteNow is { } web) web.SeekTo(Seek.Value); else P.Seek(TimeSpan.FromSeconds(Seek.Value));
+    }
+
+    void Play_Click(object sender, RoutedEventArgs e) => P.Toggle();
+    void Prev_Click(object sender, RoutedEventArgs e) => P.Previous();
+    void Next_Click(object sender, RoutedEventArgs e) => P.Next();
+    void Shuffle_Click(object sender, RoutedEventArgs e) { if (RemoteNow is { } sp) { sp.ToggleShuffle(); return; } P.Shuffle = !P.Shuffle; RefreshTransport(); }
+    void Repeat_Click(object sender, RoutedEventArgs e) { if (RemoteNow is { } sp) { sp.CycleRepeat(); return; } P.Repeat = (P.Repeat + 1) % 3; RefreshTransport(); }
+    void Mute_Click(object sender, RoutedEventArgs e)
+    {
+        P.Muted = !P.Muted;
+        foreach (var view in _pages.Values.OfType<WebServiceView>()) view.Muted = P.Muted;   // one mute button for everything
+    }
+    void Heart_Click(object sender, RoutedEventArgs e) { if (RemoteNow is { } web) web.ToggleLike(); else Cmd.Rate.Execute(P.Current?.Track); }
+
+    void Volume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!IsInitialized || Media == null) return;
+        P.Volume = Volume.Value;
+        RemoteNow?.SetVolume(Volume.Value);   // one volume slider for everything
+    }
+
+    // ---------- window ----------
+
+    void Min_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    void Max_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    void Mini_Click(object sender, RoutedEventArgs e)
+    {
+        if (_full) ToggleFullscreen();
+        _mini = new MiniWindow();
+        _mini.Closed += (_, _) => { _mini = null; Show(); Activate(); };
+        _mini.Show();
+        Hide();
+    }
+
+    void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var typing = Keyboard.FocusedElement is TextBox or PasswordBox;
+        switch (e.Key)
+        {
+            case Key.Space when !typing: P.Toggle(); e.Handled = true; break;
+            case Key.MediaPlayPause: P.Toggle(); e.Handled = true; break;
+            case Key.MediaNextTrack: P.Next(); e.Handled = true; break;
+            case Key.MediaPreviousTrack: P.Previous(); e.Handled = true; break;
+            case Key.Right when !typing && Keyboard.Modifiers == ModifierKeys.Control: P.Next(); e.Handled = true; break;
+            case Key.Left when !typing && Keyboard.Modifiers == ModifierKeys.Control: P.Previous(); e.Handled = true; break;
+            case Key.F11: if (!IsNowOpen) ShowNow(true); ToggleFullscreen(); e.Handled = true; break;
+            case Key.V when !typing && IsNowOpen && P.Current?.IsVideo != true: CycleVisualizer(); e.Handled = true; break;
+            case Key.C when !typing && IsNowOpen && P.Current?.IsVideo != true:
+                SetVisualizer(App.Settings.Visualizer, (App.Settings.VisualizerColor + 1) % Visualizer.Palettes.Length); e.Handled = true; break;
+            case Key.Escape when _full: ToggleFullscreen(); e.Handled = true; break;
+            case Key.Escape when IsNowOpen: ShowNow(false); e.Handled = true; break;
+            case Key.F when Keyboard.Modifiers == ModifierKeys.Control: SearchBox.Focus(); e.Handled = true; break;
+        }
+    }
+}

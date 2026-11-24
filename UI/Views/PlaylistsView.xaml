@@ -1,0 +1,42 @@
+<UserControl x:Class="Halcyon.UI.PlaylistsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI">
+    <Grid Margin="20,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,-4,4,6">
+                    <Button Style="{StaticResource TextBtn}" Content="&#xE710;  playlist" Click="New_Click" Margin="0,0,12,0" ToolTip="New playlist"/>
+                    <Button Style="{StaticResource TextBtn}" Content="&#xE710;  auto playlist" Click="NewAuto_Click" ToolTip="New auto playlist: fills itself from rules you choose"/>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Cap}" Text="PLAYLISTS"/>
+            </DockPanel>
+            <ListBox x:Name="PlaylistList" SelectionChanged="Playlist_SelectionChanged" MouseDoubleClick="Playlist_DoubleClick" MouseRightButtonUp="Playlist_RightClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Height="32">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" Foreground="{DynamicResource FgFaint}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+        <DockPanel Grid.Column="1" Margin="18,0,0,0">
+            <DockPanel DockPanel.Dock="Top">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,-4,28,6">
+                    <Button Style="{StaticResource TextBtn}" Content="&#xE768;  play" Click="Play_Click" Margin="0,0,14,0"/>
+                    <Button Style="{StaticResource TextBtn}" Content="&#xE8B1;  shuffle" Click="Shuffle_Click"/>
+                </StackPanel>
+                <TextBlock x:Name="SongCap" Style="{StaticResource Cap}" Text="SONGS"/>
+            </DockPanel>
+            <TextBlock x:Name="RulesText" DockPanel.Dock="Top" Foreground="{DynamicResource FgDim}" FontSize="12" Margin="8,0,28,8" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+            <ui:SongHeader x:Name="SongHdr" DockPanel.Dock="Top"/>
+            <ListBox x:Name="SongList" SelectionMode="Extended" ItemTemplate="{StaticResource SongRow}" MouseDoubleClick="Song_DoubleClick" MouseRightButtonUp="Song_RightClick"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

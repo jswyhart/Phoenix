@@ -1,0 +1,45 @@
+<UserControl x:Class="Halcyon.UI.PicturesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI"
+             Focusable="True" FocusVisualStyle="{x:Null}" PreviewKeyDown="View_KeyDown">
+    <Grid>
+        <Grid Margin="20,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <DockPanel>
+                <TextBlock x:Name="FolderCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="FOLDERS"/>
+                <ListBox x:Name="FolderList" SelectionChanged="Folder_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Height="30">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Foreground="{DynamicResource FgFaint}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <DockPanel Grid.Column="1" Margin="10,0,0,0">
+                <DockPanel DockPanel.Dock="Top">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource TextBtn}" Content="&#xE768;  play slideshow" Click="Slideshow_Click" Margin="0,-4,28,6"/>
+                    <TextBlock x:Name="PicCap" Style="{StaticResource Cap}" Text="PICTURES"/>
+                </DockPanel>
+                <ui:TileGrid x:Name="PicGrid" TileWidth="160" TileTemplate="{StaticResource PictureTile}"/>
+            </DockPanel>
+            <TextBlock x:Name="EmptyText" Grid.ColumnSpan="2" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Text="No pictures found. Add picture folders in settings." Visibility="Collapsed"/>
+        </Grid>
+
+        <!-- full-view / slideshow -->
+        <Grid x:Name="Viewer" Background="#F2000000" Visibility="Collapsed" MouseLeftButtonDown="Viewer_Click">
+            <Image x:Name="ViewerImage" Stretch="Uniform" Margin="60,40"/>
+            <TextBlock x:Name="ViewerCaption" Foreground="#C0C0C0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
+            <Button Style="{StaticResource IconBtn}" Foreground="White" Content="&#xE76B;" HorizontalAlignment="Left" VerticalAlignment="Center" Width="56" Height="80" FontSize="22" Click="ViewerPrev_Click"/>
+            <Button Style="{StaticResource IconBtn}" Foreground="White" Content="&#xE76C;" HorizontalAlignment="Right" VerticalAlignment="Center" Width="56" Height="80" FontSize="22" Click="ViewerNext_Click"/>
+            <Button Style="{StaticResource IconBtn}" Foreground="White" Content="&#xE8BB;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,44,12,0" Click="ViewerClose_Click"/>
+        </Grid>
+    </Grid>
+</UserControl>

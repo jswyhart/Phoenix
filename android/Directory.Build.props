@@ -1,0 +1,7 @@
+<Project>
+  <!-- Where this PC keeps the Android SDK and JDK (installed with the InstallAndroidDependencies target). -->
+  <PropertyGroup>
+    <AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' And Exists('D:\android-sdk')">D:\android-sdk</AndroidSdkDirectory>
+    <JavaSdkDirectory Condition="'$(JavaSdkDirectory)' == '' And Exists('D:\android-jdk')">D:\android-jdk</JavaSdkDirectory>
+  </PropertyGroup>
+</Project>

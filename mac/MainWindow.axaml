@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="clr-namespace:Halcyon.Desktop"
+        xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+        x:Class="Halcyon.Desktop.MainWindow"
+        Title="Halcyon" Width="1320" Height="840" MinWidth="1080" MinHeight="620"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontSize="13"
+        WindowStartupLocation="CenterScreen">
+    <Grid Name="Root" RowDefinitions="Auto,*,Auto">
+
+        <!-- ===== header: small top navigation, big collection sections (as in the Windows app) ===== -->
+        <Grid Grid.Row="0" Margin="28,0,0,6" RowDefinitions="40,Auto">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Name="BackBtn" Classes="icon" Margin="-10,0,10,0" Click="Back_Click" IsEnabled="False" ToolTip.Tip="Back">
+                    <Path Data="{StaticResource IconBack}"/>
+                </Button>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <RadioButton Name="NavQuick" Classes="nav top" Content="QUICKPLAY" GroupName="big" Click="NavBig_Click" Tag="quickplay"/>
+                    <RadioButton Name="NavColl" Classes="nav top" Content="COLLECTION" GroupName="big" Click="NavBig_Click" Tag="collection"/>
+                    <RadioButton Name="NavSettings" Classes="nav top" Content="SETTINGS" GroupName="big" Click="NavBig_Click" Tag="settings"/>
+                </StackPanel>
+                <TextBlock Name="StatusText" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="14,0,0,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Grid Width="200" Margin="0,0,24,0" VerticalAlignment="Center">
+                    <TextBox Name="SearchBox" Classes="search" Watermark="search"/>
+                    <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource FgFaint}" StrokeThickness="1.3" Width="12" Height="12" Stretch="Uniform"
+                          HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" IsHitTestVisible="False"/>
+                </Grid>
+                <Button Classes="bare" Width="40" Height="40" Click="Logo_Click" ToolTip.Tip="Quickplay">
+                    <Border Width="40" Height="40" Background="{StaticResource AccentGrad}">
+                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Ellipse Width="20" Height="20" Stroke="White" StrokeThickness="2.2"/>
+                            <Ellipse Width="7" Height="7" Fill="White" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-3,0"/>
+                        </Grid>
+                    </Border>
+                </Button>
+            </StackPanel>
+            <StackPanel Name="SubNav" Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
+                <RadioButton Classes="nav section" Content="music" GroupName="sub" Click="NavSub_Click" Tag="music"/>
+                <RadioButton Classes="nav section" Content="videos" GroupName="sub" Click="NavSub_Click" Tag="videos"/>
+                <RadioButton Classes="nav section" Content="pictures" GroupName="sub" Click="NavSub_Click" Tag="pictures"/>
+                <RadioButton Classes="nav section" Content="podcasts" GroupName="sub" Click="NavSub_Click" Tag="podcasts"/>
+                <RadioButton Classes="nav section" Content="books" GroupName="sub" Click="NavSub_Click" Tag="books"/>
+                <RadioButton Classes="nav section" Content="playlists" GroupName="sub" Click="NavSub_Click" Tag="playlists"/>
+            </StackPanel>
+        </Grid>
+        <!-- the pink tab at the window edge marks the top navigation -->
+        <Rectangle Grid.Row="0" Width="7" Height="34" Fill="{StaticResource AccentGrad}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,3,0,0" IsHitTestVisible="False"/>
+
+        <ContentControl Name="Host" Grid.Row="1"/>
+
+        <!-- ===== now playing layer (always dark) ===== -->
+        <ThemeVariantScope Name="NowLayer" Grid.Row="0" Grid.RowSpan="2" RequestedThemeVariant="Dark" IsVisible="False">
+            <Grid Background="#0A0A0A" RowDefinitions="44,*" DoubleTapped="NowLayer_DoubleTapped">
+                <UniformGrid Name="Mosaic" Grid.RowSpan="2" Columns="8" Opacity="0.30" ClipToBounds="True"/>
+                <Rectangle Name="MosaicShade" Grid.RowSpan="2">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0%,100%" EndPoint="100%,0%">
+                            <GradientStop Color="#F2000000" Offset="0"/>
+                            <GradientStop Color="#59000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <d:Viz Name="VizView" Grid.RowSpan="2" IsVisible="False" Opacity="0.9" Margin="0,44,0,0"/>
+
+                <Grid Name="NowInfo" Grid.RowSpan="2" Margin="48,64,28,36" ColumnDefinitions="*,360">
+                    <StackPanel VerticalAlignment="Bottom" Margin="0,0,40,0">
+                        <Border Width="240" Height="240" HorizontalAlignment="Left" Background="#1C1C1C" Margin="0,0,0,22" ClipToBounds="True">
+                            <Image Name="NowArt" d:Art.Size="500" Stretch="UniformToFill"/>
+                        </Border>
+                        <TextBlock Name="NowTitle" FontSize="50" FontWeight="Light" TextTrimming="CharacterEllipsis" Foreground="White"/>
+                        <TextBlock Name="NowArtist" FontSize="26" FontWeight="Light" Foreground="#D0D0D0" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Name="NowAlbum" FontSize="16" Foreground="#909090" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <DockPanel Name="QueuePane" Grid.Column="1">
+                        <TextBlock DockPanel.Dock="Top" Text="now playing" Classes="h2" Foreground="White"/>
+                        <ListBox Name="QueueList" ItemTemplate="{StaticResource QueueRow}" DoubleTapped="Queue_DoubleTapped"/>
+                    </DockPanel>
+                </Grid>
+
+                <!-- VLC's frames are drawn into this image (see VideoFrames), so the app's own buttons can sit over it -->
+                <Border Name="Video" Grid.Row="0" Grid.RowSpan="2" Background="Black" IsVisible="False">
+                    <Image Name="VideoImage" Stretch="Uniform"/>
+                </Border>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                    <Button Classes="icon" Click="CloseNow_Click" ToolTip.Tip="Back to collection (Esc)" Foreground="White"><Path Data="{StaticResource IconBack}"/></Button>
+                    <Button Name="VizBtn" Classes="icon" Click="Viz_Click" ToolTip.Tip="Visualizer style and colours (V and C cycle them)" Foreground="White" Margin="4,0,0,0"><Path Data="{StaticResource IconVisualizer}"/></Button>
+                    <Button Classes="icon" Click="Full_Click" ToolTip.Tip="Full screen (F11, or double-click)" Foreground="White" Margin="4,0,0,0"><Path Data="{StaticResource IconFull}"/></Button>
+                </StackPanel>
+            </Grid>
+        </ThemeVariantScope>
+
+        <!-- ===== transport: playlist icon left, what is playing in the middle, controls and volume right ===== -->
+        <Border Name="Transport" Grid.Row="2" Background="{DynamicResource BgAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+            <Grid Height="80" ColumnDefinitions="*,460,*">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <Button Classes="drop" Click="Playlists_Click" ToolTip.Tip="Click to see playlists">
+                        <Path Data="{StaticResource IconPlaylist}"/>
+                    </Button>
+                </StackPanel>
+
+                <DockPanel Grid.Column="1" VerticalAlignment="Center">
+                    <Button DockPanel.Dock="Left" Classes="bare" Click="OpenNow_Click" ToolTip.Tip="Now playing" Margin="0,0,14,0">
+                        <Border Width="56" Height="56" Background="{DynamicResource Line}" ClipToBounds="True">
+                            <Grid>
+                                <Path Data="{StaticResource IconNote}" Stroke="{DynamicResource FgFaint}" StrokeThickness="1.3" Width="18" Height="18" Stretch="Uniform"/>
+                                <Image Name="BarArt" d:Art.Size="120" Stretch="UniformToFill"/>
+                            </Grid>
+                        </Border>
+                    </Button>
+                    <StackPanel VerticalAlignment="Center">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Name="BookmarkBtn" Classes="icon" Width="30" Height="30" Click="Bookmark_Click" ToolTip.Tip="Bookmark this spot in the audiobook" IsVisible="False">
+                                    <Path Data="{StaticResource IconBookmark}"/>
+                                </Button>
+                                <Button Name="HeartBtn" Classes="icon" Width="30" Height="30" Click="Heart_Click" ToolTip.Tip="Like / dislike this song">
+                                    <Path Name="HeartPath" Data="{StaticResource IconHeart}"/>
+                                </Button>
+                            </StackPanel>
+                            <Button Classes="bare" Click="OpenNow_Click" ToolTip.Tip="Now playing" HorizontalContentAlignment="Left">
+                                <StackPanel>
+                                    <TextBlock Name="BarTitle" FontSize="15" TextTrimming="CharacterEllipsis" Text="nothing playing"/>
+                                    <TextBlock Name="BarArtist" Foreground="{DynamicResource FgDim}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Button>
+                        </DockPanel>
+                        <DockPanel Margin="0,4,0,0">
+                            <TextBlock Name="PosText" DockPanel.Dock="Left" Width="40" TextAlignment="Left" Foreground="{DynamicResource FgDim}" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Name="DurText" DockPanel.Dock="Right" Width="40" TextAlignment="Right" Foreground="{DynamicResource FgDim}" FontSize="11" VerticalAlignment="Center"/>
+                            <Slider Name="Seek" Minimum="0" Maximum="1" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </StackPanel>
+                </DockPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,22,0">
+                    <Button Name="ShuffleBtn" Classes="icon" Click="Shuffle_Click" ToolTip.Tip="Shuffle"><Path Data="{StaticResource IconShuffle}"/></Button>
+                    <Button Classes="icon filled" Click="Prev_Click" ToolTip.Tip="Previous"><Path Data="{StaticResource IconPrev}"/></Button>
+                    <Button Name="PlayBtn" Classes="icon big filled" Width="48" Click="Play_Click" ToolTip.Tip="Play / pause (Space)"><Path Name="PlayPath" Data="{StaticResource IconPlay}"/></Button>
+                    <Button Classes="icon filled" Click="Next_Click" ToolTip.Tip="Next"><Path Data="{StaticResource IconNext}"/></Button>
+                    <Button Name="RepeatBtn" Classes="icon" Click="Repeat_Click" ToolTip.Tip="Repeat"><Path Name="RepeatPath" Data="{StaticResource IconRepeat}"/></Button>
+                    <Button Name="MuteBtn" Classes="icon" Click="Mute_Click" ToolTip.Tip="Mute" Margin="6,0,0,0"><Path Name="MutePath" Data="{StaticResource IconVolume}"/></Button>
+                    <Slider Name="Volume" Width="84" Minimum="0" Maximum="1" Value="0.8" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,70 @@
+<UserControl x:Class="Halcyon.UI.BooksView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Halcyon.UI">
+    <UserControl.Resources>
+        <DataTemplate x:Key="BookTile">
+            <StackPanel>
+                <Grid Width="150" Height="225" Background="{DynamicResource BgAlt}" HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="32" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Image ui:Art.Path="{Binding ArtPath}" ui:Art.Size="320" Stretch="Uniform" VerticalAlignment="Bottom"/>
+                    <Border Background="#C0000000" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="7,3" Margin="0,6,0,0" x:Name="CounterBadge">
+                        <TextBlock Text="{Binding Counter}" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                    </Border>
+                    <Border Background="#C0000000" HorizontalAlignment="Left" VerticalAlignment="Top" Padding="6,3" Margin="0,6,0,0" x:Name="Badge">
+                        <TextBlock Text="&#xE7F6;" FontFamily="{StaticResource Icons}" Foreground="White" FontSize="12" ToolTip="Audiobook"/>
+                    </Border>
+                    <Border Height="4" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="{Binding ProgressWidth}" Background="{StaticResource AccentGrad}"/>
+                </Grid>
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                <TextBlock Text="{Binding Caption}" Foreground="{DynamicResource FgDim}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsAudio}" Value="False"><Setter TargetName="Badge" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                <DataTrigger Binding="{Binding Counter}" Value=""><Setter TargetName="CounterBadge" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                <DataTrigger Binding="{Binding Counter}" Value="read"><Setter TargetName="CounterBadge" Property="Background" Value="{StaticResource AccentGrad}"/></DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="20,8,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="8,0,0,12">
+            <RadioButton Style="{StaticResource NavTab}" Content="all" Tag="all" GroupName="bookTabs" IsChecked="True" Click="Tab_Click"/>
+            <RadioButton Style="{StaticResource NavTab}" Content="audiobooks" Tag="audio" GroupName="bookTabs" Click="Tab_Click"/>
+            <RadioButton Style="{StaticResource NavTab}" Content="ebooks" Tag="ebook" GroupName="bookTabs" Click="Tab_Click"/>
+            <RadioButton Style="{StaticResource NavTab}" Content="in progress" Tag="progress" GroupName="bookTabs" Click="Tab_Click"/>
+            <TextBlock x:Name="CountText" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="18,2,0,0"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <DockPanel>
+                <TextBlock x:Name="AuthorCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="AUTHORS"/>
+                <ListBox x:Name="AuthorList" SelectionChanged="Author_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontSize="14" Height="30" Padding="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <DockPanel Grid.Column="1" Margin="10,0,0,0">
+                <TextBlock x:Name="BookCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="BOOKS"/>
+                <ui:TileGrid x:Name="Tiles" TileWidth="162" TileTemplate="{StaticResource BookTile}"/>
+            </DockPanel>
+            <StackPanel x:Name="EmptyPanel" Grid.ColumnSpan="2" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                <TextBlock Text="no books yet" Style="{StaticResource H2}" HorizontalAlignment="Center"/>
+                <TextBlock Foreground="{DynamicResource FgDim}" TextAlignment="Center" Margin="0,0,0,14"
+                           Text="Add a book folder in settings. Phoenix picks up audiobooks (a folder of audio files, or an .m4b) and ebooks (EPUB, PDF, and comics as CBZ or CBR)."/>
+                <Button Style="{StaticResource PillBtn}" Content="open settings" HorizontalAlignment="Center" Click="OpenSettings_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
