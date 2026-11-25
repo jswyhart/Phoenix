@@ -39,6 +39,7 @@ public partial class SettingsView
 
     void LoadListening()
     {
+        RadioOn.IsChecked = S.RadioEnabled;
         LbOn.IsChecked = S.ScrobbleListenBrainz;
         LfmOn.IsChecked = S.ScrobbleLastFm;
         LbToken.Password = S.ApiKeys.GetValueOrDefault("listenbrainz", "");
@@ -53,6 +54,14 @@ public partial class SettingsView
         LfmStatus.Text = Listening.LastFmReady ? $"connected as {S.LastFmUser}" : S.ApiKeys.GetValueOrDefault("lastfm", "") == "" || S.ApiKeys.GetValueOrDefault("lastfm_secret", "") == "" ? "enter the key and secret, then CONNECT" : "not connected yet: choose CONNECT";
         LfmSignOutBtn.IsEnabled = Listening.LastFmReady;
         ScrobbleResult.Text = Listening.LastResult;
+    }
+
+    void RadioOn_Click(object sender, RoutedEventArgs e)
+    {
+        S.RadioEnabled = RadioOn.IsChecked == true;
+        Keep();
+        App.Win.ShowRadioTab();
+        App.Lib.NotifyChanged();   // quickplay shows or hides pinned stations
     }
 
     void Scrobble_Click(object sender, RoutedEventArgs e)
@@ -182,13 +191,44 @@ public partial class SettingsView
     {
         AboutVersion.Text = $"Phoenix {Updater.CurrentText}  ·  {(Updater.Arch == "arm64" ? "ARM64" : "64-bit")}  ·  {(Updater.IsInstalled ? "installed" : "portable copy")}";
         UpdatesOn.IsChecked = S.CheckUpdates;
+        AutoUpdateOn.IsChecked = S.AutoUpdate;
+        KeepPreviousOn.IsChecked = S.KeepPrevious;
         ShowUpdate(Updater.Latest, checkedNow: false);
+        ShowRevert();
     }
 
     void UpdatesOn_Click(object sender, RoutedEventArgs e)
     {
         S.CheckUpdates = UpdatesOn.IsChecked == true;
+        S.AutoUpdate = AutoUpdateOn.IsChecked == true;
+        S.KeepPrevious = KeepPreviousOn.IsChecked == true;
+        if (!S.KeepPrevious) Updater.ForgetKept();
         Keep();
+        ShowRevert();
+    }
+
+    void ShowRevert()
+    {
+        // updating by itself needs the daily look, and an installed copy to update
+        AutoUpdateOn.IsEnabled = S.CheckUpdates && Updater.IsInstalled;
+        RevertBtn.IsEnabled = Updater.IsInstalled;
+        var kept = Updater.Kept;
+        RevertBtn.Content = kept != null ? $"GO BACK TO {kept.Value.Version}" : "GO BACK ONE VERSION";
+        RevertStatus.Text = !Updater.IsInstalled ? "This is a portable copy: to update or go back, unpack another version's zip over it."
+            : Updater.Waiting is { } w ? $"Phoenix {w.Version} is downloaded and will be installed when you close Phoenix."
+            : kept != null ? $"Phoenix {kept.Value.Version} is kept and can be put back without downloading."
+            : S.UpdateSkipped != "" ? $"You went back from, or skipped, {S.UpdateSkipped}: it will not be installed by itself. CHECK NOW still offers it." : "";
+    }
+
+    async void Revert_Click(object sender, RoutedEventArgs e)
+    {
+        var to = Updater.Kept?.Version;
+        var text = (to != null ? $"Go back to Phoenix {to}?" : "Go back to the version before this one? It is downloaded from Phoenix's releases on GitHub.")
+                   + $" Phoenix closes and the earlier version's installer runs. Your library and settings stay as they are. Phoenix {Updater.CurrentText} will not be installed again by itself.";
+        if (MessageBox.Show(App.Win, text, "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        RevertBtn.IsEnabled = false;
+        try { await Updater.RevertAsync(status => Dispatcher.BeginInvoke(() => RevertStatus.Text = status)); }
+        catch (Exception ex) { RevertStatus.Text = "couldn't go back: " + ex.Message; RevertBtn.IsEnabled = true; }
     }
 
     void ShowUpdate(Updater.Release? release, bool checkedNow)
@@ -224,6 +264,11 @@ public partial class SettingsView
         UpdateInstallBtn.IsEnabled = false;
         try
         {
+            if (S.KeepPrevious)
+            {
+                UpdateStatus.Text = $"keeping Phoenix {Updater.CurrentText} so you can go back…";
+                try { await Updater.KeepCurrentAsync(); } catch { }   // not being able to keep it does not stop the update
+            }
             var file = await Updater.DownloadAsync(release, done => Dispatcher.BeginInvoke(() => UpdateStatus.Text = $"downloading Phoenix {release.VersionText}… {done:P0}"));
             UpdateStatus.Text = "starting the installer…";
             App.Settings.Save();

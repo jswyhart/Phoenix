@@ -76,11 +76,105 @@ public static class Updater
         return Latest = Parse(J.Parse(await response.Content.ReadAsStringAsync()), Arch);
     }
 
+    /// <summary>Every published release, newest version first.</summary>
+    public static async Task<List<Release>> AllAsync()
+    {
+        using var response = await Http.GetAsync($"https://api.github.com/repos/{Repo}/releases?per_page=30");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return new();
+        response.EnsureSuccessStatusCode();
+        return ParseAll(J.Parse(await response.Content.ReadAsStringAsync()), Arch);
+    }
+
+    public static List<Release> ParseAll(JsonElement r, string arch) => r.ValueKind != JsonValueKind.Array ? new()
+        : r.EnumerateArray().Where(x => x.O("prerelease").ValueKind != JsonValueKind.True).Select(x => Parse(x, arch)).Where(x => x != null).Select(x => x!)
+            .OrderByDescending(x => x.Version).ToList();
+
+    /// <summary>The release one step back from a version: the newest one that is older and has an installer for this PC.</summary>
+    public static Release? Before(IEnumerable<Release> releases, Version version) =>
+        releases.Where(x => x.Version < version && x.InstallerUrl != "").OrderByDescending(x => x.Version).FirstOrDefault();
+
+    // ---------- going back one version ----------
+
+    /// <summary>Where the installer of the replaced version is kept (in the data folder, so it survives the update).</summary>
+    public static string PreviousFolder => Path.Combine(Halcyon.Core.AppPaths.DataDir, "previous-version");
+
+    /// <summary>The version an update can be undone to, if its installer was kept: (version, installer file).</summary>
+    public static (string Version, string File)? Kept
+    {
+        get
+        {
+            var s = App.Settings;
+            return s.PreviousVersion != "" && s.PreviousInstaller != "" && File.Exists(s.PreviousInstaller) && ParseVersion(s.PreviousVersion) is { } v && v != Current
+                ? (s.PreviousVersion, s.PreviousInstaller) : null;
+        }
+    }
+
+    /// <summary>
+    /// Before an update: fetches the installer of the version that is running now and keeps it, so the update can be
+    /// undone. False when that version was never published (there is then nothing to keep).
+    /// </summary>
+    public static async Task<bool> KeepCurrentAsync(IEnumerable<Release>? known = null)
+    {
+        var s = App.Settings;
+        if (!s.KeepPrevious || !IsInstalled) return false;
+        if (s.PreviousVersion == CurrentText && File.Exists(s.PreviousInstaller)) return true;
+        var mine = (known ?? await AllAsync()).FirstOrDefault(x => x.Version == new Version(Current.Major, Current.Minor, Math.Max(0, Current.Build)) && x.InstallerUrl != "");
+        if (mine == null) return false;
+        var file = await DownloadAsync(mine, _ => { }, PreviousFolder);
+        // only one earlier version is kept
+        foreach (var old in Directory.GetFiles(PreviousFolder).Where(f => !string.Equals(f, file, StringComparison.OrdinalIgnoreCase))) try { File.Delete(old); } catch { }
+        s.PreviousVersion = CurrentText;
+        s.PreviousInstaller = file;
+        if (!App.SmokeMode) s.Save();
+        return true;
+    }
+
+    /// <summary>
+    /// Goes back to the version before this one: its kept installer if there is one, otherwise the release before this
+    /// one from GitHub. The version being left is not offered or installed again by itself.
+    /// </summary>
+    public static async Task RevertAsync(Action<string> status)
+    {
+        if (!IsInstalled) throw new Exception("This is a portable copy: unpack the earlier zip from the release page over it.");
+        var file = Kept?.File;
+        if (file == null)
+        {
+            status("looking for the version before this one…");
+            var earlier = Before(await AllAsync(), Current) ?? throw new Exception("No earlier version has been published to go back to.");
+            file = await DownloadAsync(earlier, done => status($"downloading Phoenix {earlier.VersionText}… {done:P0}"));
+        }
+        var s = App.Settings;
+        s.UpdateSkipped = CurrentText;   // do not come straight back to the version just left
+        s.PreviousVersion = s.PreviousInstaller = "";
+        s.Save();
+        status("starting the installer…");
+        Install(file);
+    }
+
+    public static void ForgetKept()
+    {
+        try { if (Directory.Exists(PreviousFolder)) Directory.Delete(PreviousFolder, true); } catch { }
+        App.Settings.PreviousVersion = App.Settings.PreviousInstaller = "";
+    }
+
+    // ---------- updating by itself ----------
+
+    /// <summary>An update that has been downloaded and is installed, without questions, when Phoenix closes.</summary>
+    public static (string Version, string File)? Waiting { get; private set; }
+
+    /// <summary>When Phoenix closes: runs the waiting installer silently (it does not start Phoenix again).</summary>
+    public static void InstallWaiting()
+    {
+        if (Waiting is not { } w || !File.Exists(w.File)) return;
+        try { Process.Start(new ProcessStartInfo(w.File, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART") { UseShellExecute = true }); } catch { }
+        Waiting = null;
+    }
+
     /// <summary>Downloads a release's installer and checks it arrived whole. Returns where it was saved.</summary>
-    public static async Task<string> DownloadAsync(Release release, Action<double> progress)
+    public static async Task<string> DownloadAsync(Release release, Action<double> progress, string? folder = null)
     {
         if (release.InstallerUrl == "") throw new Exception("This release has no installer for this kind of PC.");
-        var dir = Path.Combine(Path.GetTempPath(), "Phoenix-update");
+        var dir = folder ?? Path.Combine(Path.GetTempPath(), "Phoenix-update");
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, Path.GetFileName(release.InstallerName));
         using (var response = await Http.GetAsync(release.InstallerUrl, HttpCompletionOption.ResponseHeadersRead))
@@ -126,8 +220,17 @@ public static class Updater
         {
             var release = await CheckAsync();
             s.UpdateChecked = Halcyon.Core.Fmt.Now;
-            if (release is { IsNewer: true } && release.VersionText != s.UpdateSkipped)
-                App.Win.SetStatus($"Phoenix {release.VersionText} is available: settings → about");
+            if (release is not { IsNewer: true } || release.VersionText == s.UpdateSkipped) return;
+            if (!s.AutoUpdate || !IsInstalled || release.InstallerUrl == "")
+            {
+                App.Win.SetStatus($"Phoenix {release.VersionText} is available: settings → updates");
+                return;
+            }
+            // updating by itself: fetch it now, install it when Phoenix is closed
+            try { await KeepCurrentAsync(); } catch { }
+            var file = await DownloadAsync(release, _ => { });
+            Waiting = (release.VersionText, file);
+            App.Win.SetStatus($"Phoenix {release.VersionText} will be installed when you close Phoenix");
         }
         catch { /* offline, or GitHub is busy: tomorrow */ }
     }

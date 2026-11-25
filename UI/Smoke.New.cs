@@ -147,10 +147,45 @@ public static partial class Smoke
         var item = Player.From(lib.Stations[0]);
         Check("a saved station is listed, and plays as an endless stream outside the music engine", radio.SavedShown == 1 && lib.Stations.Count == 1 && item.Station != null && item.Track == null && item.DurationMs == 0 && CastMedia.Can(item));
         await Shot("31-radio");
+        // the sources tab: browse the directory and add from it
+        var genres = Radio.ParseGenres(JsonDocument.Parse("""[{"name":"pop","stationcount":3000},{"name":"x","stationcount":900},{"name":"rare thing","stationcount":3},{"name":" jazz ","stationcount":800}]""").RootElement);
+        var countries = Radio.ParseCountries(JsonDocument.Parse("""[{"name":"Norway","iso_3166_1":"NO","stationcount":210},{"name":"Austria","iso_3166_1":"AT","stationcount":400},{"name":"Nowhere","iso_3166_1":"","stationcount":5}]""").RootElement);
+        Check("the directory's genres and countries are read for browsing", genres.Select(g => g.Name).SequenceEqual(new[] { "pop", "jazz" }) && countries.Select(c => c.Key).SequenceEqual(new[] { "AT", "NO" }) && genres[0].CountText == "3,000",
+            $"{string.Join(", ", genres.Select(g => g.Name))}; {string.Join(", ", countries.Select(c => c.Name))}");
+        radio.ShowTab("sources");
+        var fromDirectory = new List<Station> { new() { Name = "Blues Hour", Url = "https://stream.example/blues", Tags = "blues", Country = "US" }, lib.Stations[0] };
+        radio.Show(fromDirectory, "BLUES");
+        await Task.Delay(200);
+        var savedBefore = lib.Stations.Count;
+        radio.Save(fromDirectory[0]);
+        Check("the radio page has a sources tab where stations are browsed and added to my stations",
+            radio.Tab == "sources" && radio.SourcesVisible && radio.Results.Count == 2 && savedBefore == 1 && lib.Stations.Count == 2 && lib.Stations.Any(x => x.Name == "Blues Hour") && radio.SavedShown == 2,
+            $"{radio.Results.Count} shown, {lib.Stations.Count} saved");
+        await Shot("31-radio-sources");
+        lib.RemoveStation(lib.Stations.First(x => x.Name == "Blues Hour"));
+        radio.ShowTab("mine");
         win.Navigate("quickplay");
         await Task.Delay(300);
-        var pinned = ((ItemsControl)win.Page<QuickplayView>("quickplay").FindName("PinsList")).Items.Cast<QuickItem>().Any(q => q.Title == "Jazz FM" && q.Subtitle == "radio");
+        bool Pinned() => ((ItemsControl)win.Page<QuickplayView>("quickplay").FindName("PinsList")).Items.Cast<QuickItem>().Any(q => q.Title == "Jazz FM" && q.Subtitle == "radio");
+        var pinned = Pinned();
         Check("a station can be pinned to quickplay", pinned);
+        // radio switched off in settings
+        win.Navigate("radio");
+        S.RadioEnabled = false;
+        win.ShowRadioTab();
+        lib.NotifyChanged();
+        var leftPage = win.CurrentPage != "radio";
+        win.Navigate("radio");
+        var hidden = !win.RadioTabShown && leftPage && win.CurrentPage != "radio";
+        win.Navigate("quickplay");
+        await Task.Delay(200);
+        var pinHidden = !Pinned();
+        S.RadioEnabled = true;
+        win.ShowRadioTab();
+        lib.NotifyChanged();
+        await Task.Delay(200);
+        Check("radio can be switched off in settings: the tab and pinned stations go, and come back with the stations kept", hidden && pinHidden && win.RadioTabShown && Pinned() && lib.Stations.Count == 1,
+            $"hidden {hidden}, pin hidden {pinHidden}, back {win.RadioTabShown}");
         lib.RemoveStation(lib.Stations[0]);
         Check("removing a station also takes its pin away", lib.Stations.Count == 0 && !lib.IsPinned("radio", parsed[0].Url));
 
@@ -260,6 +295,13 @@ public static partial class Smoke
         Check("a newer release on GitHub is recognised, with the installer for this kind of PC", release is { IsNewer: true, InstallerSize: 123, Sha256: "abcd" } && release.InstallerName.Contains("x64") && release.VersionText == "9.4.1"
             && current is { IsNewer: false } && Updater.ParseVersion("v1.2") == new Version(1, 2, 0), $"{release?.VersionText}: {release?.InstallerName}");
         Check("an installer that is not on Phoenix's own GitHub page is never offered", elsewhere is { InstallerUrl: "" });
+        string Rel(string v, bool pre = false) => "{\"tag_name\":\"v" + v + "\",\"prerelease\":" + (pre ? "true" : "false") + ",\"assets\":[{\"name\":\"Phoenix-" + v + "-win-x64-setup.exe\",\"size\":1,\"browser_download_url\":\"https://github.com/"
+            + Updater.Repo + "/releases/download/v" + v + "/Phoenix-" + v + "-win-x64-setup.exe\"}]}";
+        var published = Updater.ParseAll(JsonDocument.Parse($"[{Rel("2.1.0")},{Rel("2.3.0")},{Rel("2.2.5", pre: true)},{Rel("2.2.0")},{Rel("1.9.0")}]").RootElement, "x64");
+        var back = Updater.Before(published, new Version(2, 3, 0));
+        Check("going back one version picks the release just before the one you have, never a pre-release", published.Count == 4 && published[0].VersionText == "2.3.0" && back is { VersionText: "2.2.0" }
+            && Updater.Before(published, new Version(1, 9, 0)) == null && Updater.Before(published, new Version(2, 2, 0)) is { VersionText: "2.1.0" }, $"from 2.3.0 back to {back?.VersionText}");
+        Check("updating by itself is off until asked for, and nothing waits to be installed", !S.AutoUpdate && S.KeepPrevious && Updater.Waiting == null && Updater.Kept == null);
 
         // ---------- artist photos ----------
         var pickId = Backdrops.PickArtist(JsonDocument.Parse("""{"artists":[{"id":"wrong","score":100,"name":"The Examples"},{"id":"right","score":96,"name":"The Example Band"}]}""").RootElement, "Example Band");
@@ -404,14 +446,17 @@ public static partial class Smoke
         bool Shown(string panel) => ((FrameworkElement)settings.FindName(panel)).IsVisible;
         settings.ShowCategory("software", "Listening");
         await Task.Delay(200);
+        Check("settings: Listening has the switch for radio, on to begin with", Shown("PanelListening") && ((CheckBox)settings.FindName("RadioOn")).IsChecked == true);
         Check("settings: Listening offers scrobbling, off to begin with", Shown("PanelListening") && ((CheckBox)settings.FindName("LbOn")).IsChecked == false && ((CheckBox)settings.FindName("LfmOn")).IsChecked == false);
         await Shot("36-settings-listening");
         settings.ShowCategory("software", "Playback");
         Check("settings: Playback offers volume levelling", Shown("PanelPlayback") && ((CheckBox)settings.FindName("LevelOn")).IsChecked == false);
-        settings.ShowCategory("software", "About");
+        settings.ShowCategory("software", "Updates");
         await Task.Delay(200);
-        Check("settings: About shows the version and the update check", Shown("PanelAbout") && ((TextBlock)settings.FindName("AboutVersion")).Text.Contains(Updater.CurrentText) && ((CheckBox)settings.FindName("UpdatesOn")).IsChecked == true);
-        await Shot("37-settings-about");
+        Check("settings: Updates shows the version, the daily check, updating by itself (off) and going back", Shown("PanelAbout") && ((TextBlock)settings.FindName("AboutVersion")).Text.Contains(Updater.CurrentText)
+            && ((CheckBox)settings.FindName("UpdatesOn")).IsChecked == true && ((CheckBox)settings.FindName("AutoUpdateOn")).IsChecked == false && ((CheckBox)settings.FindName("KeepPreviousOn")).IsChecked == true
+            && settings.FindName("RevertBtn") is Button);
+        await Shot("37-settings-updates");
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);
         settings.ShowCategory("software");

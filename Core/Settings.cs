@@ -58,8 +58,13 @@ public class Settings
     public bool ScrobbleListenBrainz { get; set; }
     public string LastFmUser { get; set; } = "";
     public string ListenBrainzUser { get; set; } = "";
+    public bool RadioEnabled { get; set; } = true;        // show internet radio in the collection
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
     public bool CheckUpdates { get; set; } = true;        // ask GitHub once a day whether there is a newer Phoenix
+    public bool AutoUpdate { get; set; }                  // download a newer Phoenix when one is found and install it when Phoenix is closed
+    public bool KeepPrevious { get; set; } = true;        // keep the installer of the version being replaced, so an update can be undone
+    public string PreviousVersion { get; set; } = "";     // the version that was replaced by the last update
+    public string PreviousInstaller { get; set; } = "";   // where its installer is kept
     public long UpdateChecked { get; set; }
     public string UpdateSkipped { get; set; } = "";       // a version you chose not to be told about again
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");

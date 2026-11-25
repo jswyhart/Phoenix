@@ -289,6 +289,9 @@
                     <StackPanel Orientation="Horizontal">
                         <Button Style="{StaticResource PillBtn}" Content="SHOW MY STATS" Margin="0" Click="ShowStats_Click"/>
                     </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="INTERNET RADIO" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="RadioOn" Content="Show radio in the collection" Margin="0,4,0,0" Click="RadioOn_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: the radio tab and any stations pinned to quickplay are hidden. Your saved stations are kept for when you switch it back on."/>
                     <TextBlock Style="{StaticResource Label}" Text="LISTENBRAINZ" Margin="0,22,0,3"/>
                     <CheckBox x:Name="LbOn" Content="Send my listens to ListenBrainz" Margin="0,4,0,0" Click="Scrobble_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Needs your user token, from listenbrainz.org → settings. It is free and needs no application key."/>
@@ -318,11 +321,13 @@
                 </StackPanel>
 
                 <StackPanel x:Name="PanelAbout" Visibility="Collapsed">
-                    <TextBlock Text="about" Style="{StaticResource Head}"/>
+                    <TextBlock Text="updates" Style="{StaticResource Head}"/>
                     <TextBlock x:Name="AboutVersion" FontSize="15"/>
-                    <TextBlock Style="{StaticResource Label}" Text="UPDATES" Margin="0,22,0,3"/>
+                    <TextBlock Style="{StaticResource Label}" Text="NEW VERSIONS" Margin="0,22,0,3"/>
                     <CheckBox x:Name="UpdatesOn" Content="Look for a newer Phoenix once a day" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Asks GitHub for Phoenix's public list of releases. Nothing about you or your library is sent."/>
+                    <CheckBox x:Name="AutoUpdateOn" Content="Update by itself" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: a new version is downloaded when it is found and installed when you close Phoenix, without asking; the next start is the new version. Off: Phoenix only tells you, and you choose when to install."/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <Button x:Name="UpdateCheckBtn" Style="{StaticResource PillBtn}" Content="CHECK NOW" Margin="0" Click="UpdateCheck_Click"/>
                         <Button x:Name="UpdateInstallBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD AND INSTALL" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateInstall_Click"/>
@@ -331,6 +336,13 @@
                     </StackPanel>
                     <TextBlock x:Name="UpdateStatus" Style="{StaticResource Status}"/>
                     <TextBlock x:Name="UpdateNotes" Foreground="{DynamicResource FgDim}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                    <TextBlock Style="{StaticResource Label}" Text="GOING BACK" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="KeepPreviousOn" Content="Keep the version before an update, so the update can be undone" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: before an update, the installer of the version you have is kept in Phoenix's data folder (about 50 MB; only one is kept). Off: nothing is kept, and going back downloads the earlier version from GitHub when you ask. Your library and settings are not changed by going back."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button x:Name="RevertBtn" Style="{StaticResource PillBtn}" Content="GO BACK ONE VERSION" Margin="0" Click="Revert_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="RevertStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelWeb" Visibility="Collapsed">

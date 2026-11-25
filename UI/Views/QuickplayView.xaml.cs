@@ -63,7 +63,7 @@ public partial class QuickplayView : UserControl
                             Play = () => Menus.Play(albums.SelectMany(a => a.Tracks))
                         });
                     break;
-                case "radio" when lib.Stations.FirstOrDefault(st => st.Url == pin.Key) is { } station:
+                case "radio" when App.Settings.RadioEnabled && lib.Stations.FirstOrDefault(st => st.Url == pin.Key) is { } station:
                     pins.Add(new QuickItem { Title = station.Name, Subtitle = "radio", Glyph = "\uE7F6", Pin = pin, ArtPath = station.Art, Play = () => Halcyon.Services.Radio.Play(station) });
                     break;
                 case "playlist" when lib.Playlists.FirstOrDefault(p => p.Id.ToString() == pin.Key) is { } pl:

@@ -72,6 +72,7 @@ public partial class MainWindow : Window
         };
 
         BuildTaskbarButtons();
+        ShowRadioTab();
         ShowWebTabs();
         ShowQueueTab(App.Settings.ShowLyrics);
         Navigate("quickplay");
@@ -268,6 +269,8 @@ public partial class MainWindow : Window
         _page = page;
         var web = page.StartsWith("web:") ? WebServices.Find(page[4..]) : null;
         if (page.StartsWith("web:") && (web == null || !WebServices.IsOn(web))) { page = "music"; web = null; }
+        if (page == "radio" && !App.Settings.RadioEnabled) page = "music";
+        _page = page;
         var isColl = CollectionPages.Contains(page) || web != null;
         if (isColl) _collPage = page;
         Host.Content = Page<FrameworkElement>(page);
@@ -477,6 +480,19 @@ public partial class MainWindow : Window
         m.Items.Add(Menus.Item("Listening stats", () => Navigate("stats")));
         return m;
     }
+
+    /// <summary>Shows or hides the radio tab, as chosen in settings; switching radio off also stops a station that is playing.</summary>
+    public void ShowRadioTab()
+    {
+        var on = App.Settings.RadioEnabled;
+        NavRadio.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on) return;
+        if (_collPage == "radio") _collPage = "music";
+        if (_page == "radio") Navigate("music");
+        if (P.Current?.Station != null) P.Stop();
+    }
+
+    public bool RadioTabShown => NavRadio.Visibility == Visibility.Visible;
 
     /// <summary>Sets the volume as if the slider had been moved (used by the phone remote).</summary>
     public void SetVolume(double value) => Volume.Value = Math.Clamp(value, 0, 1);

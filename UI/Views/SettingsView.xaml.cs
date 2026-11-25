@@ -30,7 +30,7 @@ public partial class SettingsView : UserControl
     // SOFTWARE / PHONE / SERVERS, each with its categories and the panel a category shows
     static readonly Dictionary<string, (string name, string panel)[]> Categories = new()
     {
-        ["software"] = new[] { ("Collection", "PanelCollection"), ("Rip", "PanelRip"), ("Burn", "PanelBurn"), ("Metadata", "PanelMetadata"), ("Playback", "PanelPlayback"), ("Listening", "PanelListening"), ("Podcasts", "PanelPodcasts"), ("Translation", "PanelTranslation"), ("Display", "PanelDisplay"), ("Storage", "PanelStorage"), ("About", "PanelAbout") },
+        ["software"] = new[] { ("Collection", "PanelCollection"), ("Rip", "PanelRip"), ("Burn", "PanelBurn"), ("Metadata", "PanelMetadata"), ("Playback", "PanelPlayback"), ("Listening", "PanelListening"), ("Podcasts", "PanelPodcasts"), ("Translation", "PanelTranslation"), ("Display", "PanelDisplay"), ("Storage", "PanelStorage"), ("Updates", "PanelAbout") },
         ["phone"] = new[] { ("Sync options", "PanelPhone") },
         ["servers"] = new[] { ("Jellyfin", "PanelJellyfin"), ("Plex", "PanelPlex"), ("Streaming", "PanelWeb") }
     };

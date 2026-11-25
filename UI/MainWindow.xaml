@@ -51,7 +51,7 @@
                 <RadioButton Style="{StaticResource NavSection}" Content="podcasts" GroupName="sub" Click="NavSub_Click" Tag="podcasts"/>
                 <RadioButton Style="{StaticResource NavSection}" Content="books" GroupName="sub" Click="NavSub_Click" Tag="books"/>
                 <RadioButton Style="{StaticResource NavSection}" Content="playlists" GroupName="sub" Click="NavSub_Click" Tag="playlists"/>
-                <RadioButton Style="{StaticResource NavSection}" Content="radio" GroupName="sub" Click="NavSub_Click" Tag="radio"/>
+                <RadioButton x:Name="NavRadio" Style="{StaticResource NavSection}" Content="radio" GroupName="sub" Click="NavSub_Click" Tag="radio"/>
             </StackPanel>
         </Grid>
         <!-- the pink tab at the window edge marks the top navigation -->

@@ -49,6 +49,32 @@ public static class Radio
         }).Where(s => s.Name != "" && s.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)).GroupBy(s => s.Url).Select(g => g.First()).ToList();
     }
 
+    /// <summary>A way of browsing the directory: a genre or a country, with how many stations it has.</summary>
+    public record Group(string Name, string Key, int Count)
+    {
+        public string CountText => Count.ToString("N0");
+    }
+
+    /// <summary>The genres with the most stations.</summary>
+    public static async Task<List<Group>> GenresAsync() => ParseGenres(await AskAsync("tags?order=stationcount&reverse=true&hidebroken=true&limit=150"));
+
+    /// <summary>Countries, by name.</summary>
+    public static async Task<List<Group>> CountriesAsync() => ParseCountries(await AskAsync("countries?order=name&hidebroken=true"));
+
+    public static async Task<List<Station>> ByGenreAsync(string genre) =>
+        Parse(await AskAsync($"stations/bytagexact/{Uri.EscapeDataString(genre)}?limit=100&hidebroken=true&order=clickcount&reverse=true"));
+
+    public static async Task<List<Station>> ByCountryAsync(string code) =>
+        Parse(await AskAsync($"stations/bycountrycodeexact/{Uri.EscapeDataString(code)}?limit=100&hidebroken=true&order=clickcount&reverse=true"));
+
+    public static List<Group> ParseGenres(JsonElement r) => r.ValueKind != JsonValueKind.Array ? new()
+        : r.EnumerateArray().Select(x => new Group(x.S("name").Trim(), x.S("name").Trim(), (int)x.L("stationcount")))
+            .Where(g => g.Name.Length is > 1 and < 30 && g.Count >= 20).ToList();
+
+    public static List<Group> ParseCountries(JsonElement r) => r.ValueKind != JsonValueKind.Array ? new()
+        : r.EnumerateArray().Select(x => new Group(x.S("name").Trim(), x.S("iso_3166_1").Trim(), (int)x.L("stationcount")))
+            .Where(g => g.Name != "" && g.Key.Length == 2 && g.Count > 0).OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>Makes a station from an address you typed (a stream, not a web page).</summary>
     public static Station? FromAddress(string name, string url)
     {
