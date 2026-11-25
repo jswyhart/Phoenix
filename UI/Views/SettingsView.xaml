@@ -161,7 +161,7 @@
                     <TextBlock Style="{StaticResource Label}" Text="ARTIST PHOTOS" Margin="0,22,0,3"/>
                     <CheckBox x:Name="BackdropsBox" Content="Show photos of the artist behind now playing" Margin="0,4,0,0" Click="Backdrops_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="The artist's name is sent to find them: to fanart.tv and TheAudioDB if you entered their keys under metadata (wide photos), otherwise to Deezer (a portrait). Photos are kept in Phoenix's data folder."/>
-                    <StackPanel Orientation="Horizontal" Margin="24,0,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
                         <TextBlock x:Name="BackdropUsage" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center"/>
                         <Button Style="{StaticResource TextBtn}" Content="remove kept photos" Margin="16,0,0,0" Click="BackdropsClear_Click"/>
                     </StackPanel>
@@ -328,7 +328,7 @@
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Asks GitHub for Phoenix's public list of releases. Nothing about you or your library is sent."/>
                     <CheckBox x:Name="AutoUpdateOn" Content="Update by itself" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: a new version is downloaded when it is found and installed when you close Phoenix, without asking; the next start is the new version. Off: Phoenix only tells you, and you choose when to install."/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <Button x:Name="UpdateCheckBtn" Style="{StaticResource PillBtn}" Content="CHECK NOW" Margin="0" Click="UpdateCheck_Click"/>
                         <Button x:Name="UpdateInstallBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD AND INSTALL" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateInstall_Click"/>
                         <Button x:Name="UpdatePageBtn" Style="{StaticResource PillBtn}" Content="OPEN THE RELEASE PAGE" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdatePage_Click"/>
@@ -339,7 +339,7 @@
                     <TextBlock Style="{StaticResource Label}" Text="GOING BACK" Margin="0,22,0,3"/>
                     <CheckBox x:Name="KeepPreviousOn" Content="Keep the version before an update, so the update can be undone" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: before an update, the installer of the version you have is kept in Phoenix's data folder (about 50 MB; only one is kept). Off: nothing is kept, and going back downloads the earlier version from GitHub when you ask. Your library and settings are not changed by going back."/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <Button x:Name="RevertBtn" Style="{StaticResource PillBtn}" Content="GO BACK ONE VERSION" Margin="0" Click="Revert_Click"/>
                     </StackPanel>
                     <TextBlock x:Name="RevertStatus" Style="{StaticResource Status}"/>

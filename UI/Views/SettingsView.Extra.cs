@@ -238,6 +238,7 @@ public partial class SettingsView
         UpdatePageBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
         UpdateSkipBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
         UpdateNotes.Text = newer ? release!.Notes.Trim() : "";
+        UpdateNotes.Visibility = UpdateNotes.Text == "" ? Visibility.Collapsed : Visibility.Visible;   // no empty gap when there is nothing to say
         if (newer)
             UpdateStatus.Text = $"Phoenix {release!.VersionText} is available." + (Updater.IsInstalled ? "" : "  This is a portable copy: download the new zip from the release page and unpack it over this one.");
         else if (checkedNow) UpdateStatus.Text = release == null ? "No release has been published yet." : $"You have the newest version ({Updater.CurrentText}).";
