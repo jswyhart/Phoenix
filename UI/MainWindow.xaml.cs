@@ -419,15 +419,23 @@ public partial class MainWindow : Window
     }
 
     string _infoText = "";
+    bool? _moreLit;
 
     /// <summary>The small line under the artist: the technical details, then anything out of the ordinary (casting, sleep timer, speed).</summary>
     void ComposeInfo()
     {
         var mode = ModeText;
         var text = string.Join("   ·   ", new[] { _infoText, mode }.Where(x => x != ""));
-        if (BarInfo.Text != text) BarInfo.Text = text;
-        BarInfo.Visibility = text == "" ? Visibility.Collapsed : Visibility.Visible;
-        MoreBtn.SetResourceReference(ForegroundProperty, mode != "" ? "Accent" : "Fg");
+        // this runs four times a second: touch the controls only when something changed
+        if (BarInfo.Text != text)
+        {
+            BarInfo.Text = text;
+            BarInfo.Visibility = text == "" ? Visibility.Collapsed : Visibility.Visible;
+        }
+        var lit = mode != "";
+        if (lit == _moreLit) return;
+        _moreLit = lit;
+        MoreBtn.SetResourceReference(ForegroundProperty, lit ? "Accent" : "Fg");
     }
 
     /// <summary>What is switched on from the "more" button, in words.</summary>

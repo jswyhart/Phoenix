@@ -272,7 +272,6 @@ public static partial class Smoke
             var g = gaps.OrderBy(x => x).ToList();
             var mid = g[g.Count / 2];
             Log.AppendLine($"PERF  baseline (the whole window redrawn each frame, nothing else): {g.Count} frames, median {mid:0.0} ms ({1000 / mid:0} fps), 95% under {g[(int)(g.Count * 0.95)]:0.0} ms, worst {g[^1]:0.0} ms, {g.Count(x => x > mid * 1.8)} late, {g.Count(x => x > 8)} over 8 ms");
-            if (false) Log.AppendLine($"INFO  window at {win.Left:0},{win.Top:0}, {win.ActualWidth:0}x{win.ActualHeight:0}; virtual screen {SystemParameters.VirtualScreenWidth:0}x{SystemParameters.VirtualScreenHeight:0}, primary {SystemParameters.PrimaryScreenWidth:0}x{SystemParameters.PrimaryScreenHeight:0}");
         }
         win.Navigate("books");
         await Scroll("book covers", win.Page<BooksView>("books").TileArea);

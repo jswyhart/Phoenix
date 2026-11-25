@@ -38,7 +38,16 @@ public static class Art
     /// <summary>How many thumbnails came from Windows' own cache, and how many had to be made (for the self-test).</summary>
     public static (int FromWindows, int Made) ThumbnailCounts => (_fromWindows, _made);
     public static void ForgetAll() { lock (Cache) Cache.Clear(); if (Application.Current?.Dispatcher.CheckAccess() == true) D3DSurface.ForgetBitmaps(); }
-    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // Pictures from the internet (station logos, podcast covers) get a lane of their own and a short wait: a slow
+    // station's server would otherwise hold up the covers of your own music, which share the lane above.
+    static readonly SemaphoreSlim WebLane = new(6);
+    static readonly HttpClient Http = CreateHttp();
+    static HttpClient CreateHttp()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("PhoenixMediaPlayer/1.0");   // some servers refuse a request that says nothing about itself
+        return c;
+    }
 
     public static void Invalidate(string path)
     {
@@ -83,9 +92,10 @@ public static class Art
         }
         else
         {
-            await Gate.WaitAsync();
+            var lane = path.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? WebLane : Gate;
+            await lane.WaitAsync();
             try { src = await Task.Run(() => Load(path, size)); }
-            finally { Gate.Release(); }
+            finally { lane.Release(); }
         }
         lock (Cache)
         {

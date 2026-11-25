@@ -110,7 +110,8 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
         {
             using var devices = new NAudio.CoreAudioApi.MMDeviceEnumerator();
             using var device = devices.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.Role.Multimedia);
-            rate = device.AudioClient.MixFormat.SampleRate;
+            using var client = device.CreateAudioClient();   // (the AudioClient property makes a new one on every read, never released)
+            rate = client.MixFormat.SampleRate;
         }
         catch { }
         _rate = rate is >= 32000 and <= 192000 ? rate : 48000;
@@ -129,9 +130,11 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
     /// <summary>Asks again for the gain of everything that is open (levelling was switched on or off).</summary>
     public void RefreshGains()
     {
-        lock (_gate)
-            foreach (var d in new[] { _cur, _tail, _next })
-                if (d != null) { var deck = d; deck.Gain.Target = GainFor?.Invoke(deck.Item, g => deck.Gain.Target = g) ?? 1; }
+        // Working out a gain can mean reading a file's tags: done outside the lock, so the sound never waits for it.
+        Deck?[] decks;
+        lock (_gate) decks = new[] { _cur, _tail, _next };
+        foreach (var d in decks)
+            if (d != null) { var deck = d; deck.Gain.Target = GainFor?.Invoke(deck.Item, g => deck.Gain.Target = g) ?? 1; }
     }
 
     public PlayItem? Playing { get { lock (_gate) return _cur?.Item; } }
@@ -257,7 +260,7 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
     {
         if (_out != null) return;
         // the standard Windows output: it follows the default device when headphones or speakers are switched
-        var o = new WaveOutEvent { BufferMilliseconds = 60, NumberOfBuffers = 3 };
+        var o = new WaveOut { BufferMilliseconds = 60, NumberOfBuffers = 3 };
         o.PlaybackStopped += (_, e) =>
         {
             if (e.Exception == null) return;

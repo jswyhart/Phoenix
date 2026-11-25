@@ -284,6 +284,7 @@ public class Page : LinearLayout
         actionScroll.AddView(_actions);
         AddView(actionScroll, Ui.Fill());
 
+        _filterReload = Reload;
         _filter = Ui.Input(a, "filter");
         _filter.SetTextSize(Android.Util.ComplexUnitType.Sp, 14 * Th.Scale);
         _filter.SetPadding(Th.Dp(10), Th.Dp(6), Th.Dp(10), Th.Dp(6));
@@ -298,7 +299,6 @@ public class Page : LinearLayout
             HalcyonApp.Main.RemoveCallbacks(_filterReload);
             HalcyonApp.Main.PostDelayed(_filterReload, 220);
         };
-        _filterReload = Reload;
         _showLink = Ui.Link(a, "", () => PickShow());
         _sortLink = Ui.Link(a, "", () => PickSort());
         _directionLink = Ui.Link(a, "▲", () => { if (_view != null) { _view.SortBy(_view.Sort); Reload(); } });
