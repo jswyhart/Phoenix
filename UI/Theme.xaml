@@ -488,41 +488,11 @@
 
     <!-- ===== data templates ===== -->
     <DataTemplate x:Key="SongRow">
-        <Grid Height="30" Background="Transparent">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="34"/>
-                <ColumnDefinition Width="3*"/>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="1.5*"/>
-                <ColumnDefinition Width="56"/>
-                <ColumnDefinition Width="30"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=(ItemsControl.AlternationIndex), Converter={x:Static ui:RowNumber.Instance}}" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" ui:Tr.Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <TextBlock Grid.Column="2" ui:Tr.Text="{Binding Artist}" Foreground="{DynamicResource FgDim}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <TextBlock Grid.Column="3" ui:Tr.Text="{Binding Album}" Foreground="{DynamicResource FgDim}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <TextBlock Grid.Column="4" Text="{Binding TagText}" Foreground="{DynamicResource Accent}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding TagText}"/>
-            <TextBlock Grid.Column="5" Text="{Binding DurationText}" Foreground="{DynamicResource FgDim}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-            <Button Grid.Column="6" Style="{StaticResource IconBtn}" Width="28" Height="28" FontSize="12" Content="{Binding RatingGlyph}" Opacity="{Binding RatingOpacity}"
-                    Command="{x:Static core:Cmd.Rate}" CommandParameter="{Binding}" ToolTip="Like / dislike"/>
-        </Grid>
+        <ui:SongRowView/>
     </DataTemplate>
 
     <DataTemplate x:Key="SongRowCompact">
-        <Grid Height="30" Background="Transparent">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="34"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="52"/>
-                <ColumnDefinition Width="30"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=(ItemsControl.AlternationIndex), Converter={x:Static ui:RowNumber.Instance}}" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" ui:Tr.Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <TextBlock Grid.Column="2" Text="{Binding DurationText}" Foreground="{DynamicResource FgDim}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-            <Button Grid.Column="3" Style="{StaticResource IconBtn}" Width="28" Height="28" FontSize="12" Content="{Binding RatingGlyph}" Opacity="{Binding RatingOpacity}"
-                    Command="{x:Static core:Cmd.Rate}" CommandParameter="{Binding}" ToolTip="Like / dislike"/>
-        </Grid>
+        <ui:SongRowView Compact="True"/>
     </DataTemplate>
 
     <!-- square cover + two lines; used for albums and quickplay -->

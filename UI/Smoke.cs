@@ -81,6 +81,174 @@ public static class Smoke
         var booksPage = win.Page<BooksView>("books");
         Log.AppendLine($"PERF  books tab ebooks {await Time(() => booksPage.ShowTab("ebook"))} ms");
         Log.AppendLine($"PERF  books tab all {await Time(() => booksPage.ShowTab("all"))} ms");
+        // how evenly frames arrive while a list is being scrolled with the wheel
+        async Task Scroll(string what, ScrollViewer area)
+        {
+            await Task.Delay(1200);   // let covers finish loading first
+            var times = new List<double>();
+            var counting = false;
+            var ops = new List<(double start, double end, string name)>();
+            var gapNotes = new List<string>();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            TimeSpan lastFrame = default;
+            double last = 0;
+            void Frame(object? s2, EventArgs e2)
+            {
+                if (e2 is System.Windows.Media.RenderingEventArgs r) { if (r.RenderingTime == lastFrame) return; lastFrame = r.RenderingTime; }
+                var now = clock.Elapsed.TotalMilliseconds;
+                // while nothing moves Windows only draws now and then; those gaps are not late frames
+                if (last > 0 && (counting == false || SmoothScroll.Moving))
+                {
+                    times.Add(now - last);
+                    // a long gap: what was the interface thread doing in it?
+                    if (counting && now - last > 8 && gapNotes.Count < 4)
+                    {
+                        var inGap = ops.Where(o => o.end >= last && o.start <= now).ToList();
+                        gapNotes.Add($"gap {now - last:0.0} ms: {inGap.Count} pieces of work taking {inGap.Sum(o => o.end - o.start):0.0} ms in all: " +
+                            string.Join("; ", inGap.OrderByDescending(o => o.end - o.start).Take(5).Select(o => $"{o.name} {o.end - o.start:0.0}")));
+                    }
+                }
+                last = SmoothScroll.Moving || !counting ? now : 0;
+            }
+            System.Windows.Media.CompositionTarget.Rendering += Frame;
+            // first with nothing moving, to see how evenly frames arrive on this PC anyway
+            await Task.Delay(1500);
+            var idle = times.OrderBy(x => x).ToList();
+            if (idle.Count > 10) Log.AppendLine($"PERF  idle before {what}: {idle.Count} frames, median {idle[idle.Count / 2]:0.0} ms, 95% under {idle[(int)(idle.Count * 0.95)]:0.0} ms, worst {idle[^1]:0.0} ms, {idle.Count(x => x > idle[idle.Count / 2] * 1.8)} late");
+            times.Clear(); last = 0; counting = true;
+            SmoothScroll.LayoutTimes = new List<double>();
+            var gcBefore = GC.CollectionCount(0);
+            // which pieces of work on the interface thread run long while the list is moving
+            var slow = new Dictionary<string, (int n, double ms, double worst)>();
+            var started = new Dictionary<System.Windows.Threading.DispatcherOperation, long>();
+            var hooks = Application.Current.Dispatcher.Hooks;
+            System.Windows.Threading.DispatcherHookEventHandler onStart = (_, a) => started[a.Operation] = System.Diagnostics.Stopwatch.GetTimestamp();
+            System.Windows.Threading.DispatcherHookEventHandler onDone = (_, a) =>
+            {
+                if (!started.Remove(a.Operation, out var t0)) return;
+                var ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                var f = typeof(System.Windows.Threading.DispatcherOperation).GetField("_method", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var name = a.Operation.Priority + " " + ((f?.GetValue(a.Operation) as Delegate)?.Method is { } m ? m.DeclaringType?.Name + "." + m.Name : "?");
+                var endAt = clock.Elapsed.TotalMilliseconds;
+                ops.Add((endAt - ms, endAt, name));
+                if (ops.Count > 4000) ops.RemoveRange(0, 2000);
+                if (ms < 2.5) return;
+                slow.TryGetValue(name, out var cur);
+                slow[name] = (cur.n + 1, cur.ms + ms, Math.Max(cur.worst, ms));
+            };
+            hooks.OperationStarted += onStart; hooks.OperationCompleted += onDone;
+            for (var i = 0; i < 24; i++) { SmoothScroll.Wheel(area, -240); await Task.Delay(120); }
+            await Task.Delay(600);
+            System.Windows.Media.CompositionTarget.Rendering -= Frame;
+            hooks.OperationStarted -= onStart; hooks.OperationCompleted -= onDone;
+            foreach (var note in gapNotes) Log.AppendLine($"PERF    {what}: {note}");
+            foreach (var (name, v) in slow.OrderByDescending(x => x.Value.ms).Take(8)) Log.AppendLine($"PERF    slow work during {what}: {name}  x{v.n}, {v.ms:0} ms in all, worst {v.worst:0.0} ms");
+            var lay = SmoothScroll.LayoutTimes!.OrderBy(x => x).ToList();
+            SmoothScroll.LayoutTimes = null;
+            if (lay.Count > 10) Log.AppendLine($"PERF  layout per step while scrolling {what}: median {lay[lay.Count / 2]:0.00} ms, 95% under {lay[(int)(lay.Count * 0.95)]:0.00} ms, worst {lay[^1]:0.0} ms, {lay.Count(x => x > 2)} over 2 ms of {lay.Count}; {GC.CollectionCount(0) - gcBefore} garbage collections");
+            if (times.Count < 10) { Log.AppendLine($"PERF  scroll {what}: too few frames"); return; }
+            var sorted = times.OrderBy(x => x).ToList();
+            var median = sorted[sorted.Count / 2];
+            Log.AppendLine($"PERF  scroll {what}: {times.Count} frames, median {median:0.0} ms ({1000 / median:0} fps), 95% under {sorted[(int)(sorted.Count * 0.95)]:0.0} ms, worst {sorted[^1]:0.0} ms, " +
+                           $"{times.Count(x => x > median * 1.8)} late frames (over {median * 1.8:0.0} ms), {times.Count(x => x > 8)} over 8 ms; moved to {area.VerticalOffset:0}; render tier {System.Windows.Media.RenderCapability.Tier >> 16}");
+        }
+        ScrollViewer? Inner(DependencyObject o)
+        {
+            if (o is ScrollViewer sv && sv.ScrollableHeight > 0) return sv;
+            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(o); i++) if (Inner(System.Windows.Media.VisualTreeHelper.GetChild(o, i)) is { } found) return found;
+            return null;
+        }
+        // baseline: one tiny thing changing every frame and nothing else, to see how evenly Windows and the graphics
+        // system let this app draw at all
+        {
+            win.Navigate("settings");
+            await Task.Delay(800);
+            var dot = new System.Windows.Shapes.Rectangle { Width = 2, Height = 2, Fill = System.Windows.Media.Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+            win.AddHidden(dot);
+            var gaps = new List<double>();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            TimeSpan seen = default; double prev = 0; var flip = false;
+            void Tick(object? s3, EventArgs e3)
+            {
+                if (e3 is System.Windows.Media.RenderingEventArgs r) { if (r.RenderingTime == seen) return; seen = r.RenderingTime; }
+                var now = sw.Elapsed.TotalMilliseconds;
+                if (prev > 0) gaps.Add(now - prev);
+                prev = now;
+                flip = !flip;
+                dot.Opacity = flip ? 0.5 : 0.6;
+            }
+            System.Windows.Media.CompositionTarget.Rendering += Tick;
+            await Task.Delay(3000);
+            System.Windows.Media.CompositionTarget.Rendering -= Tick;
+            win.RemoveHidden(dot);
+            var g = gaps.OrderBy(x => x).ToList();
+            var mid = g[g.Count / 2];
+            Log.AppendLine($"PERF  baseline (a 2 px dot changing each frame, nothing else): {g.Count} frames, median {mid:0.0} ms ({1000 / mid:0} fps), 95% under {g[(int)(g.Count * 0.95)]:0.0} ms, worst {g[^1]:0.0} ms, {g.Count(x => x > mid * 1.8)} late, {g.Count(x => x > 8)} over 8 ms");
+            Log.AppendLine($"INFO  window at {win.Left:0},{win.Top:0}, {win.ActualWidth:0}x{win.ActualHeight:0}; virtual screen {SystemParameters.VirtualScreenWidth:0}x{SystemParameters.VirtualScreenHeight:0}, primary {SystemParameters.PrimaryScreenWidth:0}x{SystemParameters.PrimaryScreenHeight:0}");
+        }
+        // the same with the whole window changing: one tiny thing changing every frame and nothing else, to see how evenly Windows and the graphics
+        // system let this app draw at all
+        {
+            win.Navigate("settings");
+            await Task.Delay(800);
+            var dot = new System.Windows.Shapes.Rectangle { Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(8, 128, 128, 128)), IsHitTestVisible = false };
+            System.Windows.Controls.Grid.SetRowSpan(dot, 3);
+            win.AddHidden(dot);
+            var gaps = new List<double>();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            TimeSpan seen = default; double prev = 0; var flip = false;
+            void Tick(object? s3, EventArgs e3)
+            {
+                if (e3 is System.Windows.Media.RenderingEventArgs r) { if (r.RenderingTime == seen) return; seen = r.RenderingTime; }
+                var now = sw.Elapsed.TotalMilliseconds;
+                if (prev > 0) gaps.Add(now - prev);
+                prev = now;
+                flip = !flip;
+                dot.Opacity = flip ? 0.5 : 0.6;
+            }
+            System.Windows.Media.CompositionTarget.Rendering += Tick;
+            await Task.Delay(3000);
+            System.Windows.Media.CompositionTarget.Rendering -= Tick;
+            win.RemoveHidden(dot);
+            var g = gaps.OrderBy(x => x).ToList();
+            var mid = g[g.Count / 2];
+            Log.AppendLine($"PERF  baseline (the whole window redrawn each frame, nothing else): {g.Count} frames, median {mid:0.0} ms ({1000 / mid:0} fps), 95% under {g[(int)(g.Count * 0.95)]:0.0} ms, worst {g[^1]:0.0} ms, {g.Count(x => x > mid * 1.8)} late, {g.Count(x => x > 8)} over 8 ms");
+            if (false) Log.AppendLine($"INFO  window at {win.Left:0},{win.Top:0}, {win.ActualWidth:0}x{win.ActualHeight:0}; virtual screen {SystemParameters.VirtualScreenWidth:0}x{SystemParameters.VirtualScreenHeight:0}, primary {SystemParameters.PrimaryScreenWidth:0}x{SystemParameters.PrimaryScreenHeight:0}");
+        }
+        win.Navigate("books");
+        await Scroll("book covers", win.Page<BooksView>("books").TileArea);
+        win.Navigate("music");
+        var musicPage = win.Page<MusicView>("music");
+        musicPage.SetMode("albums");
+        await Task.Delay(300);
+        if (Inner((DependencyObject)musicPage.FindName("AlbumGrid")) is { } albumArea) await Scroll("album covers", albumArea);
+        musicPage.SetMode("songs");
+        await Task.Delay(300);
+        if (Inner((DependencyObject)musicPage.FindName("SongList")) is { } songArea) await Scroll("songs list", songArea);
+        // the experiment: slide the same list with a transform only (its layout untouched) and count the gaps
+        if (Inner((DependencyObject)musicPage.FindName("SongList")) is { } slideArea && slideArea.Content is FrameworkElement content)
+        {
+            var move = new System.Windows.Media.TranslateTransform();
+            content.RenderTransform = move;
+            var gaps = new List<double>();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            TimeSpan seen = default; double prev = 0;
+            void Tick(object? s4, EventArgs e4)
+            {
+                if (e4 is System.Windows.Media.RenderingEventArgs r) { if (r.RenderingTime == seen) return; seen = r.RenderingTime; }
+                var now = sw.Elapsed.TotalMilliseconds;
+                if (prev > 0) gaps.Add(now - prev);
+                prev = now;
+                move.Y = -Math.Round(Math.Abs(Math.Sin(now / 400)) * 300);
+            }
+            System.Windows.Media.CompositionTarget.Rendering += Tick;
+            await Task.Delay(3000);
+            System.Windows.Media.CompositionTarget.Rendering -= Tick;
+            content.RenderTransform = null;
+            var g = gaps.OrderBy(x => x).ToList();
+            Log.AppendLine($"PERF  songs list slid by transform only: {g.Count} frames, median {g[g.Count / 2]:0.0} ms, 95% under {g[(int)(g.Count * 0.95)]:0.0} ms, worst {g[^1]:0.0} ms, {g.Count(x => x > 3.6)} late, {g.Count(x => x > 8)} over 8 ms");
+        }
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--scroll-only") >= 0) return;
         win.Navigate("music");
         foreach (var round in new[] { 1, 2 })
             foreach (var mode in new[] { "artists", "genres", "albums", "songs" })

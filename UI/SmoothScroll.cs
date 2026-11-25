@@ -30,6 +30,12 @@ public static class SmoothScroll
     /// <summary>How quickly the list closes on where it is going: the time to cover about two thirds of the way, in seconds.</summary>
     const double Ease = 0.075;
 
+    /// <summary>Timing harness only: lay the list out inside the step and note how long that took (milliseconds).</summary>
+    public static List<double>? LayoutTimes;
+
+    /// <summary>Whether any list is gliding right now.</summary>
+    public static bool Moving => _hooked;
+
     /// <summary>Frames in which a list was moved (for the self-test).</summary>
     public static int Frames { get; private set; }
 
@@ -95,7 +101,18 @@ public static class SmoothScroll
             var done = Math.Abs(s.Target - s.Current) < 0.4;
             if (done) s.Current = s.Target;
             s.Ours = true;
-            sv.ScrollToVerticalOffset(s.Current);
+            // Lists are moved by whole screen pixels. At a part-pixel position every line of text has to be drawn again
+            // (and comes out soft); on whole pixels the graphics card just slides what it already drew.
+            var scale = VisualTreeHelper.GetDpi(sv).DpiScaleY;
+            var snapped = Math.Round(s.Current * scale) / scale;
+            if (Math.Abs(snapped - sv.VerticalOffset) < 0.01 && !done) { s.Ours = false; continue; }   // not a whole pixel further yet
+            sv.ScrollToVerticalOffset(done ? Math.Round(s.Target * scale) / scale : snapped);
+            if (LayoutTimes != null)
+            {
+                var t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                sv.UpdateLayout();
+                LayoutTimes.Add((System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+            }
             s.Ours = false;
             Frames++;
             if (done) { s.Moving = false; lock (Active) Active.Remove(weak); }

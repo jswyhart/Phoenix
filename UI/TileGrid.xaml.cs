@@ -64,14 +64,71 @@ public partial class TileGrid : UserControl
         set { foreach (var c in _cells) c.IsSelected = value != null && ReferenceEquals(c.Item, value); }
     }
 
-    FrameworkElement BuildRow(int index)
+    FrameworkElement BuildRow(int index) => BuildRow(index, now: true);
+
+    // Building a row of covers takes several milliseconds, which is more than one frame on a fast display. So while
+    // the grid is being scrolled a row arrives as an empty strip of the right size and its covers are added one at a
+    // time between frames; rows are asked for two ahead of the screen, so they are normally full before they show.
+    readonly Queue<(StackPanel row, TileCell cell)> _toBuild = new();
+    bool _building;
+
+    FrameworkElement BuildRow(int index, bool now)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
-        var cell = (DataTemplate)Resources["Cell"];
+        RowsMade++;
+        if (!now && _rowH > 0) row.Height = _rowH;
         foreach (var c in _cells.Skip(index * _cols).Take(_cols))
-            row.Children.Add(new ContentControl { Content = c, ContentTemplate = cell, Focusable = false, IsTabStop = false });
+        {
+            if (now) row.Children.Add(Tile(c));
+            else _toBuild.Enqueue((row, c));
+        }
+        if (!now && !_building) { _building = true; Dispatcher.BeginInvoke(BuildSome, System.Windows.Threading.DispatcherPriority.Background); }
         return row;
     }
+
+    readonly Stack<StackPanel> _spare = new();
+    /// <summary>Rows made since the grid was last laid out afresh, and rows reused (for the self-test).</summary>
+    public int RowsMade { get; private set; }
+    public int RowsReused { get; private set; }
+
+    /// <summary>Gives a row that scrolled away the covers of another row.</summary>
+    FrameworkElement Reuse(StackPanel row, int index)
+    {
+        var cells = _cells.Skip(index * _cols).Take(_cols).ToList();
+        for (var k = 0; k < cells.Count; k++)
+        {
+            if (k < row.Children.Count)
+            {
+                var tile = (ContentControl)row.Children[k];
+                if (!ReferenceEquals(tile.Content, cells[k])) tile.Content = cells[k];
+                if (tile.Visibility != Visibility.Visible) tile.Visibility = Visibility.Visible;
+            }
+            else row.Children.Add(Tile(cells[k]));
+        }
+        for (var k = cells.Count; k < row.Children.Count; k++) row.Children[k].Visibility = Visibility.Collapsed;   // a short last row
+        if (row.Visibility != Visibility.Visible) row.Visibility = Visibility.Visible;
+        RowsReused++;
+        return row;
+    }
+
+    ContentControl Tile(TileCell c) => new() { Content = c, ContentTemplate = (DataTemplate)Resources["Cell"], Focusable = false, IsTabStop = false, SnapsToDevicePixels = true };
+
+    void BuildSome()
+    {
+        // one cover per turn: drawing and input come first, the rest of the row follows straight after
+        while (_toBuild.Count > 0)
+        {
+            var (row, cell) = _toBuild.Dequeue();
+            if (!_rows.ContainsValue(row)) continue;      // the row scrolled away before it was filled
+            row.Children.Add(Tile(cell));
+            break;
+        }
+        if (_toBuild.Count > 0) Dispatcher.BeginInvoke(BuildSome, System.Windows.Threading.DispatcherPriority.Background);
+        else _building = false;
+    }
+
+    /// <summary>Covers still waiting to be added to rows (for the self-test).</summary>
+    public int Waiting => _toBuild.Count;
 
     /// <summary>Lays the grid out for the current width and builds just the rows that are on screen.</summary>
     void Arrange(bool rebuild)
@@ -88,12 +145,15 @@ public partial class TileGrid : UserControl
             return;
         }
         _stale = false;
+        if (rebuild) _toBuild.Clear();
         var cols = Math.Max(1, (int)((ActualWidth - 14) / TileWidth));
         if (cols != _cols) { _cols = cols; rebuild = true; }
         if (rebuild)
         {
             Surface.Children.Clear();
             _rows.Clear();
+            _spare.Clear();
+            RowsMade = RowsReused = 0;
             _rowH = 0;
             if (_cells.Count > 0)
             {
@@ -128,20 +188,26 @@ public partial class TileGrid : UserControl
         var first = Math.Max(0, (int)(Scroller.VerticalOffset / _rowH) - 2);
         var last = Math.Min(rows - 1, (int)((Scroller.VerticalOffset + view) / _rowH) + 2);
         last = Math.Min(last, first + 60);   // never more than a few screens' worth, whatever the measurements say
+        // Rows that have left are not thrown away: they stay in place, hidden, and are handed the covers of the rows
+        // coming in. Re-pointing an existing row costs a fraction of making one (no templates to build), which is what
+        // keeps scrolling inside one frame on a fast display.
         foreach (var i in _rows.Keys.Where(i => i < first || i > last).ToList())
         {
-            Surface.Children.Remove(_rows[i]);
+            _spare.Push((StackPanel)_rows[i]);
             _rows.Remove(i);
         }
         if (_rows.TryGetValue(0, out var top) && top.Margin.Top != 0) top.Margin = new Thickness(0);
         for (var i = first; i <= last; i++)
         {
             if (_rows.ContainsKey(i)) continue;
-            var row = BuildRow(i);
+            // rows on screen right now are built at once; the ones kept ready beyond it are filled between frames
+            FrameworkElement row;
+            if (_spare.Count > 0) row = Reuse(_spare.Pop(), i);
+            else { row = BuildRow(i, now: true); Surface.Children.Add(row); }
             row.Margin = new Thickness(0, i * _rowH, 0, 0);
             _rows[i] = row;
-            Surface.Children.Add(row);
         }
+        foreach (var idle in _spare) if (idle.Visibility != Visibility.Collapsed) idle.Visibility = Visibility.Collapsed;
         if (!_remeasureQueued)
         {
             _remeasureQueued = true;
@@ -152,7 +218,7 @@ public partial class TileGrid : UserControl
     /// <summary>Tiles can grow once their artwork and text arrive; if the real row height differs from the estimate, redo the positions.</summary>
     void Remeasure()
     {
-        if (_rows.Count == 0) return;
+        if (_rows.Count == 0 || _toBuild.Count > 0) return;
         var h = _rows.Values.Max(r => r.ActualHeight);
         if (h < 1 || Math.Abs(h - _rowH) < 1) return;
         _rowH = h;
@@ -161,9 +227,14 @@ public partial class TileGrid : UserControl
         Fill();
     }
 
+    bool _scrolling;
+
     void Scroller_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (e.VerticalChange != 0 || e.ViewportHeightChange != 0) Fill();
+        if (e.VerticalChange == 0 && e.ViewportHeightChange == 0) return;
+        _scrolling = e.VerticalChange != 0;
+        Fill();
+        _scrolling = false;
     }
 
     void Cell_Down(object sender, MouseButtonEventArgs e)
