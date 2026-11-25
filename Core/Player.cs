@@ -119,7 +119,9 @@ public class Player
 
     // ---------- the audio engine (music) ----------
 
-    static bool UseEngine(PlayItem item) => App.Settings.AudioEngine && item.Track != null && !item.IsVideo && item.SeekUrl == null;
+    // Radio always goes through the audio engine: Windows' own player (the MediaElement) refuses https addresses
+    // outright ("only site-of-origin pack URIs are supported"), and most stations are https now.
+    static bool UseEngine(PlayItem item) => item.Station != null || (App.Settings.AudioEngine && item.Track != null && !item.IsVideo && item.SeekUrl == null);
 
     AudioEngine Eng()
     {
@@ -154,6 +156,16 @@ public class Player
         e.Paused = false;
         var ok = await e.PlayAsync(item, startMs);
         if (!ReferenceEquals(Current, item)) return;
+        if (!ok && item.Station != null)
+        {
+            // a station that could not be opened: an http one may still play the old way; otherwise say so plainly
+            _onEngine = false;
+            if (item.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                try { _me.Source = new Uri(item.Url); _me.Play(); return; } catch { }
+            Error?.Invoke($"can't tune in to {item.Title}: the stream did not answer, or is in a form Windows can't play");
+            Stop();
+            return;
+        }
         if (!ok)
         {
             // the engine could not open it: let the media element try, as before

@@ -145,7 +145,7 @@ public static partial class Smoke
         await Task.Delay(300);
         var radio = win.Page<RadioView>("radio");
         var item = Player.From(lib.Stations[0]);
-        Check("a saved station is listed, and plays as an endless stream outside the music engine", radio.SavedShown == 1 && lib.Stations.Count == 1 && item.Station != null && item.Track == null && item.DurationMs == 0 && CastMedia.Can(item));
+        Check("a saved station is listed, and is an endless stream with no length", radio.SavedShown == 1 && lib.Stations.Count == 1 && item.Station != null && item.Track == null && item.DurationMs == 0 && CastMedia.Can(item));
         await Shot("31-radio");
         // the sources tab: browse the directory and add from it
         var genres = Radio.ParseGenres(JsonDocument.Parse("""[{"name":"pop","stationcount":3000},{"name":"x","stationcount":900},{"name":"rare thing","stationcount":3},{"name":" jazz ","stationcount":800}]""").RootElement);
@@ -186,6 +186,31 @@ public static partial class Smoke
         await Task.Delay(200);
         Check("radio can be switched off in settings: the tab and pinned stations go, and come back with the stations kept", hidden && pinHidden && win.RadioTabShown && Pinned() && lib.Stations.Count == 1,
             $"hidden {hidden}, pin hidden {pinHidden}, back {win.RadioTabShown}");
+        // a real station, if the network is there: https streams are what failed in Windows' own player
+        try
+        {
+            var live = (await Radio.SearchAsync("BBC World Service")).Where(x => x.Url.StartsWith("https://")).Take(4).ToList();
+            var tuned = "";
+            foreach (var st in live)
+            {
+                Radio.Play(st);
+                if (await Until(() => P.OnEngine && P.Engine != null && P.Engine.Position.TotalSeconds > 1.5, 15000)) { tuned = st.Name + "  " + st.Url; break; }
+            }
+            Log.AppendLine(live.Count == 0 ? "INFO  live radio: the directory returned no https station to try" : tuned != "" ? $"INFO  live radio: an https station plays through the audio engine: {tuned}" : $"INFO  live radio: none of {live.Count} https stations started within 15 s");
+            P.Stop();
+        }
+        catch (Exception ex) { Log.AppendLine("INFO  live radio was not tried (no network): " + ex.Message); }
+        Check("radio plays through the audio engine even when the engine is switched off for music", PlaysOnEngine());
+        bool PlaysOnEngine()
+        {
+            var was = S.AudioEngine;
+            S.AudioEngine = false;
+            Radio.Play(new Station { Name = "Local tone", Url = quiet });
+            var on = P.OnEngine;
+            P.Stop();
+            S.AudioEngine = was;
+            return on;
+        }
         lib.RemoveStation(lib.Stations[0]);
         Check("removing a station also takes its pin away", lib.Stations.Count == 0 && !lib.IsPinned("radio", parsed[0].Url));
 
