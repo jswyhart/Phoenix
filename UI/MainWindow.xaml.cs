@@ -11,7 +11,7 @@ namespace Halcyon.UI;
 
 public partial class MainWindow : Window
 {
-    static readonly string[] CollectionPages = { "music", "videos", "pictures", "podcasts", "books", "playlists", "disc", "phone" };
+    static readonly string[] CollectionPages = { "music", "videos", "pictures", "podcasts", "books", "playlists", "radio", "disc", "phone", "mixview" };
     readonly Dictionary<string, FrameworkElement> _pages = new();
     readonly Stack<string> _back = new();
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -66,6 +66,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             P.SaveEpisodePosition();
+            P.StopCast(resumeHere: false);
             App.Settings.Shuffle = P.Shuffle;
             App.Settings.Repeat = P.Repeat;
         };
@@ -248,6 +249,10 @@ public partial class MainWindow : Window
         "phone" => new PhoneView(),
         "search" => new SearchView(),
         "settings" => new SettingsView(),
+        "stats" => new StatsView(),
+        "radio" => new RadioView(),
+        "care" => new CareView(),
+        "mixview" => new MixviewPage(),
         _ when page.StartsWith("web:") && WebServices.Find(page[4..]) is { } service => HookWeb(new WebServiceView(service)),
         _ => throw new ArgumentException(page)
     };
@@ -267,9 +272,9 @@ public partial class MainWindow : Window
         if (isColl) _collPage = page;
         Host.Content = Page<FrameworkElement>(page);
 
-        NavQuick.IsChecked = page == "quickplay";
+        NavQuick.IsChecked = page is "quickplay" or "stats";
         NavColl.IsChecked = isColl || page == "search";
-        NavSettings.IsChecked = page == "settings";
+        NavSettings.IsChecked = page is "settings" or "care";
         SubNav.Visibility = isColl ? Visibility.Visible : Visibility.Collapsed;
         var lit = web is { Video: true } ? "videos" : page;
         foreach (RadioButton rb in SubNav.Children) rb.IsChecked = (string)rb.Tag == lit;
@@ -404,9 +409,99 @@ public partial class MainWindow : Window
     /// <summary>The small technical line under the artist: format and bitrate, or picture size and frame rate for video.</summary>
     void ShowInfo(string text)
     {
-        BarInfo.Text = text;
-        BarInfo.Visibility = text == "" ? Visibility.Collapsed : Visibility.Visible;
+        _infoText = text;
+        ComposeInfo();
     }
+
+    string _infoText = "";
+
+    /// <summary>The small line under the artist: the technical details, then anything out of the ordinary (casting, sleep timer, speed).</summary>
+    void ComposeInfo()
+    {
+        var mode = ModeText;
+        var text = string.Join("   ·   ", new[] { _infoText, mode }.Where(x => x != ""));
+        if (BarInfo.Text != text) BarInfo.Text = text;
+        BarInfo.Visibility = text == "" ? Visibility.Collapsed : Visibility.Visible;
+        MoreBtn.SetResourceReference(ForegroundProperty, mode != "" ? "Accent" : "Fg");
+    }
+
+    /// <summary>What is switched on from the "more" button, in words.</summary>
+    public string ModeText => string.Join("  ·  ", new[]
+    {
+        P.Cast != null ? "playing on " + P.Cast.Name : "", P.SleepText, P.CanSpeed && Math.Abs(P.Speed - 1) > 0.01 ? $"{P.Speed:0.##}× speed" : ""
+    }.Where(x => x != ""));
+
+    // ---------- the "more" button: sleep timer, speed, casting ----------
+
+    void More_Click(object sender, RoutedEventArgs e) => Menus.Open(MoreMenu(), MoreBtn);
+
+    public ContextMenu MoreMenu()
+    {
+        var m = new ContextMenu();
+        var sleep = new MenuItem { Header = P.SleepOn ? $"Sleep timer  ({P.SleepText.Replace("sleep: ", "").Replace("sleep ", "")})" : "Sleep timer" };
+        var off = Menus.Item("Off", () => P.SetSleep(null));
+        off.IsChecked = !P.SleepOn;
+        sleep.Items.Add(off);
+        foreach (var minutes in new[] { 15, 30, 45, 60, 90, 120 })
+        {
+            var n = minutes;
+            sleep.Items.Add(Menus.Item($"{n} minutes", () => P.SetSleep(TimeSpan.FromMinutes(n))));
+        }
+        var atEnd = Menus.Item("When this one ends", () => P.SetSleep(null, atEnd: true), P.Current != null);
+        atEnd.IsChecked = P.SleepAtEnd;
+        sleep.Items.Add(atEnd);
+        m.Items.Add(sleep);
+
+        var speed = new MenuItem { Header = P.CanSpeed ? "Playback speed" : "Playback speed (podcasts, audiobooks, video)", IsEnabled = P.CanSpeed };
+        foreach (var rate in new[] { 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3 })
+        {
+            var r = rate;
+            var item = Menus.Item(r == 1 ? "1× (normal)" : $"{r:0.##}×", () => { P.Speed = r; App.Settings.Save(); });
+            item.IsChecked = Math.Abs(P.Speed - r) < 0.01;
+            speed.Items.Add(item);
+        }
+        m.Items.Add(speed);
+        m.Items.Add(new Separator());
+        if (P.Cast is { } device) m.Items.Add(Menus.Item($"Stop playing on {device.Name}", () => P.StopCast()));
+        m.Items.Add(Menus.Item(P.Cast != null ? "Play on a different device…" : "Play on another device…", () =>
+        {
+            if (CastDialog.Ask() is not { } target) return;
+            SetStatus($"connecting to {target.Name}…");
+            P.StartCast(target.Connect());
+            SetStatus(P.Current == null ? $"{target.Name} is ready: what you play next plays there" : "");
+        }));
+        m.Items.Add(new Separator());
+        var track = P.Current?.Track;
+        var album = track == null ? null : App.Lib.Albums.FirstOrDefault(a => a.Key == track.AlbumKey);
+        m.Items.Add(Menus.Item("Mixview for this album", () => MixviewPage.Open(album, album!.Artist), album != null));
+        m.Items.Add(Menus.Item("Listening stats", () => Navigate("stats")));
+        return m;
+    }
+
+    /// <summary>Sets the volume as if the slider had been moved (used by the phone remote).</summary>
+    public void SetVolume(double value) => Volume.Value = Math.Clamp(value, 0, 1);
+
+    public void ToggleMute() => Mute_Click(this, new RoutedEventArgs());
+
+    // ---------- artist photos behind now playing ----------
+
+    string _backdropFor = "";
+
+    async void UpdateBackdrop()
+    {
+        var cur = P.Current;
+        var artist = App.Settings.Backdrops && IsNowOpen && cur is { IsVideo: false, Track: not null } ? cur.Track!.Artist : "";
+        if (artist == _backdropFor) return;
+        _backdropFor = artist;
+        var files = artist == "" ? new List<string>() : await Backdrops.ForAsync(artist);
+        if (artist != _backdropFor) return;   // the song changed while the pictures were being fetched
+        Backdrop.Show(files);
+        UpdateVideoSurface();
+    }
+
+    public Backdrop BackdropLayer => Backdrop;
+    /// <summary>Looks at the backdrop setting again (after it was changed).</summary>
+    public void RefreshBackdrop() { _backdropFor = "\u0001"; UpdateBackdrop(); }
 
     async void ShowLocalInfo(PlayItem? item)
     {
@@ -578,6 +673,7 @@ public partial class MainWindow : Window
         }
         if (show) { BuildMosaic(); QueueList.ScrollIntoView(P.Current); LoadLyrics(); }
         UpdateVideoSurface();
+        UpdateBackdrop();
     }
 
     void UpdateVideoSurface()
@@ -586,7 +682,9 @@ public partial class MainWindow : Window
         var viz = IsNowOpen && !video && App.Settings.Visualizer > 0;
         Media.Visibility = video ? Visibility.Visible : Visibility.Hidden;
         NowInfo.Visibility = MosaicShade.Visibility = video ? Visibility.Hidden : Visibility.Visible;
-        Mosaic.Visibility = video || viz ? Visibility.Hidden : Visibility.Visible;
+        var photos = IsNowOpen && !video && Backdrop.HasPictures;
+        Backdrop.Visibility = photos ? Visibility.Visible : Visibility.Collapsed;
+        Mosaic.Visibility = video || viz || photos ? Visibility.Hidden : Visibility.Visible;
         VizBtn.Visibility = video ? Visibility.Collapsed : Visibility.Visible;
         Viz.Mode = App.Settings.Visualizer;
         Viz.Palette = App.Settings.VisualizerColor;
@@ -739,6 +837,7 @@ public partial class MainWindow : Window
         else UpdateVideoSurface();
         if (IsNowOpen && cur != null) QueueList.ScrollIntoView(cur);
         LoadLyrics();
+        UpdateBackdrop();
         DjText.Visibility = P.DjSeed != null ? Visibility.Visible : Visibility.Collapsed;
         DjText.Text = P.DjSeed is { } seed ? $"smart dj  ·  music like “{seed.Title}”" : "";
         _smtc.Update(cur, P.IsPlaying);
@@ -798,6 +897,8 @@ public partial class MainWindow : Window
     {
         // Every ten seconds, note where a playing audiobook or podcast is, so a crash or power cut loses little.
         if (++_ticks % 40 == 0 && P.IsPlaying) P.SaveEpisodePosition();
+        P.SleepTick();
+        ComposeInfo();
         if (RemoteNow != null) { ShowRemoteClock(); return; }
         if (P.Current == null)
         {

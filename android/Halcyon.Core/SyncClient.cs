@@ -65,6 +65,12 @@ public class SyncClient
 
     static string Base => "http://" + (S.SyncHost.Contains(':') ? S.SyncHost : $"{S.SyncHost}:{Port}");
 
+    /// <summary>
+    /// The PC's remote control page (play, pause, skip, volume and the queue of what is playing there). The pairing
+    /// code rides in the part after "#", which the page reads and which is never sent over the network as part of the address.
+    /// </summary>
+    public static string RemoteUrl => $"{Base}/remote#code={Uri.EscapeDataString(S.SyncCode)}";
+
     // ---------- finding and talking to the PC ----------
 
     /// <summary>Asks the local network who is running Halcyon with phone sync on. Returns (name, address).</summary>

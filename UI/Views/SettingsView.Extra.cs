@@ -1,0 +1,247 @@
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Controls;
+using Halcyon.Core;
+using Halcyon.Services;
+
+namespace Halcyon.UI;
+
+/// <summary>Settings: volume levelling, scrobbling, artist photos, backup and restore, library care, the remote, and updates.</summary>
+public partial class SettingsView
+{
+    static void Keep() { if (!App.SmokeMode) S.Save(); }
+
+    void Care_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("care");
+    void ShowStats_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("stats");
+
+    // ---------- volume levelling ----------
+
+    void LoadLevelling()
+    {
+        LevelOn.IsChecked = S.Levelling;
+        LevelAlbum.IsChecked = S.LevelByAlbum;
+        LevelMeasureBox.IsChecked = S.LevelMeasure;
+        LevelOn.IsEnabled = S.AudioEngine;
+        LevelAlbum.IsEnabled = LevelMeasureBox.IsEnabled = S.Levelling && S.AudioEngine;
+    }
+
+    void Level_Click(object sender, RoutedEventArgs e)
+    {
+        S.Levelling = LevelOn.IsChecked == true;
+        S.LevelByAlbum = LevelAlbum.IsChecked == true;
+        S.LevelMeasure = LevelMeasureBox.IsChecked == true;
+        Keep();
+        App.Player.ApplyAudioSettings();   // the song that is playing changes over a second or two
+        LoadLevelling();
+    }
+
+    // ---------- listening: the play log and scrobbling ----------
+
+    void LoadListening()
+    {
+        LbOn.IsChecked = S.ScrobbleListenBrainz;
+        LfmOn.IsChecked = S.ScrobbleLastFm;
+        LbToken.Password = S.ApiKeys.GetValueOrDefault("listenbrainz", "");
+        LfmKey.Password = S.ApiKeys.GetValueOrDefault("lastfm", "");
+        LfmSecret.Password = S.ApiKeys.GetValueOrDefault("lastfm_secret", "");
+        ShowListening();
+    }
+
+    void ShowListening()
+    {
+        LbStatus.Text = !Listening.ListenBrainzReady ? "no token entered" : S.ListenBrainzUser != "" ? $"connected as {S.ListenBrainzUser}" : "token entered (CHECK tells you whether it works)";
+        LfmStatus.Text = Listening.LastFmReady ? $"connected as {S.LastFmUser}" : S.ApiKeys.GetValueOrDefault("lastfm", "") == "" || S.ApiKeys.GetValueOrDefault("lastfm_secret", "") == "" ? "enter the key and secret, then CONNECT" : "not connected yet: choose CONNECT";
+        LfmSignOutBtn.IsEnabled = Listening.LastFmReady;
+        ScrobbleResult.Text = Listening.LastResult;
+    }
+
+    void Scrobble_Click(object sender, RoutedEventArgs e)
+    {
+        S.ScrobbleListenBrainz = LbOn.IsChecked == true;
+        S.ScrobbleLastFm = LfmOn.IsChecked == true;
+        Keep();
+        ShowListening();
+    }
+
+    void ScrobbleKeys_Lost(object sender, RoutedEventArgs e)
+    {
+        void Set(string id, string value) { if (value.Trim() == "") S.ApiKeys.Remove(id); else S.ApiKeys[id] = value.Trim(); }
+        var lb = S.ApiKeys.GetValueOrDefault("listenbrainz", "");
+        Set("listenbrainz", LbToken.Password);
+        if (lb != S.ApiKeys.GetValueOrDefault("listenbrainz", "")) S.ListenBrainzUser = "";
+        Set("lastfm", LfmKey.Password);
+        Set("lastfm_secret", LfmSecret.Password);
+        Keep();
+        ShowListening();
+    }
+
+    async void LbCheck_Click(object sender, RoutedEventArgs e)
+    {
+        ScrobbleKeys_Lost(sender, e);
+        if (!Listening.ListenBrainzReady) return;
+        LbStatus.Text = "asking ListenBrainz…";
+        try
+        {
+            S.ListenBrainzUser = await Listening.ListenBrainzCheckAsync(S.ApiKeys["listenbrainz"]);
+            Keep();
+            LbStatus.Text = S.ListenBrainzUser != "" ? $"connected as {S.ListenBrainzUser}" : "ListenBrainz does not accept that token";
+        }
+        catch (Exception ex) { LbStatus.Text = "couldn't reach ListenBrainz: " + ex.Message; }
+    }
+
+    async void LfmConnect_Click(object sender, RoutedEventArgs e)
+    {
+        ScrobbleKeys_Lost(sender, e);
+        if (S.ApiKeys.GetValueOrDefault("lastfm", "") == "" || S.ApiKeys.GetValueOrDefault("lastfm_secret", "") == "") { LfmStatus.Text = "enter the API key and the shared secret first"; return; }
+        LfmConnectBtn.IsEnabled = false;
+        try
+        {
+            var token = await Listening.LastFmBeginAsync();
+            LfmStatus.Text = "allow Phoenix in the browser window that just opened…";
+            var name = "";
+            for (var i = 0; i < 90 && name == ""; i++)
+            {
+                await Task.Delay(2000);
+                name = await Listening.LastFmFinishAsync(token);
+            }
+            LfmStatus.Text = name == "" ? "that took too long: choose CONNECT again" : $"connected as {name}";
+            if (name != "") { S.ScrobbleLastFm = true; LfmOn.IsChecked = true; Keep(); }
+        }
+        catch (Exception ex) { LfmStatus.Text = "couldn't connect: " + ex.Message; }
+        finally { LfmConnectBtn.IsEnabled = true; LfmSignOutBtn.IsEnabled = Listening.LastFmReady; }
+    }
+
+    void LfmSignOut_Click(object sender, RoutedEventArgs e)
+    {
+        Listening.LastFmSignOut();
+        S.ScrobbleLastFm = false;
+        LfmOn.IsChecked = false;
+        Keep();
+        ShowListening();
+    }
+
+    // ---------- artist photos ----------
+
+    void LoadBackdrops()
+    {
+        BackdropsBox.IsChecked = S.Backdrops;
+        var (artists, bytes) = Backdrops.Usage();
+        BackdropUsage.Text = artists == 0 ? "No photos kept yet." : $"Photos of {artists} artist{(artists == 1 ? "" : "s")} kept, using {Storage.SizeText(bytes)}.";
+    }
+
+    void Backdrops_Click(object sender, RoutedEventArgs e)
+    {
+        S.Backdrops = BackdropsBox.IsChecked == true;
+        Keep();
+        App.Win.RefreshBackdrop();
+    }
+
+    void BackdropsClear_Click(object sender, RoutedEventArgs e)
+    {
+        App.Win.BackdropLayer.Show(new List<string>());
+        Backdrops.Clear();
+        App.Win.RefreshBackdrop();
+        LoadBackdrops();
+    }
+
+    // ---------- backup and restore ----------
+
+    async void Backup_Click(object sender, RoutedEventArgs e)
+    {
+        var pick = new Microsoft.Win32.SaveFileDialog { Title = "Save a backup of Phoenix", FileName = Backup.SuggestedName, Filter = $"Phoenix backup (*{Backup.Extension})|*{Backup.Extension}", DefaultExt = Backup.Extension };
+        if (pick.ShowDialog(App.Win) != true) return;
+        try
+        {
+            var size = await Backup.CreateAsync(pick.FileName, BackupCovers.IsChecked == true, text => Dispatcher.BeginInvoke(() => BackupStatus.Text = text));
+            BackupStatus.Text = $"backed up to {pick.FileName} ({Storage.SizeText(size)})";
+        }
+        catch (Exception ex) { BackupStatus.Text = "couldn't make the backup: " + ex.Message; }
+    }
+
+    void Restore_Click(object sender, RoutedEventArgs e)
+    {
+        var pick = new Microsoft.Win32.OpenFileDialog { Title = "Restore Phoenix from a backup", Filter = $"Phoenix backup (*{Backup.Extension})|*{Backup.Extension}|All files|*.*" };
+        if (pick.ShowDialog(App.Win) != true) return;
+        var m = Backup.Read(pick.FileName);
+        if (m == null) { BackupStatus.Text = "that file is not a Phoenix backup"; return; }
+        var when = DateTime.TryParse(m.Created, out var made) ? made.ToString("f") : m.Created;
+        var text = $"Restore the backup made on {when}?\n\nIt holds {m.Songs:N0} songs' details and {m.Playlists} playlists{(m.Covers ? ", with covers" : "")}.\n\n" +
+                   "Your library and settings as they are now are replaced by the ones in the backup. Phoenix restarts to do it; the library in use now is kept beside it as “library.before-restore.db”. Your music files are not touched.";
+        if (MessageBox.Show(App.Win, text, "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try
+        {
+            Backup.Stage(pick.FileName);
+            Storage.Restart();
+        }
+        catch (Exception ex) { BackupStatus.Text = "couldn't restore: " + ex.Message; }
+    }
+
+    // ---------- about and updates ----------
+
+    void LoadAbout()
+    {
+        AboutVersion.Text = $"Phoenix {Updater.CurrentText}  ·  {(Updater.Arch == "arm64" ? "ARM64" : "64-bit")}  ·  {(Updater.IsInstalled ? "installed" : "portable copy")}";
+        UpdatesOn.IsChecked = S.CheckUpdates;
+        ShowUpdate(Updater.Latest, checkedNow: false);
+    }
+
+    void UpdatesOn_Click(object sender, RoutedEventArgs e)
+    {
+        S.CheckUpdates = UpdatesOn.IsChecked == true;
+        Keep();
+    }
+
+    void ShowUpdate(Updater.Release? release, bool checkedNow)
+    {
+        var newer = release is { IsNewer: true };
+        UpdateInstallBtn.Visibility = newer && Updater.IsInstalled && release!.InstallerUrl != "" ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePageBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSkipBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNotes.Text = newer ? release!.Notes.Trim() : "";
+        if (newer)
+            UpdateStatus.Text = $"Phoenix {release!.VersionText} is available." + (Updater.IsInstalled ? "" : "  This is a portable copy: download the new zip from the release page and unpack it over this one.");
+        else if (checkedNow) UpdateStatus.Text = release == null ? "No release has been published yet." : $"You have the newest version ({Updater.CurrentText}).";
+        else UpdateStatus.Text = "";
+    }
+
+    async void UpdateCheck_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateCheckBtn.IsEnabled = false;
+        UpdateStatus.Text = "asking GitHub…";
+        try
+        {
+            var release = await Updater.CheckAsync();
+            S.UpdateChecked = Fmt.Now;
+            ShowUpdate(release, checkedNow: true);
+        }
+        catch (Exception ex) { UpdateStatus.Text = "couldn't check: " + ex.Message; }
+        finally { UpdateCheckBtn.IsEnabled = true; }
+    }
+
+    async void UpdateInstall_Click(object sender, RoutedEventArgs e)
+    {
+        if (Updater.Latest is not { IsNewer: true } release) return;
+        UpdateInstallBtn.IsEnabled = false;
+        try
+        {
+            var file = await Updater.DownloadAsync(release, done => Dispatcher.BeginInvoke(() => UpdateStatus.Text = $"downloading Phoenix {release.VersionText}… {done:P0}"));
+            UpdateStatus.Text = "starting the installer…";
+            App.Settings.Save();
+            Updater.Install(file);
+        }
+        catch (Exception ex) { UpdateStatus.Text = "couldn't update: " + ex.Message; UpdateInstallBtn.IsEnabled = true; }
+    }
+
+    void UpdatePage_Click(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(Updater.Latest?.Page ?? Updater.ReleasesPage) { UseShellExecute = true }); } catch { }
+    }
+
+    void UpdateSkip_Click(object sender, RoutedEventArgs e)
+    {
+        if (Updater.Latest is not { } release) return;
+        S.UpdateSkipped = release.VersionText;
+        Keep();
+        UpdateStatus.Text = $"You won't be told about {release.VersionText} again when Phoenix starts.";
+    }
+}

@@ -139,7 +139,7 @@ public class SyncServer
 
     static async Task WriteHeadAsync(Stream s, int status, string type, long length, CancellationToken ct)
     {
-        var reason = status switch { 200 => "OK", 401 => "Unauthorized", 404 => "Not Found", _ => "Error" };
+        var reason = status switch { 200 => "OK", 401 => "Unauthorized", 404 => "Not Found", 429 => "Too Many Requests", _ => "Error" };
         var head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: {type}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n";
         await s.WriteAsync(Encoding.ASCII.GetBytes(head), ct);
     }
@@ -156,6 +156,20 @@ public class SyncServer
         await using var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 16, true);
         await WriteHeadAsync(s, 200, "application/octet-stream", f.Length, ct);
         await f.CopyToAsync(s, 1 << 16, ct);
+    }
+
+    // Wrong pairing codes are counted per address: after twenty in a row that address is not listened to for ten
+    // minutes, so the six-digit code cannot simply be guessed by trying them all.
+    const int WrongLimit = 20;
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Wrong, DateTime Until)> Wrong = new();
+
+    public static bool LockedOut(string address) => Wrong.TryGetValue(address, out var w) && w.Wrong >= WrongLimit && DateTime.UtcNow < w.Until;
+
+    public static void NoteCode(string address, bool right)
+    {
+        if (right) { Wrong.TryRemove(address, out _); return; }
+        Wrong.AddOrUpdate(address, _ => (1, DateTime.UtcNow.AddMinutes(10)),
+            (_, w) => DateTime.UtcNow >= w.Until ? (1, DateTime.UtcNow.AddMinutes(10)) : (w.Wrong + 1, DateTime.UtcNow.AddMinutes(10)));
     }
 
     static bool CodeMatches(string given)
@@ -179,12 +193,26 @@ public class SyncServer
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { name = Environment.MachineName, app = "Halcyon", version = 1 }), ct);
                 return;
             }
-            if (!req.Headers.TryGetValue("X-Halcyon-Code", out var code) || !CodeMatches(code))
+            if (req.Path is "/remote" or "/remote/")   // the remote control page itself; everything it then asks for needs the code
             {
+                await SendAsync(s, 200, RemoteControl.Page, ct, "text/html; charset=utf-8");
+                return;
+            }
+            var from = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "";
+            if (LockedOut(from))
+            {
+                await SendAsync(s, 429, "{\"error\":\"too many wrong pairing codes; try again in ten minutes\"}", ct);
+                return;
+            }
+            var hasCode = req.Headers.TryGetValue("X-Halcyon-Code", out var code);
+            if (!hasCode || !CodeMatches(code!))
+            {
+                if (hasCode) NoteCode(from, false);   // a request with no code at all is the remote page asking before it has one
                 await Task.Delay(400, ct);   // slows down guessing the 6-digit code
                 await SendAsync(s, 401, "{\"error\":\"wrong pairing code\"}", ct);
                 return;
             }
+            NoteCode(from, true);
 
             var tracks = App.Lib.Tracks.Where(t => t.IsLocal).ToList();
             if (req.Path == "/sync/library")
@@ -193,6 +221,12 @@ public class SyncServer
                 await SendFileAsync(s, t.SourceId, ct);
             else if (req.Path.StartsWith("/sync/art/") && Find(tracks, req.Path) is { } a && IsLocalFile(a.ArtPath))
                 await SendFileAsync(s, a.ArtPath, ct);
+            else if (req.Path == "/remote/state")
+                await SendAsync(s, 200, RemoteControl.StateJson(), ct);
+            else if (req.Path == "/remote/command" && req.Method == "POST")
+                await SendAsync(s, 200, JsonSerializer.Serialize(new { ok = RemoteControl.Command(req.Body) }), ct);
+            else if (req.Path == "/remote/art" && RemoteControl.ArtFile() is { } cover)
+                await SendFileAsync(s, cover, ct);
             else if (req.Path == "/sync/stats" && req.Method == "POST")
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { applied = ApplyStats(req.Body) }), ct);
             else

@@ -89,6 +89,7 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <Button x:Name="RescanBtn" Style="{StaticResource PillBtn}" Content="RESCAN COLLECTION NOW" Click="Rescan_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="FIND DUPLICATES AND MISSING FILES" Click="Care_Click" ToolTip="The same song stored twice, and songs whose files have gone"/>
                     </StackPanel>
                     <TextBlock x:Name="ScanStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
@@ -157,6 +158,13 @@
                     <TextBlock Style="{StaticResource Label}" Text="QUICKPLAY" Margin="0,22,0,3"/>
                     <CheckBox x:Name="QuickplayPlaysBox" Content="Clicking an album in quickplay plays it straight away" Margin="0,4,0,0" Click="QuickplayPlays_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: a click opens the album in your collection; right-click a tile to play it."/>
+                    <TextBlock Style="{StaticResource Label}" Text="ARTIST PHOTOS" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="BackdropsBox" Content="Show photos of the artist behind now playing" Margin="0,4,0,0" Click="Backdrops_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="The artist's name is sent to find them: to fanart.tv and TheAudioDB if you entered their keys under metadata (wide photos), otherwise to Deezer (a portrait). Photos are kept in Phoenix's data folder."/>
+                    <StackPanel Orientation="Horizontal" Margin="24,0,0,0">
+                        <TextBlock x:Name="BackdropUsage" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource TextBtn}" Content="remove kept photos" Margin="16,0,0,0" Click="BackdropsClear_Click"/>
+                    </StackPanel>
                     <TextBlock Style="{StaticResource Label}" Text="NOW PLAYING VISUALIZER" Margin="0,22,0,3"/>
                     <ComboBox x:Name="VizStyle" Width="260" HorizontalAlignment="Left" SelectionChanged="Viz_Changed"/>
                     <TextBlock Style="{StaticResource Label}" Text="VISUALIZER COLOURS"/>
@@ -174,6 +182,11 @@
                         <Slider x:Name="CrossfadeSlider" Width="260" Minimum="0" Maximum="12" SmallChange="1" LargeChange="2" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" ValueChanged="Crossfade_Changed"/>
                         <TextBlock x:Name="CrossfadeText" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource FgDim}"/>
                     </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="VOLUME LEVELLING" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="LevelOn" Content="Play every song at about the same loudness" Margin="0,4,0,0" Click="Level_Click"/>
+                    <CheckBox x:Name="LevelAlbum" Content="Level whole albums (an album's quiet and loud songs stay as they are to each other)" Margin="24,8,0,0" Click="Level_Click"/>
+                    <CheckBox x:Name="LevelMeasureBox" Content="Measure songs that carry no ReplayGain tags" Margin="24,8,0,0" Click="Level_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,8,0,0" Text="Uses the ReplayGain tags in your files where they have them. Other songs are measured the first time they play (a second or two each, in the background) and the result is kept in Phoenix's library; your files are not changed."/>
                     <TextBlock Style="{StaticResource Label}" Text="EQUALIZER" Margin="0,22,0,3"/>
                     <CheckBox x:Name="EqOn" Content="Use the equalizer" Margin="0,4,0,8" Click="Eq_Click"/>
                     <StackPanel Orientation="Horizontal">
@@ -260,6 +273,64 @@
                     </StackPanel>
                     <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0" Text="Moving copies everything to the new folder, restarts Phoenix from there and then removes the old copies. If the folder you pick already holds a Phoenix library, that library is used instead and nothing is copied."/>
                     <TextBlock x:Name="StorageStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="BACKUP AND RESTORE" Margin="0,24,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="A backup is one file holding your playlists, likes, play counts and the play log, bookmarks and reading progress, podcasts, pins, tags, imported lyrics and your settings. Your music, videos, pictures and books themselves are not in it. Sign-ins and keys in a backup only work again for the same Windows user."/>
+                    <CheckBox x:Name="BackupCovers" Content="Include album covers (a much larger file)" Margin="0,2,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="BACK UP NOW…" Margin="0" Click="Backup_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="RESTORE FROM A BACKUP…" Margin="10,0,0,0" Click="Restore_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="BackupStatus" Style="{StaticResource Status}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelListening" Visibility="Collapsed">
+                    <TextBlock Text="listening" Style="{StaticResource Head}"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix keeps a log of what you listen to, in its own library, for the stats page (quickplay → listening stats). It can also send your listens to ListenBrainz or Last.fm (“scrobbling”). Nothing is sent unless you switch a service on here."/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource PillBtn}" Content="SHOW MY STATS" Margin="0" Click="ShowStats_Click"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="LISTENBRAINZ" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="LbOn" Content="Send my listens to ListenBrainz" Margin="0,4,0,0" Click="Scrobble_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Needs your user token, from listenbrainz.org → settings. It is free and needs no application key."/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="token" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
+                        <PasswordBox x:Name="LbToken" Width="300" LostFocus="ScrobbleKeys_Lost"/>
+                        <Button Style="{StaticResource PillBtn}" Content="CHECK" Margin="10,0,0,0" Click="LbCheck_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="LbStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="LAST.FM" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="LfmOn" Content="Send my listens to Last.fm" Margin="0,4,0,0" Click="Scrobble_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Needs an API key and its shared secret, from last.fm/api/account/create (free). The key is the same one the Last.fm metadata source uses. CONNECT then opens Last.fm in your browser, where you allow Phoenix: you sign in there, not here."/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="key" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
+                        <PasswordBox x:Name="LfmKey" Width="300" LostFocus="ScrobbleKeys_Lost"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="secret" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
+                        <PasswordBox x:Name="LfmSecret" Width="300" LostFocus="ScrobbleKeys_Lost"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="LfmConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT…" Margin="0" Click="LfmConnect_Click"/>
+                        <Button x:Name="LfmSignOutBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Margin="10,0,0,0" Click="LfmSignOut_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="LfmStatus" Style="{StaticResource Status}"/>
+                    <TextBlock x:Name="ScrobbleResult" Foreground="{DynamicResource FgDim}" Margin="0,14,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <StackPanel x:Name="PanelAbout" Visibility="Collapsed">
+                    <TextBlock Text="about" Style="{StaticResource Head}"/>
+                    <TextBlock x:Name="AboutVersion" FontSize="15"/>
+                    <TextBlock Style="{StaticResource Label}" Text="UPDATES" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="UpdatesOn" Content="Look for a newer Phoenix once a day" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Asks GitHub for Phoenix's public list of releases. Nothing about you or your library is sent."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button x:Name="UpdateCheckBtn" Style="{StaticResource PillBtn}" Content="CHECK NOW" Margin="0" Click="UpdateCheck_Click"/>
+                        <Button x:Name="UpdateInstallBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD AND INSTALL" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateInstall_Click"/>
+                        <Button x:Name="UpdatePageBtn" Style="{StaticResource PillBtn}" Content="OPEN THE RELEASE PAGE" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdatePage_Click"/>
+                        <Button x:Name="UpdateSkipBtn" Style="{StaticResource PillBtn}" Content="SKIP THIS VERSION" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateSkip_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="UpdateStatus" Style="{StaticResource Status}"/>
+                    <TextBlock x:Name="UpdateNotes" Foreground="{DynamicResource FgDim}" TextWrapping="Wrap" Margin="0,12,0,0"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelWeb" Visibility="Collapsed">
@@ -295,10 +366,13 @@
                 <StackPanel x:Name="PanelPhone" Visibility="Collapsed">
                     <TextBlock Text="sync options" Style="{StaticResource Head}"/>
                     <TextBlock Style="{StaticResource Note}" Text="The companion app on your Android phone copies music, likes and playlists from this PC while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below."/>
-                    <CheckBox x:Name="SyncEnabled" Content="Let my phone sync with this PC" Margin="0,8,0,4" Click="SyncEnabled_Click"/>
+                    <CheckBox x:Name="SyncEnabled" Content="Let my phone sync with and control this PC" Margin="0,8,0,4" Click="SyncEnabled_Click"/>
                     <TextBlock x:Name="SyncStatus" Style="{StaticResource Status}" TextWrapping="Wrap"/>
                     <Button x:Name="SyncNewCodeBtn" Style="{StaticResource PillBtn}" Content="NEW CODE" HorizontalAlignment="Left" Margin="0,8,0,0" Click="SyncNewCode_Click"
                             ToolTip="Replaces the pairing code; phones paired with the old code must enter the new one"/>
+                    <TextBlock Style="{StaticResource Label}" Text="REMOTE CONTROL" Margin="0,24,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="While sync is on, the phone can also work this PC: play, pause, skip, the volume and the queue. In the phone app choose “remote”; or open the address below in any browser on your network and enter the pairing code."/>
+                    <TextBlock x:Name="RemoteAddress" Foreground="{DynamicResource FgDim}" TextWrapping="Wrap"/>
                     <TextBlock Style="{StaticResource Label}" Text="ITEMS I CHOOSE" Margin="0,24,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Drag songs, albums, artists or playlists from your collection to the phone icon in the lower left. They are added to your phone sync list and copied the next time the phone syncs."/>
                     <StackPanel Orientation="Horizontal">

@@ -271,6 +271,10 @@ public class PlayItem : Observable
     public Episode? Episode { get; set; }
     public Book? Book { get; set; }
     public int BookPart { get; set; }
+    /// <summary>A radio station: an endless stream with no length.</summary>
+    public Station? Station { get; set; }
+    /// <summary>This listen has been written to the play log (so it is not written twice).</summary>
+    public bool Logged { get; set; }
     /// <summary>Podcast episodes: the address after any tracking redirects, and whether we already fell back to downloading the file.</summary>
     public string? Resolved { get; set; }
     public bool Downloaded { get; set; }

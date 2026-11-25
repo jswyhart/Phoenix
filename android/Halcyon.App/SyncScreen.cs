@@ -80,7 +80,13 @@ public static class SyncScreen
             catch (Exception ex) { Say(ex.Message); }
         }
 
-        page.Actions(("sync now", () => _ = Run()), ("find pc", () => _ = Find()), ("pairing code", AskCode), ("address", EnterAddress));
+        void Remote()
+        {
+            if (!Sync.IsPaired) { Say("Pair with the PC first (find pc, then its pairing code)."); return; }
+            RemoteScreen.Open(a);
+        }
+
+        page.Actions(("sync now", () => _ = Run()), ("remote", Remote), ("find pc", () => _ = Find()), ("pairing code", AskCode), ("address", EnterAddress));
         page.Subtitle = () =>
         {
             if (lib == null) return S.SyncHost == "" ? "not paired" : S.SyncHost;

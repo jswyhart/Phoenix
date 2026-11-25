@@ -50,6 +50,18 @@ public class Settings
     public string FpcalcPath { get; set; } = "";                                         // Chromaprint's fpcalc.exe, for identifying songs by sound
     public Dictionary<string, string> ApiKeysEnc { get; set; } = new();                  // other sources' keys, encrypted like the tokens below
     [JsonIgnore] public Dictionary<string, string> ApiKeys { get; set; } = new();
+    public bool Levelling { get; set; }                   // play every song at about the same loudness
+    public bool LevelByAlbum { get; set; }                // keep the loud and quiet songs of an album as they are relative to each other
+    public bool LevelMeasure { get; set; } = true;        // measure songs that carry no ReplayGain tags
+    public Dictionary<string, double> Speeds { get; set; } = new();   // "podcast:<id>" or "book:<id>" -> playback speed
+    public bool ScrobbleLastFm { get; set; }
+    public bool ScrobbleListenBrainz { get; set; }
+    public string LastFmUser { get; set; } = "";
+    public string ListenBrainzUser { get; set; } = "";
+    public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
+    public bool CheckUpdates { get; set; } = true;        // ask GitHub once a day whether there is a newer Phoenix
+    public long UpdateChecked { get; set; }
+    public string UpdateSkipped { get; set; } = "";       // a version you chose not to be told about again
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public bool SyncEnabled { get; set; }      // let the phone app copy music from this PC over the local network
     public string SyncCode { get; set; } = ""; // pairing code the phone must send with every request

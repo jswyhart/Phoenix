@@ -399,6 +399,7 @@ public partial class Library
             f.Tag.Genres = t.Genre == "" ? Array.Empty<string>() : new[] { t.Genre };
             f.Tag.Year = (uint)Math.Max(0, t.Year);
             f.Tag.Track = (uint)Math.Max(0, t.TrackNo);
+            f.Tag.Disc = (uint)Math.Max(0, t.DiscNo);
             if (cover != null) f.Tag.Pictures = new TagLib.IPicture[] { new TagLib.Picture(new TagLib.ByteVector(cover)) };
             f.Save();
             t.FileModified = File.GetLastWriteTimeUtc(t.SourceId).Ticks;

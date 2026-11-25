@@ -149,6 +149,9 @@ public static class SettingsScreen
                     : Fmt.Join(S.SyncHost, Fmt.Plural(App.Sync.State.Files.Count, "song") + " on this phone")
             });
 
+            if (App.Sync.IsPaired)
+                rows.Add(new Row { Title = "remote control for the pc…", Sub = "play, pause, skip and volume for Phoenix on " + S.SyncHost, Click = () => RemoteScreen.Open(a) });
+
             rows.Add(Row.Caption("APPEARANCE"));
             rows.Add(new Row { Title = "theme", Trail = S.Theme, Click = () => { S.Theme = S.Theme == "dark" ? "light" : "dark"; S.Save(); a.ApplyThemeAndRestart(); } });
             rows.Add(new Row

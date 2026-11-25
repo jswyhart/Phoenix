@@ -30,7 +30,7 @@ public partial class SettingsView : UserControl
     // SOFTWARE / PHONE / SERVERS, each with its categories and the panel a category shows
     static readonly Dictionary<string, (string name, string panel)[]> Categories = new()
     {
-        ["software"] = new[] { ("Collection", "PanelCollection"), ("Rip", "PanelRip"), ("Burn", "PanelBurn"), ("Metadata", "PanelMetadata"), ("Playback", "PanelPlayback"), ("Podcasts", "PanelPodcasts"), ("Translation", "PanelTranslation"), ("Display", "PanelDisplay"), ("Storage", "PanelStorage") },
+        ["software"] = new[] { ("Collection", "PanelCollection"), ("Rip", "PanelRip"), ("Burn", "PanelBurn"), ("Metadata", "PanelMetadata"), ("Playback", "PanelPlayback"), ("Listening", "PanelListening"), ("Podcasts", "PanelPodcasts"), ("Translation", "PanelTranslation"), ("Display", "PanelDisplay"), ("Storage", "PanelStorage"), ("About", "PanelAbout") },
         ["phone"] = new[] { ("Sync options", "PanelPhone") },
         ["servers"] = new[] { ("Jellyfin", "PanelJellyfin"), ("Plex", "PanelPlex"), ("Streaming", "PanelWeb") }
     };
@@ -59,8 +59,10 @@ public partial class SettingsView : UserControl
         foreach (var panel in Categories.Values.SelectMany(v => v).Select(c => c.panel))
             ((FrameworkElement)FindName(panel)).Visibility = panel == show ? Visibility.Visible : Visibility.Collapsed;
         PageScroll.ScrollToTop();
-        if (show == "PanelDisplay") LoadDisplay();
-        if (show == "PanelPlayback") LoadPlayback();
+        if (show == "PanelDisplay") { LoadDisplay(); LoadBackdrops(); }
+        if (show == "PanelPlayback") { LoadPlayback(); LoadLevelling(); }
+        if (show == "PanelListening") LoadListening();
+        if (show == "PanelAbout") LoadAbout();
         if (show == "PanelMetadata") BuildSources();
         if (show == "PanelStorage") LoadStorage();
         if (show == "PanelTranslation") LoadTranslation();
@@ -123,6 +125,8 @@ public partial class SettingsView : UserControl
     void RefreshSync()
     {
         SyncNewCodeBtn.IsEnabled = S.SyncEnabled;
+        RemoteAddress.Text = S.SyncEnabled && App.Sync.IsRunning
+            ? string.Join("   or   ", SyncServer.LocalAddresses().Select(a => $"http://{a}:{SyncServer.Port}/remote")) : "Turn sync on above to use the remote.";
         if (!S.SyncEnabled) { SyncStatus.Text = "off"; return; }
         if (!App.Sync.IsRunning)
         {

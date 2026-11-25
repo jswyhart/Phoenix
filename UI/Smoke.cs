@@ -13,7 +13,7 @@ namespace Halcyon.UI;
 /// Developer self-test: `Halcyon.exe --smoke &lt;dir&gt;` (with HALCYON_DATA pointing at a throwaway folder) builds a sample
 /// library, exercises scanning, playback, playlists and parsers, and writes screenshots plus smoke.log to &lt;dir&gt;.
 /// </summary>
-public static class Smoke
+public static partial class Smoke
 {
     static readonly StringBuilder Log = new();
     static string _dir = "";
@@ -1766,6 +1766,7 @@ public static class Smoke
         settings.ShowCategory("servers");
         Check("settings: Servers opens on Jellyfin", Shown("PanelJellyfin") && !Shown("PanelPlex"));
         await Shot("12-settings-servers");
+        await RunNewFeatures();
         settings.ShowCategory("software");
         App.ApplyTheme("dark");
         win.Navigate("music");

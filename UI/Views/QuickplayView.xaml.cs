@@ -63,6 +63,9 @@ public partial class QuickplayView : UserControl
                             Play = () => Menus.Play(albums.SelectMany(a => a.Tracks))
                         });
                     break;
+                case "radio" when lib.Stations.FirstOrDefault(st => st.Url == pin.Key) is { } station:
+                    pins.Add(new QuickItem { Title = station.Name, Subtitle = "radio", Glyph = "\uE7F6", Pin = pin, ArtPath = station.Art, Play = () => Halcyon.Services.Radio.Play(station) });
+                    break;
                 case "playlist" when lib.Playlists.FirstOrDefault(p => p.Id.ToString() == pin.Key) is { } pl:
                     var tracks = lib.TracksOf(pl);
                     pins.Add(new QuickItem
@@ -119,4 +122,5 @@ public partial class QuickplayView : UserControl
     }
 
     void OpenSettings_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("settings");
+    void Stats_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("stats");
 }

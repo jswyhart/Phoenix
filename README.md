@@ -22,8 +22,16 @@ versions share a common core.
   with AcoustID.
 - **Translation** of song, artist and album names shown beside the originals, with a fully offline option that
   uses downloadable language packs.
-- **Zune touches**: the now playing screen with fifteen visualizers, quickplay with pins, new and history, a mini
-  player, CD ripping and burning, and syncing music to the Android app over your home network.
+- **Zune touches**: the now playing screen with fifteen visualizers and (optional) artist photos behind it, Mixview
+  (an album or artist with related music from your collection drifting around it), quickplay with pins, new and
+  history, a mini player, CD ripping and burning, and syncing music to the Android app over your home network.
+- **Listening**: volume levelling (ReplayGain tags, or measured here), a sleep timer, playback speed remembered per
+  podcast and audiobook, internet radio (your own stream addresses or the Radio Browser directory), a stats page
+  from your play log, and optional scrobbling to Last.fm and ListenBrainz.
+- **Library care**: a tag editor with batch fixes, a finder for duplicate songs (by name, or by sound with
+  Chromaprint's fpcalc) and for songs whose files have gone, and backup and restore of the library and settings.
+- **Reach**: play on DLNA speakers and Chromecasts on your network, use the phone (the Android app, or any browser)
+  as a remote control, and automatic updates from this repository's releases.
 
 ## Layout of this repository
 

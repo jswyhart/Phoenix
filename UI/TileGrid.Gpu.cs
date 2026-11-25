@@ -343,7 +343,7 @@ public partial class TileGrid
         QueueDraw();
     }
 
-    static (byte[]? pixels, int w, int h) Shrink(BitmapSource source, int pw, int ph, bool fit)
+    internal static (byte[]? pixels, int w, int h) Shrink(BitmapSource source, int pw, int ph, bool fit)
     {
         if (source.PixelWidth < 1 || source.PixelHeight < 1) return default;
         double sx = pw / (double)source.PixelWidth, sy = ph / (double)source.PixelHeight;

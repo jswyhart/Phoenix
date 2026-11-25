@@ -137,8 +137,10 @@ public static class Menus
         m.Items.Add(Item(tracks.Count == 1 ? "Edit song info…" : $"Edit info for {tracks.Count} songs…", () => new EditInfoDialog(tracks, false).ShowDialog()));
         m.Items.Add(Item(tracks.Count == 1 ? "Edit tags…" : $"Edit tags for {tracks.Count} songs…",
             () => new EditTagsDialog(Library.SongTag, tracks.Select(t => t.Id), tracks.Count == 1 ? $"“{tracks[0].Title}”" : $"{tracks.Count} songs").ShowDialog()));
+        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(tracks).ShowDialog()));
         var album = App.Lib.Albums.FirstOrDefault(a => a.Key == tracks[0].AlbumKey);
         if (album != null) m.Items.Add(Item("Find album info…", () => new DiscogsDialog(album).ShowDialog()));
+        if (album != null) m.Items.Add(Item("Mixview", () => MixviewPage.Open(album, album.Artist)));
         if (tracks.Count == 1 && tracks[0].IsLocal && Metadata.CanIdentify) m.Items.Add(Item("Identify by sound…", () => Identify(tracks[0])));
         if (tracks.Count == 1 && tracks[0].IsLocal)
             m.Items.Add(Item("Show in File Explorer", () => Process.Start("explorer.exe", $"/select,\"{tracks[0].SourceId}\"")));
@@ -154,10 +156,12 @@ public static class Menus
         m.Items.Add(AddToPlaylist(() => a.Tracks));
         m.Items.Add(AddToBurnList(() => a.Tracks));
         m.Items.Add(Item(App.Lib.IsPinned("album", a.Key) ? "Unpin from quickplay" : "Pin to quickplay", () => App.Lib.TogglePin("album", a.Key, a.Title)));
+        m.Items.Add(Item("Mixview", () => MixviewPage.Open(a, a.Artist)));
         m.Items.Add(new Separator());
         m.Items.Add(Item("Find album info…", () => new DiscogsDialog(a).ShowDialog()));
         m.Items.Add(InfoSource(a));
         m.Items.Add(Item("Edit album info…", () => new EditInfoDialog(a.Tracks, true).ShowDialog()));
+        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(a.Tracks).ShowDialog()));
         m.Items.Add(Item("Edit tags for all songs…", () => new EditTagsDialog(Library.SongTag, a.Tracks.Select(t => t.Id), $"“{a.Title}” ({a.Tracks.Count} songs)").ShowDialog()));
         return m;
     }
@@ -172,6 +176,9 @@ public static class Menus
         m.Items.Add(Item("Add to now playing", () => Enqueue(tracks)));
         m.Items.Add(AddToPlaylist(() => tracks));
         m.Items.Add(Item(App.Lib.IsPinned("artist", artist) ? "Unpin from quickplay" : "Pin to quickplay", () => App.Lib.TogglePin("artist", artist, artist)));
+        m.Items.Add(Item("Mixview", () => MixviewPage.Open(null, artist)));
+        m.Items.Add(new Separator());
+        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(tracks).ShowDialog(), tracks.Count > 0));
         return m;
     }
 }

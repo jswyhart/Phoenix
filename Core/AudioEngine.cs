@@ -28,11 +28,34 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
         ("vocal", new float[] { -2, -3, -3, 1.5f, 4, 4, 3, 1.5f, 0, -1.5f }),
     };
 
+    /// <summary>Volume levelling: one song's own gain, moved to gently when it changes while the song plays.</summary>
+    sealed class GainStage(ISampleProvider source) : ISampleProvider
+    {
+        float _now = 1;
+        public volatile float Target = 1;
+        public WaveFormat WaveFormat => source.WaveFormat;
+        public void Snap(float gain) { Target = gain; _now = gain; }
+        public int Read(Span<float> buffer)
+        {
+            var n = source.Read(buffer);
+            var target = Target;
+            if (_now == target) { if (target != 1) for (var i = 0; i < n; i++) buffer[i] *= target; return n; }
+            var step = 1f / (source.WaveFormat.SampleRate * 1.5f);   // a full change takes a second and a half
+            for (var i = 0; i < n; i++)
+            {
+                if ((i & 1) == 0) _now = _now < target ? Math.Min(target, _now + step * Math.Max(1, target)) : Math.Max(target, _now - step * Math.Max(1, _now));
+                buffer[i] *= _now;
+            }
+            return n;
+        }
+    }
+
     sealed class Deck : IDisposable
     {
         public PlayItem Item = null!;
         public WaveStream Reader = null!;
         public ISampleProvider Source = null!;
+        public GainStage Gain = null!;
         public double Seconds => Reader.TotalTime.TotalSeconds;
         public double Remaining => Reader.WaveFormat.AverageBytesPerSecond > 0
             ? Math.Max(0, (Reader.Length - Reader.Position) / (double)Reader.WaveFormat.AverageBytesPerSecond) : 0;
@@ -94,6 +117,23 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
         WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(_rate, 2);
     }
 
+    /// <summary>
+    /// Volume levelling: asked when a song is opened for the gain to play it at (1 = as it is). The second argument
+    /// can be called later with a better answer, for a song that had to be measured first.
+    /// </summary>
+    public Func<PlayItem, Action<float>, float>? GainFor { get; set; }
+
+    /// <summary>The gain the playing song is heading for (for the self-test).</summary>
+    public float CurrentGain { get { lock (_gate) return _cur?.Gain.Target ?? 1; } }
+
+    /// <summary>Asks again for the gain of everything that is open (levelling was switched on or off).</summary>
+    public void RefreshGains()
+    {
+        lock (_gate)
+            foreach (var d in new[] { _cur, _tail, _next })
+                if (d != null) { var deck = d; deck.Gain.Target = GainFor?.Invoke(deck.Item, g => deck.Gain.Target = g) ?? 1; }
+    }
+
     public PlayItem? Playing { get { lock (_gate) return _cur?.Item; } }
     public PlayItem? Preloaded { get { lock (_gate) return _next?.Item; } }
     public bool IsLoadingNext { get; private set; }
@@ -122,7 +162,9 @@ public sealed class AudioEngine : ISampleProvider, IDisposable
             if (s.WaveFormat.Channels == 1) s = new MonoToStereoSampleProvider(s);
             else if (s.WaveFormat.Channels > 2) s = new FirstTwo(s);
             if (s.WaveFormat.SampleRate != _rate) s = new WdlResamplingSampleProvider(s, _rate);
-            return new Deck { Item = item, Reader = reader, Source = s };
+            var gain = new GainStage(s);
+            if (GainFor != null) gain.Snap(GainFor(item, g => gain.Target = g));
+            return new Deck { Item = item, Reader = reader, Source = gain, Gain = gain };
         }
         catch { reader.Dispose(); throw; }
     }

@@ -31,6 +31,10 @@ public class Player
     AudioEngine? _engine;
     bool _onEngine;     // the current item is playing through the audio engine, not the MediaElement
     readonly System.Windows.Threading.DispatcherTimer _ahead = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    double _vol = 0.8;      // the volume you set
+    double _fade = 1;       // the sleep timer turning it down at the end
+    double _speed = 1;
+    bool _onCast;           // the current item is playing on another device
 
     /// <summary>When set and active, play/pause, next and previous go to it instead of the queue.</summary>
     public IRemotePlayer? Remote { get; set; }
@@ -63,10 +67,12 @@ public class Player
         _me = me;
         _shuffle = App.Settings.Shuffle;
         Repeat = App.Settings.Repeat;
-        me.Volume = App.Settings.Volume;
+        _vol = App.Settings.Volume;
+        me.Volume = _vol;
         me.MediaOpened += (_, _) =>
         {
             _failStreak = 0;
+            try { if (_me.SpeedRatio != _speed) _me.SpeedRatio = _speed; } catch { }
             var cur = Current;
             if (cur == null) return;
             if (_me.NaturalDuration.HasTimeSpan && cur.DurationMs <= 0) cur.DurationMs = (long)_me.NaturalDuration.TimeSpan.TotalMilliseconds;
@@ -99,6 +105,7 @@ public class Player
     /// <summary>What happens when an item has played to its end: counts, played marks, finished books.</summary>
     static void Finished(PlayItem? cur)
     {
+        if (cur != null) Listening.Left(cur, 0, true);
         if (cur?.Track is { } t) { t.PlayCount++; t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
         if (cur?.Episode is { } e) { e.Played = true; e.PositionMs = 0; App.Lib.Db.SaveEpisodeState(e); e.Raise(); }
         if (cur?.Book is { } b && cur.BookPart == b.Parts.Count - 1)
@@ -117,7 +124,7 @@ public class Player
     AudioEngine Eng()
     {
         if (_engine != null) return _engine;
-        var e = new AudioEngine { Volume = (float)_me.Volume, Muted = _me.IsMuted };
+        var e = new AudioEngine { Volume = (float)(_vol * _fade), Muted = _me.IsMuted, GainFor = Levelling.For };
         var ui = _me.Dispatcher;
         e.Advanced += (was, now) => ui.BeginInvoke(() => OnAdvanced(was, now));
         e.Ended += was => ui.BeginInvoke(() =>
@@ -137,14 +144,15 @@ public class Player
     {
         if (_engine == null) return;
         _engine.Crossfade = Math.Clamp(App.Settings.Crossfade, 0, 12);
+        _engine.RefreshGains();
         _engine.SetEqualizer(App.Settings.EqEnabled ? App.Settings.EqGains : null);
     }
 
-    async Task StartOnEngine(PlayItem item)
+    async Task StartOnEngine(PlayItem item, long startMs = 0)
     {
         var e = Eng();
         e.Paused = false;
-        var ok = await e.PlayAsync(item);
+        var ok = await e.PlayAsync(item, startMs);
         if (!ReferenceEquals(Current, item)) return;
         if (!ok)
         {
@@ -172,7 +180,10 @@ public class Player
         now.IsCurrent = true;
         if (now.DurationMs <= 0 && _engine != null) now.DurationMs = (long)_engine.Duration.TotalMilliseconds;
         if (now.Track is { } t) { t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
+        now.Logged = false;
+        Listening.Started(now);
         RefillDj();
+        if (SleepAtEnd) { SleepAtEnd = false; if (IsPlaying) Toggle(); }   // "stop after this song"
         CurrentChanged?.Invoke();
         StateChanged?.Invoke();
     }
@@ -222,8 +233,149 @@ public class Player
 
     public double Volume
     {
-        get => _me.Volume;
-        set { _me.Volume = value; if (_engine != null) _engine.Volume = (float)value; App.Settings.Volume = value; }
+        get => _vol;
+        set { _vol = value; ApplyVolume(); App.Settings.Volume = value; if (_onCast) _ = Quiet(Cast!.SetVolumeAsync(value)); }
+    }
+
+    void ApplyVolume()
+    {
+        _me.Volume = _vol * _fade;
+        if (_engine != null) _engine.Volume = (float)(_vol * _fade);
+    }
+
+    static async Task Quiet(Task t) { try { await t; } catch { } }
+
+    // ---------- sleep timer ----------
+
+    /// <summary>When playback will be paused by the sleep timer, if it is set.</summary>
+    public DateTime? SleepAt { get; private set; }
+    /// <summary>The sleep timer is set to "when this one ends".</summary>
+    public bool SleepAtEnd { get; private set; }
+    public bool SleepOn => SleepAt != null || SleepAtEnd;
+
+    /// <summary>Sets the sleep timer: after a time, at the end of what is playing, or (both empty) off.</summary>
+    public void SetSleep(TimeSpan? after, bool atEnd = false)
+    {
+        SleepAt = after is { } a ? DateTime.Now + a : null;
+        SleepAtEnd = atEnd && after == null;
+        _fade = 1;
+        ApplyVolume();
+        StateChanged?.Invoke();
+    }
+
+    public string SleepText => SleepAtEnd ? "sleep: when this ends"
+        : SleepAt is { } at ? $"sleep in {Math.Max(1, (int)Math.Ceiling((at - DateTime.Now).TotalMinutes))} min" : "";
+
+    /// <summary>Called a few times a second: turns the sound down over the last seconds, then pauses.</summary>
+    public void SleepTick()
+    {
+        if (SleepAt is not { } at) return;
+        var left = (at - DateTime.Now).TotalSeconds;
+        if (left > 12) return;
+        if (left > 0) { _fade = Math.Clamp(left / 12, 0, 1); ApplyVolume(); return; }
+        SleepAt = null;
+        if (RemoteActive) { if (Remote!.Playing) Remote.Toggle(); }
+        else if (IsPlaying) Toggle();
+        _fade = 1;
+        ApplyVolume();
+        StateChanged?.Invoke();
+    }
+
+    // ---------- playback speed (podcasts, audiobooks, video) ----------
+
+    /// <summary>Speed can be changed for what plays through Windows' own player: not music on the audio engine, not while casting.</summary>
+    public bool CanSpeed => Current != null && !_onEngine && !_onCast && !RemoteActive && Current.Station == null;
+
+    static string? SpeedKey(PlayItem? i) => i?.Episode is { } e ? "podcast:" + e.PodcastId : i?.Book is { } b ? "book:" + b.Id : null;
+
+    /// <summary>The speed of what is playing. A podcast series or an audiobook remembers its own.</summary>
+    public double Speed
+    {
+        get => CanSpeed ? _speed : 1;
+        set
+        {
+            if (!CanSpeed) return;
+            _speed = Math.Clamp(value, 0.5, 3);
+            try { _me.SpeedRatio = _speed; } catch { }
+            if (SpeedKey(Current) is { } key)
+            {
+                if (Math.Abs(_speed - 1) < 0.01) App.Settings.Speeds.Remove(key); else App.Settings.Speeds[key] = _speed;
+            }
+            StateChanged?.Invoke();
+        }
+    }
+
+    void ApplySpeed(PlayItem item)
+    {
+        _speed = SpeedKey(item) is { } key && App.Settings.Speeds.TryGetValue(key, out var s) ? Math.Clamp(s, 0.5, 3) : 1;
+        try { _me.SpeedRatio = _speed; } catch { }
+    }
+
+    // ---------- casting to another device ----------
+
+    /// <summary>The speaker or TV everything is being played on, if any.</summary>
+    public ICastDevice? Cast { get; private set; }
+    public bool OnCast => _onCast;
+
+    /// <summary>Sends playback to a device on the network; what is playing carries on there from the same place.</summary>
+    public void StartCast(ICastDevice device)
+    {
+        StopCast(resumeHere: false);
+        Cast = device;
+        var ui = _me.Dispatcher;
+        device.Ended += () => ui.BeginInvoke(() =>
+        {
+            if (!_onCast || !ReferenceEquals(Cast, device)) return;
+            Finished(Current);
+            Next(auto: true);
+        });
+        device.Failed += msg => ui.BeginInvoke(() => Error?.Invoke($"{device.Name}: {msg}"));
+        device.Changed += () => ui.BeginInvoke(() => { if (_onCast && ReferenceEquals(Cast, device) && IsPlaying != device.Playing && device.Loaded) { IsPlaying = device.Playing; StateChanged?.Invoke(); } });
+        if (Current != null) PlayAt(_index, (long)Position.TotalMilliseconds);
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>Brings playback back to this PC (paused, at the same place).</summary>
+    public void StopCast(bool resumeHere = true)
+    {
+        var device = Cast;
+        if (device == null) return;
+        var at = (long)Position.TotalMilliseconds;
+        var was = _onCast;
+        Cast = null;
+        _onCast = false;
+        _ = device.StopAsync().ContinueWith(_ => device.Dispose());
+        if (was && resumeHere && Current != null)
+        {
+            PlayAt(_index, at);
+            if (IsPlaying) Toggle();
+        }
+        StateChanged?.Invoke();
+    }
+
+    async Task StartOnCast(PlayItem item, long startMs)
+    {
+        var device = Cast;
+        if (device == null) return;
+        try
+        {
+            await device.LoadAsync(item, startMs / 1000.0);
+            if (!ReferenceEquals(Current, item) || !ReferenceEquals(Cast, device)) return;
+            _failStreak = 0;
+            await device.SetVolumeAsync(_vol);
+            if (!IsPlaying) await device.PauseAsync();
+            StateChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(Current, item)) return;
+            Error?.Invoke($"couldn't play on {device.Name}: {ex.Message}");
+        }
+    }
+
+    void LeaveCurrent()
+    {
+        if (Current is { Track: not null } c) Listening.Left(c, (long)Position.TotalMilliseconds, false);
     }
 
     public bool Muted
@@ -232,10 +384,12 @@ public class Player
         set { _me.IsMuted = value; if (_engine != null) _engine.Muted = value; StateChanged?.Invoke(); }
     }
 
-    public TimeSpan Position => Current == null ? TimeSpan.Zero : _onEngine ? _engine!.Position : _offset + _me.Position;
+    public TimeSpan Position => Current == null ? TimeSpan.Zero : _onCast && Cast != null ? TimeSpan.FromSeconds(Cast.Position)
+        : _onEngine ? _engine!.Position : _offset + _me.Position;
 
     // A transcoded stream doesn't know its real length, so trust the library's duration for those.
-    public TimeSpan Duration => _onEngine && _engine!.Duration > TimeSpan.Zero ? _engine.Duration
+    public TimeSpan Duration => _onCast && Cast is { Duration: > 0 } cast ? TimeSpan.FromSeconds(cast.Duration)
+        : _onEngine && _engine!.Duration > TimeSpan.Zero ? _engine.Duration
         : Current is { SeekUrl: not null, DurationMs: > 0 } c ? TimeSpan.FromMilliseconds(c.DurationMs)
         : _me.NaturalDuration.HasTimeSpan ? _me.NaturalDuration.TimeSpan : TimeSpan.FromMilliseconds(Current?.DurationMs ?? 0);
 
@@ -244,6 +398,7 @@ public class Player
         var cur = Current;
         if (cur == null) return;
         if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+        if (_onCast) { _ = Quiet(Cast!.SeekAsync(t.TotalSeconds)); return; }
         if (_onEngine) { _engine!.Seek(t); return; }
         if (cur.SeekUrl == null) { _me.Position = t; return; }
         // Not seekable in place: ask the server for a new stream that begins at the target time.
@@ -284,9 +439,10 @@ public class Player
         if (wasEmpty && Queue.Count > 0) { BuildOrder(0); PlayAt(0); }
     }
 
-    public void PlayAt(int index)
+    public void PlayAt(int index, long startMs = -1)
     {
         if (index < 0 || index >= Queue.Count) return;
+        LeaveCurrent();
         SaveEpisodePosition();
         if (Current != null) Current.IsCurrent = false;
         _index = index;
@@ -298,19 +454,34 @@ public class Player
             if (book.Part == item.BookPart && !book.Finished) _resumeMs = book.PositionMs;
             else { book.Part = item.BookPart; book.PositionMs = 0; }
         }
+        if (startMs >= 0) _resumeMs = startMs;
+        item.Logged = false;
         _offset = TimeSpan.Zero;
         try
         {
             IsPlaying = true;
-            if (UseEngine(item))
+            if (Cast != null && CastMedia.Can(item))
             {
                 _me.Stop();
                 _me.Source = null;
+                if (_onEngine) { _engine?.Stop(); _onEngine = false; }
+                _onCast = true;
+                _ = StartOnCast(item, _resumeMs);
+                _resumeMs = 0;
+            }
+            else if (UseEngine(item))
+            {
+                if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
+                _me.Stop();
+                _me.Source = null;
                 _onEngine = true;
-                _ = StartOnEngine(item);
+                _ = StartOnEngine(item, Math.Max(0, startMs));
+                _resumeMs = 0;
             }
             else
             {
+                if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
+                ApplySpeed(item);
                 if (_onEngine) { _engine?.Stop(); _onEngine = false; }
                 if (item.Episode != null && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) _ = OpenEpisodeAsync(item);
                 else { _me.Source = new Uri(item.Url); _me.Play(); }
@@ -318,6 +489,7 @@ public class Player
         }
         catch (Exception ex) { Error?.Invoke(ex.Message); IsPlaying = false; }
         if (item.Track is { } t) { t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
+        Listening.Started(item);
         RefillDj();
         CurrentChanged?.Invoke();
         StateChanged?.Invoke();
@@ -361,7 +533,8 @@ public class Player
     {
         if (RemoteActive) { Remote!.Toggle(); return; }
         if (Current == null) return;
-        if (_onEngine) _engine!.Paused = IsPlaying;
+        if (_onCast) _ = Quiet(IsPlaying ? Cast!.PauseAsync() : Cast!.PlayAsync());
+        else if (_onEngine) _engine!.Paused = IsPlaying;
         else if (IsPlaying) _me.Pause(); else _me.Play();
         IsPlaying = !IsPlaying;
         StateChanged?.Invoke();
@@ -369,9 +542,18 @@ public class Player
 
     public void Next(bool auto = false)
     {
+        // "stop after this one": the next item is made ready, but left paused
+        var sleep = auto && SleepAtEnd;
+        if (sleep) SleepAtEnd = false;
+        Advance(auto);
+        if (sleep && IsPlaying && !RemoteActive) Toggle();
+    }
+
+    void Advance(bool auto)
+    {
         if (!auto && RemoteActive) { Remote!.Next(); return; }
         if (Queue.Count == 0) return;
-        if (auto && Repeat == 2) { if (_onEngine) PlayAt(_index); else { Seek(TimeSpan.Zero); _me.Play(); } return; }
+        if (auto && Repeat == 2) { if (_onEngine || _onCast) PlayAt(_index); else { if (Current != null) Current.Logged = false; Seek(TimeSpan.Zero); _me.Play(); } return; }
         var pos = _order.IndexOf(_index);
         if (pos + 1 < _order.Count) PlayAt(_order[pos + 1]);
         else if (Repeat == 1 || !auto) { BuildOrder(_shuffle ? new Random().Next(Queue.Count) : 0); PlayAt(_order[0]); }
@@ -389,7 +571,9 @@ public class Player
 
     public void Stop()
     {
+        LeaveCurrent();
         SaveEpisodePosition();
+        if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
         _me.Stop();
         _me.Source = null;
         _engine?.Stop();
@@ -436,6 +620,11 @@ public class Player
         Subtitle = v.Kind == "episode" ? string.Join("  ·  ", new[] { v.Series, v.EpisodeCode }.Where(s => s != "")) : v.Year > 0 ? v.Year.ToString() : "",
         Url = v.Source switch { "jellyfin" => App.Jellyfin.VideoUrl(v.Location), "plex" => App.Plex.PartUrl(v.Location), _ => v.Location },
         SeekUrl = v.Source == "jellyfin" && !JellyfinClient.IsDirect(v.Location) ? ms => App.Jellyfin.VideoUrl(v.Location, ms) : null
+    };
+
+    public static PlayItem From(Station s) => new()
+    {
+        Title = s.Name, Subtitle = s.Subtitle == "" ? "radio" : "radio  ·  " + s.Subtitle, ArtPath = s.Art, Url = s.Url, Station = s
     };
 
     /// <summary>Plays an audiobook from where it was left (or from the start).</summary>

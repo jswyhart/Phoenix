@@ -41,7 +41,10 @@
                     <ItemsControl x:Name="NewList" ItemTemplate="{StaticResource QuickTile}" ItemsPanel="{StaticResource Wrap}" Focusable="False"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="history" Style="{StaticResource ZuneHead}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="history" Style="{StaticResource ZuneHead}"/>
+                        <Button Style="{StaticResource TextBtn}" Content="&#xE9D2;  listening stats" Click="Stats_Click" Margin="22,26,0,0" VerticalAlignment="Center" ToolTip="Hours, plays and your top artists, albums and songs"/>
+                    </StackPanel>
                     <TextBlock x:Name="HistoryHint" Foreground="{DynamicResource FgFaint}" Margin="6,16,0,0" Text="What you play shows up here."/>
                     <ItemsControl x:Name="HistoryList" ItemTemplate="{StaticResource QuickTile}" ItemsPanel="{StaticResource Wrap}" Focusable="False"/>
                 </StackPanel>

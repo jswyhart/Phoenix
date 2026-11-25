@@ -14,7 +14,7 @@ public static class Storage
     // everything Phoenix itself puts in its data folder; only these are ever copied or cleaned up
     static readonly string[] Files = { "settings.json", "error.log" };
     static readonly string[] Folders = { "art", "imgcache", "podcasts", "podcast-cache", "lyrics", "translation" };
-    static readonly string[] Regrown = { "webview" };   // the ebook reader's browser cache: rebuilt when needed, not worth moving
+    static readonly string[] Regrown = { "webview", "backdrops" };   // the ebook reader's browser cache: rebuilt when needed, not worth moving
 
     /// <summary>The browser profiles of the streaming services (their sign-ins), one folder each.</summary>
     static IEnumerable<string> Profiles(string root)

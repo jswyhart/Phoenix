@@ -55,9 +55,12 @@ public partial class App : Application
             UI.MessageBox.Show(a.Exception.Message, "Phoenix", MessageBoxButton.OK, MessageBoxImage.Warning);
         };
 
+        var restoredFrom = Backup.ApplyPending();   // a backup chosen for restoring last time is put in place before anything is opened
         Settings = Settings.Load();
         ApplyTheme(Settings.Theme);
         Lib = new Library(new Database(AppPaths.DbPath));
+        if (!string.IsNullOrEmpty(restoredFrom) && !string.Equals(restoredFrom.TrimEnd('\\'), AppPaths.DataDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            Lib.Db.MoveDataFolder(restoredFrom.TrimEnd('\\') + "\\", AppPaths.DataDir.TrimEnd('\\') + "\\");
         Lib.Load();
         Translator.Attach(Lib.Db);
         if (!SmokeMode) Storage.CleanUpOld();   // the library opened from here, so copies left in a folder it was moved from can go
@@ -92,6 +95,8 @@ public partial class App : Application
         {
             _ = RefreshCollectionAsync();
             PodcastSync.Start();
+            _ = Listening.FlushAsync();   // listens that could not be sent last time
+            _ = Updater.DailyAsync();
         }
     }
 
