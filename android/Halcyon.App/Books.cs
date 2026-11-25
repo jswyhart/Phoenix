@@ -31,7 +31,7 @@ public static class BookScreens
         var shows = new[] { ("", "everything"), ("new", "not started"), ("started", "in progress"), ("done", "finished"), ("comic", "comics"), ("epub", "EPUB"), ("pdf", "PDF") };
         return page.Grid(() =>
         {
-            page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
+            page.Actions(page.Opts(view, sorts, shows).ToArray());
             var books = App.Lib.Books.AsEnumerable();
             books = _tab switch
             {

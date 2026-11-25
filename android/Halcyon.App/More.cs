@@ -4,33 +4,10 @@ using Halcyon.Services;
 
 namespace Halcyon.Droid;
 
-/// <summary>The sorting and filtering links a page carries above its list: "sort", "show" and "filter".</summary>
+/// <summary>Empty choices for the filter / show / sort bar (a page that only filters, say).</summary>
 public static class Opts
 {
     public static readonly (string Key, string Label)[] None = Array.Empty<(string, string)>();
-
-    static string Label((string Key, string Label)[] choices, string key) => choices.FirstOrDefault(c => c.Key == key).Label ?? choices.FirstOrDefault().Label ?? "";
-
-    /// <summary>
-    /// The links for a page. Choosing the sort that is already chosen turns it round; "filter" asks for part of a
-    /// name. <paramref name="changed"/> is told to redraw the page.
-    /// </summary>
-    public static List<(string label, Action act)> Links(MainActivity a, ViewChoice v, (string Key, string Label)[] sorts, (string Key, string Label)[] shows, Action changed)
-    {
-        var links = new List<(string, Action)>();
-        if (sorts.Length > 0)
-            links.Add(($"sort: {Label(sorts, v.Sort)} {(v.Descending ? "▼" : "▲")}", () => Ui.Menu(a, "Sort by",
-                sorts.Select(s => ((v.Sort == s.Key ? (v.Descending ? "▼  " : "▲  ") : "") + s.Label, (Action)(() => { v.SortBy(s.Key); changed(); }))).ToArray())));
-        if (shows.Length > 0)
-            links.Add(($"show: {Label(shows, v.Show)}", () => Ui.Menu(a, "Show",
-                shows.Select(s => ((v.Show == s.Key ? "●  " : "") + s.Label, (Action)(() => { v.ShowOnly(s.Key); changed(); }))).ToArray())));
-        links.Add((v.Text.Trim() == "" ? "filter" : $"filter: {v.Text.Trim()}  ✕", () =>
-        {
-            if (v.Text.Trim() != "") { v.Text = ""; changed(); return; }
-            Ui.Ask(a, "Filter", "part of a name", "", text => { v.Text = text.Trim(); changed(); });
-        }));
-        return links;
-    }
 }
 
 /// <summary>Screens brought over from the Windows app: radio, podcast sources, listening stats, and the player's extras.</summary>
@@ -115,7 +92,7 @@ public static class MoreScreens
                             if (Halcyon.Services.Radio.FromAddress(name, url) is { } st) Lib.SaveStation(st); else Ui.Toast(a, "That is not a web address.");
                         })))
                 };
-                links.AddRange(Opts.Links(a, view, new[] { ("", "name"), ("country", "country"), ("genre", "genre") }, Opts.None, page.Reload));
+                links.AddRange(page.Opts(view, new[] { ("", "name"), ("country", "country"), ("genre", "genre") }, Opts.None));
                 page.Actions(links.ToArray());
                 var stations = view.Order(Lib.Stations.Where(st => view.Matches(st.Name, st.Tags, st.Country)), key => key switch
                 {

@@ -136,14 +136,14 @@ public static class Screens
             switch (tab)
             {
                 case "genres":
-                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, Opts.None, Opts.None).ToArray());
                     return new Content(Catalog.Genres().Where(g => view.Matches(g)).Select(g => new Row
                     {
                         Title = g, Sub = Fmt.Plural(Catalog.AlbumsInGenre(g).Count, "album"),
                         Click = () => a.Push(new Page(a, g).Grid(() => Catalog.AlbumsInGenre(g).Select(al => AlbumRow(a, al)).ToList(), 150, 1f))
                     }).ToList(), Empty: empty);
                 case "albums":
-                    page.Actions(Opts.Links(a, view, albumSorts, shows, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, albumSorts, shows).ToArray());
                     var albums = view.Order(Lib.Albums.Where(KeepAlbum), key => key switch
                     {
                         "title" => l => l.OrderBy(x => x.Title, byName),
@@ -157,10 +157,10 @@ public static class Screens
                 case "songs":
                     var songs = songSort.Apply(Catalog.Songs().Where(KeepSong));
                     // the song list has its own sort (by column); "show" and "filter" come from the same bar as the albums
-                    page.Actions(new[] { SortLink(a, songSort, () => page.Reload()) }.Concat(Opts.Links(a, view, Opts.None, shows, page.Reload)).ToArray());
+                    page.Actions(new[] { SortLink(a, songSort, () => page.Reload()) }.Concat(page.Opts(view, Opts.None, shows)).ToArray());
                     return new Content(songs.Select((t, i) => SongRow(a, t, () => songs, true, i)).ToList(), Empty: empty);
                 default:
-                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, Opts.None, Opts.None).ToArray());
                     return new Content(Catalog.Artists().Where(name => view.Matches(name)).Select(name =>
                     {
                         var albums = Catalog.AlbumsOf(name);
@@ -246,13 +246,13 @@ public static class Screens
             switch (tab)
             {
                 case "movies":
-                    page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, sorts, shows).ToArray());
                     return new Content(Arrange(Catalog.Movies()).Select(v => PosterTile(a, v)).ToList(), 108, 1.5f, empty);
                 case "shows":
                 case "collections":
                 case "folders":
                     var kind = tab;
-                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, Opts.None, Opts.None).ToArray());
                     return new Content(Catalog.VideoGroups(kind).Where(g => view.Matches(g.Name)).Select(g => new Row
                     {
                         Title = g.Name, Sub = Fmt.Plural(g.Count, kind == "shows" ? "episode" : kind == "collections" ? "movie" : "video"),
@@ -261,7 +261,7 @@ public static class Screens
                         Long = () => Menus.ForVideoGroup(a, kind, g, _ => { })
                     }).ToList(), Empty: empty);
                 default:
-                    page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
+                    page.Actions(page.Opts(view, sorts, shows).ToArray());
                     var all = Arrange(Catalog.AllVideos());
                     return new Content(all.Select(v => VideoRow(a, v, () => new List<VideoItem> { v }, false)).ToList(), Empty: empty);
             }
@@ -346,7 +346,7 @@ public static class Screens
         return page.Show(() =>
         {
             var pics = Shown();
-            page.Actions(new[] { ("slideshow", (Action)(() => a.ShowViewer(pics, 0, true))) }.Concat(Opts.Links(a, view, new[] { ("", "name"), ("date", "date") }, Opts.None, page.Reload)).ToArray());
+            page.Actions(new[] { ("slideshow", (Action)(() => a.ShowViewer(pics, 0, true))) }.Concat(page.Opts(view, new[] { ("", "name"), ("date", "date") }, Opts.None)).ToArray());
             return new Content(pics.Select((p, i) => new Row { Art = p.ArtPath, Click = () => a.ShowViewer(pics, i, false) }).ToList(), 104, 1f, "No pictures here.");
         });
     }
@@ -391,7 +391,7 @@ public static class Screens
                 App.SetStatus(failed > 0 ? $"{failed} podcast feed(s) could not be refreshed" : "");
                 busy = false;
                 page.Reload();
-            }) }.Concat(Opts.Links(a, view, new[] { ("", "title"), ("author", "author") }, Opts.None, page.Reload)).ToArray());
+            }) }.Concat(page.Opts(view, new[] { ("", "title"), ("author", "author") }, Opts.None)).ToArray());
         return page.Show(() =>
         {
             if (tab == "sources") return MoreScreens.PodcastSources(a, page, browser);
@@ -424,7 +424,7 @@ public static class Screens
         };
         return page.List(() =>
         {
-            page.Actions(Opts.Links(a, view, Opts.None, shows, page.Reload).ToArray());
+            page.Actions(page.Opts(view, Opts.None, shows).ToArray());
             var rows = new List<Row>();
             if (p.Description != "") rows.Add(Row.Note(p.Description));
             rows.AddRange(Shown().Select(e => new Row
@@ -497,7 +497,7 @@ public static class Screens
         if (playlist != null) page.TitleSource = () => playlist.Name;
         page.Subtitle = () => Fmt.Join(Fmt.Plural(tracks().Count, "song"), Fmt.Time(tracks().Sum(t => t.DurationMs)));
         void SetActions() => page.Actions(new (string, Action)[] { ("play", () => P.PlayTracks(Sorted())), ("shuffle", () => P.PlayShuffled(Sorted())), SortLink(a, sort, () => page.Reload()) }
-            .Concat(Opts.Links(a, view, Opts.None, shows, page.Reload)).ToArray());
+            .Concat(page.Opts(view, Opts.None, shows)).ToArray());
         SetActions();
         return page.List(() =>
         {

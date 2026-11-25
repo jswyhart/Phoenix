@@ -271,17 +271,45 @@ public class Page : LinearLayout
         _subtitle.Visibility = ViewStates.Gone;
         AddView(_subtitle, Ui.Fill());
 
+        // As on the desktop, top to bottom: the page's tabs, its action links, then the bar to filter, show and sort by.
+        _chips = new LinearLayout(a) { Orientation = Orientation.Horizontal };
+        _chips.SetPadding(Th.Dp(8), 0, Th.Dp(8), 0);
+        _chipScroll = new HorizontalScrollView(a) { HorizontalScrollBarEnabled = false, Visibility = ViewStates.Gone };
+        _chipScroll.AddView(_chips);
+        AddView(_chipScroll, Ui.Fill());
+
         _actions = new LinearLayout(a) { Orientation = Orientation.Horizontal };
         _actions.SetPadding(Th.Dp(4), 0, Th.Dp(4), 0);
         var actionScroll = new HorizontalScrollView(a) { HorizontalScrollBarEnabled = false };
         actionScroll.AddView(_actions);
         AddView(actionScroll, Ui.Fill());
 
-        _chips = new LinearLayout(a) { Orientation = Orientation.Horizontal };
-        _chips.SetPadding(Th.Dp(8), 0, Th.Dp(8), 0);
-        _chipScroll = new HorizontalScrollView(a) { HorizontalScrollBarEnabled = false, Visibility = ViewStates.Gone };
-        _chipScroll.AddView(_chips);
-        AddView(_chipScroll, Ui.Fill());
+        _filter = Ui.Input(a, "filter");
+        _filter.SetTextSize(Android.Util.ComplexUnitType.Sp, 14 * Th.Scale);
+        _filter.SetPadding(Th.Dp(10), Th.Dp(6), Th.Dp(10), Th.Dp(6));
+        var box = new Android.Graphics.Drawables.GradientDrawable();
+        box.SetColor(Th.BgAlt);
+        _filter.Background = box;
+        _filter.TextChanged += (_, _) =>
+        {
+            if (_settingFilter || _view == null || _view.Text == (_filter.Text ?? "")) return;
+            _view.Text = _filter.Text ?? "";
+            // redraw a moment after the last key, so typing stays smooth on a long list
+            HalcyonApp.Main.RemoveCallbacks(_filterReload);
+            HalcyonApp.Main.PostDelayed(_filterReload, 220);
+        };
+        _filterReload = Reload;
+        _showLink = Ui.Link(a, "", () => PickShow());
+        _sortLink = Ui.Link(a, "", () => PickSort());
+        _directionLink = Ui.Link(a, "▲", () => { if (_view != null) { _view.SortBy(_view.Sort); Reload(); } });
+        _bar = Ui.RowOf(a);
+        _bar.SetPadding(Th.Dp(14), Th.Dp(2), Th.Dp(6), Th.Dp(4));
+        _bar.AddView(_filter, Ui.Weight());
+        _bar.AddView(_showLink);
+        _bar.AddView(_sortLink);
+        _bar.AddView(_directionLink);
+        _bar.Visibility = ViewStates.Gone;
+        AddView(_bar, Ui.Fill());
 
         var body = new FrameLayout(a);
         _listAdapter = new RowAdapter(a);
@@ -301,6 +329,58 @@ public class Page : LinearLayout
         body.AddView(_grid);
         body.AddView(_empty);
         AddView(body, new LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1));
+    }
+
+    // ---------- the filter / show / sort bar ----------
+
+    readonly LinearLayout _bar;
+    readonly EditText _filter;
+    readonly TextView _showLink, _sortLink, _directionLink;
+    readonly Action _filterReload;
+    Halcyon.Core.ViewChoice? _view;
+    (string Key, string Label)[] _sorts = Array.Empty<(string, string)>(), _shows = Array.Empty<(string, string)>();
+    bool _barUsed, _settingFilter;
+
+    /// <summary>
+    /// Says what this page can be filtered, shown and sorted by; the bar under the tabs is set up to match. Called
+    /// while the page's rows are being built (a page whose current tab does not call it shows no bar). Returns no
+    /// links: the bar has taken their place.
+    /// </summary>
+    public List<(string label, Action act)> Opts(Halcyon.Core.ViewChoice view, (string Key, string Label)[] sorts, (string Key, string Label)[] shows)
+    {
+        _view = view; _sorts = sorts; _shows = shows;
+        _barUsed = true;
+        return new List<(string, Action)>();
+    }
+
+    static string LabelOf((string Key, string Label)[] choices, string key) => choices.FirstOrDefault(c => c.Key == key).Label ?? choices.FirstOrDefault().Label ?? "";
+
+    void ShowBar()
+    {
+        _bar.Visibility = _barUsed && _view != null ? ViewStates.Visible : ViewStates.Gone;
+        if (!_barUsed || _view == null) return;
+        if ((_filter.Text ?? "") != _view.Text) { _settingFilter = true; _filter.Text = _view.Text; _settingFilter = false; }
+        _showLink.Visibility = _shows.Length > 0 ? ViewStates.Visible : ViewStates.Gone;
+        _showLink.Text = LabelOf(_shows, _view.Show) + " ▾";
+        _showLink.SetTextColor(_view.Show == "" ? Th.Fg : Th.Accent);
+        _sortLink.Visibility = _directionLink.Visibility = _sorts.Length > 0 ? ViewStates.Visible : ViewStates.Gone;
+        _sortLink.Text = "by " + LabelOf(_sorts, _view.Sort) + " ▾";
+        _directionLink.Text = _view.Descending ? "▼" : "▲";
+        _directionLink.SetTextColor(_view.Descending ? Th.Accent : Th.Fg);
+    }
+
+    void PickShow()
+    {
+        if (_view == null) return;
+        var view = _view;
+        Ui.Menu(Context!, "Show", _shows.Select(c => ((view.Show == c.Key ? "●  " : "") + c.Label, (Action)(() => { view.ShowOnly(c.Key); Reload(); }))).ToArray());
+    }
+
+    void PickSort()
+    {
+        if (_view == null) return;
+        var view = _view;
+        Ui.Menu(Context!, "Sort by", _sorts.Select(c => ((view.Sort == c.Key ? "●  " : "") + c.Label, (Action)(() => { if (view.Sort != c.Key) view.SortBy(c.Key); Reload(); }))).ToArray());
     }
 
     int _topCount;
@@ -336,7 +416,9 @@ public class Page : LinearLayout
     public void Reload()
     {
         if (_content == null) return;
+        _barUsed = false;
         var c = _content();   // first: building the content may settle which chip is selected
+        ShowBar();
         if (TitleSource != null && _title != null) _title.Text = TitleSource().ToLowerInvariant();
         if (Subtitle != null)
         {
