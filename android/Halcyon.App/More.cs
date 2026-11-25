@@ -326,11 +326,13 @@ public static class MoreScreens
 
     // ---------- scrobbling, updates and backup (rows for the settings screen) ----------
 
-    public static void SettingsRows(MainActivity a, List<Row> rows, Page page)
+    public static void SettingsRows(MainActivity a, List<Row> rows, Page page, string part)
     {
         void Save() { S.Save(); page.Reload(); }
         static string Box(bool on) => on ? "☑  " : "☐  ";
 
+        if (part == "sections")
+        {
         rows.Add(Row.Caption("COLLECTION SECTIONS"));
         rows.Add(Row.Note("Choose which sections the home menu shows. A section that is off is only hidden: nothing in it is removed."));
         foreach (var tab in Settings.Tabs)
@@ -347,7 +349,10 @@ public static class MoreScreens
                 }
             });
         }
+        }
 
+        if (part == "listening")
+        {
         rows.Add(Row.Caption("LISTENING"));
         rows.Add(new Row { Title = "listening stats…", Sub = "hours, plays and your top artists, albums and songs", Click = () => a.Push(Stats(a)) });
         rows.Add(new Row
@@ -414,14 +419,21 @@ public static class MoreScreens
                 }
             });
         if (Listening.LastResult != "") rows.Add(Row.Note(Listening.LastResult));
+        }
 
+        if (part == "storage")
+        {
         rows.Add(Row.Caption("BACKUP"));
         rows.Add(Row.Note("A backup is one file holding your likes, play counts and play log, playlists, bookmarks and reading progress, podcasts, stations, pins, tags and settings. Your music and other files are not in it."));
         rows.Add(new Row { Title = "back up now…", Sub = "choose where to save the file", Click = a.StartBackup });
         rows.Add(new Row { Title = "restore from a backup…", Sub = "replaces the collection details and settings on this phone", Click = a.StartRestore });
+        }
 
+        if (part == "updates")
+        {
         rows.Add(Row.Caption("UPDATES"));
         rows.Add(new Row { Title = Box(S.CheckUpdates) + "look for a newer Phoenix once a day", Sub = "asks GitHub for the list of releases; nothing about you is sent", Click = () => { S.CheckUpdates = !S.CheckUpdates; Save(); } });
         rows.Add(new Row { Title = "check now", Sub = $"this is Phoenix {a.VersionName}", Click = () => _ = a.CheckForUpdate(true) });
+        }
     }
 }

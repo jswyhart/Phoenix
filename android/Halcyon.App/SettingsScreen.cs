@@ -5,14 +5,47 @@ using Halcyon.Services;
 
 namespace Halcyon.Droid;
 
-/// <summary>Library locations, theme, visualizer, Discogs token, and the Jellyfin and Plex connections.</summary>
+/// <summary>
+/// Settings, arranged like the Windows app's: the groups SOFTWARE, PC and SERVERS across the top, the chosen group's
+/// categories listed underneath, and each category's options on a page of its own.
+/// </summary>
 public static class SettingsScreen
 {
     static Settings S => App.Settings;
 
+    /// <summary>The groups and their categories: (id, name, what it holds).</summary>
+    public static readonly Dictionary<string, (string Id, string Name, string About)[]> Groups = new()
+    {
+        ["software"] = new[]
+        {
+            ("collection", "Collection", "folders for music, videos, pictures and books; rescan"),
+            ("metadata", "Metadata", "Discogs, for album details and covers"),
+            ("listening", "Listening", "stats, and sending listens to Last.fm or ListenBrainz"),
+            ("display", "Display", "theme, size, visualizer, and which sections are shown"),
+            ("storage", "Storage", "back up and restore"),
+            ("updates", "Updates", "look for a newer Phoenix")
+        },
+        ["pc"] = new[] { ("sync", "Sync options", "copy music from Phoenix on your PC, and use this phone as its remote") },
+        ["servers"] = new[] { ("jellyfin", "Jellyfin", "a Jellyfin server's music, videos and books"), ("plex", "Plex", "a Plex Media Server's music and videos") }
+    };
+
+    static string _group = "software";
+
     public static Page Build(MainActivity a)
     {
         var page = new Page(a, "settings");
+        page.Chips(() => new[] { "SOFTWARE", "PC", "SERVERS" }, () => _group.ToUpperInvariant(), g => _group = g.ToLowerInvariant());
+        return page.List(() => Groups[_group].Select(c => new Row
+        {
+            Title = c.Name, Sub = c.About,
+            Click = () => a.Push(Category(a, c.Id, c.Name))
+        }).ToList());
+    }
+
+    /// <summary>One category's options.</summary>
+    public static Page Category(MainActivity a, string category, string title)
+    {
+        var page = new Page(a, title);
         var note = "";
 
         void Save() { S.Save(); page.Reload(); }
@@ -126,6 +159,8 @@ public static class SettingsScreen
             var rows = new List<Row>();
             if (note != "") rows.Add(Row.Note(note));
 
+            if (category == "collection")
+            {
             Folders(rows, "MUSIC FOLDERS", S.MusicFolders, "add a music folder…", () => _ = App.RefreshCollectionAsync());
             Folders(rows, "VIDEO FOLDERS", S.VideoFolders, "add a video folder…", () => _ = App.RefreshCollectionAsync());
             Folders(rows, "PICTURE FOLDERS", S.PictureFolders, "add a picture folder…", () => { });
@@ -140,7 +175,10 @@ public static class SettingsScreen
                 Title = "rescan now", Sub = Fmt.Join(Fmt.Plural(App.Lib.Tracks.Count, "song"), Fmt.Plural(App.Lib.Videos.Count, "video"), Fmt.Plural(App.Lib.Books.Count, "book")),
                 Click = () => { if (a.EnsureMediaPermission()) _ = App.RefreshCollectionAsync(); }
             });
+            }
 
+            if (category == "sync")
+            {
             rows.Add(Row.Caption("SYNC WITH PC"));
             rows.Add(new Row
             {
@@ -152,8 +190,12 @@ public static class SettingsScreen
             if (App.Sync.IsPaired)
                 rows.Add(new Row { Title = "remote control for the pc…", Sub = "play, pause, skip and volume for Phoenix on " + S.SyncHost, Click = () => RemoteScreen.Open(a) });
 
-            MoreScreens.SettingsRows(a, rows, page);
+            }
 
+            if (category is "listening" or "storage" or "updates") MoreScreens.SettingsRows(a, rows, page, category);
+
+            if (category == "display")
+            {
             rows.Add(Row.Caption("APPEARANCE"));
             rows.Add(new Row { Title = "theme", Trail = S.Theme, Click = () => { S.Theme = S.Theme == "dark" ? "light" : "dark"; S.Save(); a.ApplyThemeAndRestart(); } });
             rows.Add(new Row
@@ -168,14 +210,21 @@ public static class SettingsScreen
                 Sub = $"{VisualizerOptions.Palettes[Math.Clamp(S.VisualizerColor, 0, VisualizerOptions.Palettes.Length - 1)]} colours  ·  {VisualizerOptions.Sensitivities[Math.Clamp(S.VisualizerSensitivity, 0, 3)]} sensitivity  ·  shown on the now playing screen",
                 Click = () => VisualizerPicker.Show(a, page.Reload)
             });
+            MoreScreens.SettingsRows(a, rows, page, "sections");
+            }
 
+            if (category == "metadata")
+            {
             rows.Add(Row.Caption("DISCOGS"));
             rows.Add(new Row
             {
                 Title = "personal access token", Sub = S.DiscogsToken == "" ? "not set  ·  needed for album lookups" : "saved (encrypted on this device)",
                 Click = () => Ui.Ask(a, "Discogs token", "paste your personal access token", "", t => { S.DiscogsToken = t.Trim(); Save(); }, true)
             });
+            }
 
+            if (category == "jellyfin")
+            {
             rows.Add(Row.Caption("JELLYFIN"));
             if (App.Jellyfin.IsConnected)
             {
@@ -192,7 +241,10 @@ public static class SettingsScreen
                 });
             }
             else rows.Add(new Row { Title = "connect…", Sub = "server address, user name and password", Click = ConnectJellyfin });
+            }
 
+            if (category == "plex")
+            {
             rows.Add(Row.Caption("PLEX"));
             if (App.Plex.IsConnected)
             {
@@ -213,10 +265,14 @@ public static class SettingsScreen
                 rows.Add(new Row { Title = "sign in with plex…", Sub = "approve Phoenix in your browser", Click = () => _ = PlexSignIn() });
                 rows.Add(new Row { Title = "connect with address and token…", Click = PlexManual });
             }
+            }
 
+            if (category == "updates")
+            {
             rows.Add(Row.Caption("ABOUT"));
-            rows.Add(Row.Note("Phoenix 1.0.0 for Android. Sign-in tokens are encrypted with a key held in the Android Keystore. " +
+            rows.Add(Row.Note($"Phoenix {a.VersionName} for Android. Sign-in tokens are encrypted with a key held in the Android Keystore. " +
                               "Edits to song and video info are kept in Phoenix's collection and survive rescans and server syncs."));
+            }
             return rows;
         });
     }
