@@ -1,8 +1,8 @@
 # Phoenix
 
 A Zune-style media player for music, videos, pictures, podcasts and books, with your own servers and streaming
-services alongside your own files. The Windows app is native (WPF, .NET 10, no Electron); Android, Mac and Linux
-versions share a common core.
+services alongside your own files. The Windows app is native; Android, Mac and Linux
+versions share a common core (electron).
 
 ![Phoenix logo](installer/phoenix.svg)
 
