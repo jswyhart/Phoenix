@@ -591,6 +591,143 @@ Section("podcast redirects, tags, sorting, crawler");
     File.Delete(Path.Combine(music, ".hidden.wav"));
 }
 
+Section("radio, podcast sources, play log, sleep timer, speed, sections, backup, updates");
+{
+    Listening.Offline = true;
+    var S = App.Settings;
+    var lib = App.Lib;
+    var P = App.Player;
+    P.Stop();
+
+    // sections can be switched off, all but the last
+    var off = S.SetTab("books", false) && !S.TabOn("books");
+    foreach (var tab in Settings.Tabs.Where(t => t != "videos")) S.SetTab(tab, false);
+    var lastStays = !S.SetTab("videos", false) && S.TabOn("videos");
+    foreach (var tab in Settings.Tabs) S.SetTab(tab, true);
+    Check(off && lastStays && S.TabsOff.Count == 0, "every collection section can be switched off except the last one left");
+
+    // sorting and filtering choices
+    var view = new ViewChoice("test");
+    view.SortBy("title");
+    view.SortBy("title");
+    view.ShowOnly("liked");
+    view.Text = "blue moon";
+    var again = new ViewChoice("test");
+    Check(view.Descending && again.Sort == "title" && again.Descending && again.Show == "liked" && view.Matches("Blue", "Moon river") && !view.Matches("Blue", "sun")
+          && view.Order(new[] { 2, 3, 1 }, key => key == "title" ? l => l.OrderBy(x => x) : null).SequenceEqual(new[] { 3, 2, 1 }), "a page's sort, direction and show choices are remembered, and a filter needs every word");
+    view.Clear();
+    Check(!view.Active, "sort and filter can be cleared");
+
+    // radio
+    var stations = Radio.Parse(System.Text.Json.JsonDocument.Parse("""
+        [{"name":" Jazz FM ","url":"http://old.example/s.pls","url_resolved":"https://stream.example/jazz","tags":"jazz,smooth,soul,extra","countrycode":"GB"},
+         {"name":"","url":"https://x.example/a"},{"name":"Again","url_resolved":"https://stream.example/jazz"}]
+        """).RootElement);
+    Check(stations.Count == 1 && stations[0].Name == "Jazz FM" && stations[0].Url == "https://stream.example/jazz" && stations[0].Subtitle == "GB  ·  jazz, smooth, soul", "stations from the directory are read without blanks or repeats");
+    var genres = Radio.ParseGenres(System.Text.Json.JsonDocument.Parse("""[{"name":"pop","stationcount":3000},{"name":"x","stationcount":900},{"name":"rare","stationcount":3}]""").RootElement);
+    var countries = Radio.ParseCountries(System.Text.Json.JsonDocument.Parse("""[{"name":"Norway","iso_3166_1":"NO","stationcount":210},{"name":"Austria","iso_3166_1":"AT","stationcount":400}]""").RootElement);
+    Check(genres.Count == 1 && genres[0].Name == "pop" && countries.Select(c => c.Key).SequenceEqual(new[] { "AT", "NO" }), "genres and countries are read for browsing");
+    lib.SaveStation(stations[0]);
+    lib.TogglePin("radio", stations[0].Url, stations[0].Name);
+    var pinned = Catalog.Pins().Any(q => q.Title == "Jazz FM" && q.Subtitle == "radio");
+    S.SetTab("radio", false);
+    var hiddenPin = !Catalog.Pins().Any(q => q.Subtitle == "radio");
+    S.SetTab("radio", true);
+    P.PlayStation(lib.Stations[0]);
+    Check(lib.Stations.Count == 1 && pinned && hiddenPin && P.Current is { Station: not null, Track: null } && engine.Url == "https://stream.example/jazz" && !P.CanSpeed,
+        "a station is saved, pinned (hidden while radio is off) and played as an endless stream");
+    P.Stop();
+    lib.RemoveStation(lib.Stations[0]);
+    Check(lib.Stations.Count == 0 && !lib.IsPinned("radio", stations[0].Url) && Radio.FromAddress("", "https://radio.example/live") is { Name: "radio.example" } && Radio.FromAddress("x", "nope") == null,
+        "removing a station takes its pin away; an address typed in becomes a station");
+
+    // podcast sources
+    var chart = PodcastDirectory.ParseAppleTop(System.Text.Json.JsonDocument.Parse("""
+        {"feed":{"entry":[{"im:name":{"label":"Show One"},"im:artist":{"label":"Maker"},"im:image":[{"label":"https://a.example/55.png"},{"label":"https://a.example/170.png"}],
+          "category":{"attributes":{"label":"Technology"}},"id":{"attributes":{"im:id":"123456"}}}]}}
+        """).RootElement);
+    var found = PodcastDirectory.ParseAppleSearch(System.Text.Json.JsonDocument.Parse("""{"results":[{"collectionName":"Radio Hour","artistName":"Studio","feedUrl":"https://feeds.example/hour","primaryGenreName":"Science","trackCount":310,"collectionId":77}]}""").RootElement);
+    var fyyd = PodcastDirectory.ParseFyyd(System.Text.Json.JsonDocument.Parse("""{"data":[{"title":"Open Show","author":"Someone","xmlURL":"https://feeds.example/open","language":"en","episode_count":12},{"title":"No feed","xmlURL":""}]}""").RootElement);
+    var opml = PodcastDirectory.ParseOpml(PodcastDirectory.ToOpml(new[] { new Podcast { Title = "First", FeedUrl = "https://feeds.example/first" }, new Podcast { Title = "Second", FeedUrl = "https://feeds.example/second" } }));
+    Check(chart.Count == 1 && chart[0] is { Title: "Show One", AppleId: "123456", FeedUrl: "" } && found[0].FeedUrl == "https://feeds.example/hour" && found[0].Subtitle == "Studio  ·  Science  ·  310 episodes"
+          && fyyd.Count == 1 && opml.Select(o => o.Title).SequenceEqual(new[] { "First", "Second" }), "podcast directories are read: Apple's charts and search, fyyd, and an OPML list");
+    S.PodcastSources.Add(new PodcastSource { Name = "Mine", Url = "https://lists.example/mine.opml" });
+    Check(PodcastDirectory.Sources().Select(x => x.Id).SequenceEqual(new[] { "apple", "fyyd", "own:0" }) && PodcastDirectory.Sources()[2].Yours && PodcastDirectory.AppleGenres.Length == 19, "the sources are Apple Podcasts, fyyd and your own lists");
+    S.PodcastSources.Clear();
+    Check(PodcastService.LooksLikeVideo("video/mp4", "https://x.example/a") && PodcastService.LooksLikeVideo("", "https://x.example/ep.m4v?x=1") && !PodcastService.LooksLikeVideo("audio/mpeg", "https://x.example/ep.mp4"),
+        "an episode counts as video when its feed says so or its file is a video");
+
+    // the play log and stats
+    var song = lib.Tracks.OrderByDescending(t => t.DurationMs).First();
+    var playsBefore = lib.Db.Plays(0, long.MaxValue).Count;
+    P.PlayTracks(new[] { song });
+    engine.FireOpened();
+    engine.FireEnded();
+    Listening.Left(new PlayItem { Title = "skipped", Track = song, DurationMs = 200_000 }, 900, finished: false);
+    var logged = lib.Db.Plays(0, long.MaxValue);
+    var year = ListenStats.FromLog("this year", new DateTimeOffset(new DateTime(DateTime.Now.Year, 1, 1)).ToUnixTimeSeconds(), Fmt.Now + 5);
+    Check(logged.Count - playsBefore == 1 && logged[^1].Counted && logged[^1].Title == song.Title && year.Plays >= 1 && year.TopSongs[0].Name == song.Title && ListenStats.AllTime().Plays >= 1,
+        "a song played to the end goes into the play log and the stats; one skipped at once does not");
+    var sig = Listening.Sign(new Dictionary<string, string> { ["token"] = "yyy", ["api_key"] = "xxx", ["method"] = "auth.getSession" }, "secret");
+    var wantSig = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes("api_keyxxxmethodauth.getSessiontokenyyysecret"))).ToLowerInvariant();
+    Check(sig == wantSig && Listening.ListenBrainzBody("single", new[] { (1700000000L, "A", "T", "", 0L) }).Contains("\"listened_at\":1700000000") && !S.ScrobbleLastFm && lib.Db.PendingScrobbles("lastfm").Count == 0,
+        "listens are packed the way Last.fm and ListenBrainz ask, and nothing is queued for a service that is off");
+    S.Keys["listenbrainz"] = "token-123";
+    S.Save();
+    var settingsText = File.ReadAllText(AppPaths.SettingsPath);
+    Check(!settingsText.Contains("token-123") && Settings.Load().Keys["listenbrainz"] == "token-123", "scrobbling keys are stored encrypted");
+    S.Keys.Clear();
+
+    // sleep timer and speed
+    P.PlayTracks(lib.Tracks.Take(3));
+    engine.FireOpened();
+    var volume = P.Volume;
+    P.SetSleep(TimeSpan.FromMilliseconds(300));
+    Thread.Sleep(400);
+    P.SleepTick();
+    Check(!P.IsPlaying && !P.SleepOn && engine.Paused && Math.Abs(P.Volume - volume) < 0.001 && Math.Abs(engine.Volume - (float)volume) < 0.001, "the sleep timer pauses playback and leaves the volume as it was");
+    P.Toggle();
+    P.SetSleep(null, atEnd: true);
+    var index = P.CurrentIndex;
+    engine.FireEnded();
+    Check(P.CurrentIndex == index + 1 && !P.IsPlaying && !P.SleepAtEnd && P.SleepText == "", "“when this one ends” stops at the start of the next item");
+    var fast = new SpeedEngine();
+    var p2 = new Player(fast);
+    var episode = new Episode { Id = 900, PodcastId = 55, Title = "Ep", Url = "https://media.example/ep.mp3" };
+    p2.Play(new[] { new PlayItem { Title = "Ep", Url = episode.Url, Episode = episode } });
+    p2.Speed = 1.5;
+    p2.Play(new[] { new PlayItem { Title = "Other", Url = "https://media.example/2.mp3", Episode = new Episode { Id = 901, PodcastId = 55, Title = "Other", Url = "https://media.example/2.mp3" } } });
+    var remembered = p2.Speed;
+    p2.Play(new[] { Player.From(lib.Tracks[0]) });
+    Check(Math.Abs(remembered - 1.5) < 0.01 && S.Speeds.GetValueOrDefault("podcast:55") == 1.5 && p2.Speed == 1 && fast.Speed == 1 && !P.CanSpeed,
+        "playback speed is kept per podcast series; music starts at normal speed; an engine that cannot change speed is left alone");
+    p2.Stop();
+    S.Speeds.Clear();
+    P.Stop();
+
+    // backup
+    using var packed = new MemoryStream();
+    Backup.Write(packed);
+    packed.Position = 0;
+    var manifest = Backup.Stage(packed);
+    var pending = Path.Combine(AppPaths.DataDir, "restore-pending");
+    var staged = File.Exists(Path.Combine(pending, "library.db")) && File.Exists(Path.Combine(pending, "settings.json"));
+    Backup.Discard();
+    var notOne = false;
+    try { Backup.Stage(new MemoryStream(Encoding.UTF8.GetBytes("hello"))); } catch { notOne = true; }
+    Check(manifest.App == "Phoenix" && manifest.Songs == lib.Tracks.Count && staged && !Directory.Exists(pending) && notOne && packed.Length > 1000, "a backup holds the library and settings, can be unpacked for restoring, and anything else is refused");
+
+    // updates
+    var release = Updates.Parse(System.Text.Json.JsonDocument.Parse($$"""
+        {"tag_name":"v9.4.1","name":"Phoenix 9.4.1","html_url":"https://github.com/{{Updates.Repo}}/releases/tag/v9.4.1",
+         "assets":[{"name":"Phoenix-9.4.1-win-x64-setup.exe","size":5,"browser_download_url":"https://github.com/{{Updates.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1-win-x64-setup.exe"},
+                   {"name":"Phoenix-9.4.1.apk","size":123,"browser_download_url":"https://github.com/{{Updates.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1.apk"}]}
+        """).RootElement, ".apk");
+    var elsewhere = Updates.Parse(System.Text.Json.JsonDocument.Parse("""{"tag_name":"v9.9.9","assets":[{"name":"Phoenix.apk","size":1,"browser_download_url":"https://downloads.example/Phoenix.apk"}]}""").RootElement, ".apk");
+    Check(release is { VersionText: "9.4.1", FileName: "Phoenix-9.4.1.apk", FileSize: 123 } && release.Version > new Version(1, 0, 0) && elsewhere is { FileUrl: "" } && Updates.ParseVersion("v1.2") == new Version(1, 2, 0),
+        "a newer release is recognised with the file for this platform, and a file from anywhere else is never offered");
+}
+
 Console.WriteLine();
 Console.WriteLine(failures == 0 ? $"ALL {checks} CHECKS PASSED" : $"{failures} of {checks} CHECKS FAILED");
 try { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(root, true); } catch { }
@@ -629,6 +766,12 @@ class FakeEngine : IMediaEngine
     public void FireOpened() => Opened?.Invoke();
     public void FireEnded() => Ended?.Invoke();
     public void FireFailed(string m) => Failed?.Invoke(m);
+}
+
+/// <summary>An engine that can also play faster or slower.</summary>
+class SpeedEngine : FakeEngine, ISpeedEngine
+{
+    public float Speed { get; set; } = 1;
 }
 
 class XorSecrets : ISecretProtector

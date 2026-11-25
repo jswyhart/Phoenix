@@ -45,6 +45,7 @@ public static class App
         Directory.CreateDirectory(AppPaths.DataDir);
         Directory.CreateDirectory(AppPaths.ArtDir);
         Directory.CreateDirectory(AppPaths.ImgCacheDir);
+        Backup.ApplyPending();   // a backup chosen for restoring last time is put in place before anything is opened
         Settings = Settings.Load(defaults);
         Lib = new Library(new Database(AppPaths.DbPath));
         Lib.Load();

@@ -7,7 +7,7 @@ using Halcyon.Core;
 namespace Halcyon.Droid;
 
 /// <summary>ExoPlayer (Media3) behind the shared play queue: local files, direct server files, HLS and progressive streams.</summary>
-public class ExoEngine : Java.Lang.Object, IMediaEngine, IPlayerListener
+public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerListener
 {
     const int StateReady = 3, StateEnded = 4;
     readonly IExoPlayer _player;
@@ -29,6 +29,14 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, IPlayerListener
         _player.SetHandleAudioBecomingNoisy(true);         // pause when headphones are unplugged
         _player.SetWakeMode(C.WakeModeNetwork);
         _player.AddListener(this);
+    }
+
+    float _speed = 1;
+    /// <summary>Faster or slower playback (the pitch is kept), for podcasts and audiobooks.</summary>
+    public float Speed
+    {
+        get => _speed;
+        set { _speed = Math.Clamp(value, 0.5f, 3f); _player.SetPlaybackSpeed(_speed); }
     }
 
     public int AudioSessionId => _player.AudioSessionId;

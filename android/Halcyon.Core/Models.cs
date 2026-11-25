@@ -179,6 +179,10 @@ public class PlayItem : Observable
     public Episode? Episode { get; set; }
     public Book? Book { get; set; }
     public int BookPart { get; set; }   // which file of the audiobook this is
+    /// <summary>A radio station: an endless stream with no length.</summary>
+    public Station? Station { get; set; }
+    /// <summary>This listen has been written to the play log (so it is not written twice).</summary>
+    public bool Logged { get; set; }
     /// <summary>Works out the stream URL when the item actually starts (server items: direct play or a fresh conversion session).</summary>
     public Func<Task<string>>? Resolve { get; set; }
     /// <summary>A second way to play the item, tried once when the first URL fails (e.g. a server-converted stream).</summary>

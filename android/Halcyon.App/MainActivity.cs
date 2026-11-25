@@ -11,8 +11,9 @@ namespace Halcyon.Droid;
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.KeyboardHidden | ConfigChanges.UiMode)]
 public class MainActivity : Activity
 {
-    static readonly string[] Pivots = { "quickplay", "music", "videos", "pictures", "podcasts", "books", "playlists", "settings" };
-    const int ReqMedia = 1, ReqAudio = 2;
+    /// <summary>The home menu: quickplay, the collection sections that are switched on, then settings.</summary>
+    static List<string> Pivots => new[] { "quickplay" }.Concat(Settings.Tabs.Where(App.Settings.TabOn)).Append("settings").ToList();
+    const int ReqMedia = 1, ReqAudio = 2, ReqBackup = 11, ReqRestore = 12;
 
     readonly List<Page> _stack = new();
     string _pivot = "";
@@ -87,6 +88,104 @@ public class MainActivity : Activity
         OnPlayerChanged();
         if (Intent?.GetBooleanExtra("nowplaying", false) == true) ShowNowPlaying();
         if (EnsureMediaPermission()) _ = App.RefreshCollectionAsync();
+        _ = Halcyon.Services.Listening.FlushAsync();   // listens that could not be sent last time
+        if (App.Settings.CheckUpdates && Fmt.Now - App.Settings.UpdateChecked > 20 * 3600) _ = CheckForUpdate(false);
+    }
+
+    // ---------- updates ----------
+
+    public string VersionName
+    {
+        get { try { return PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName ?? "1.0.0"; } catch { return "1.0.0"; } }
+    }
+
+    /// <summary>Asks GitHub whether there is a newer Phoenix; if so, offers to open its download. Quiet unless asked for by hand.</summary>
+    public async Task CheckForUpdate(bool byHand)
+    {
+        try
+        {
+            if (byHand) App.SetStatus("asking GitHub…");
+            var release = await Halcyon.Services.Updates.CheckAsync(".apk");
+            App.Settings.UpdateChecked = Fmt.Now;
+            App.SetStatus("");
+            var mine = Halcyon.Services.Updates.ParseVersion(VersionName) ?? new Version(1, 0, 0);
+            if (release == null) { if (byHand) Ui.Alert(this, "No release has been published yet."); return; }
+            if (release.Version <= mine) { if (byHand) Ui.Alert(this, $"You have the newest version ({VersionName})."); return; }
+            if (!byHand) { App.SetStatus($"Phoenix {release.VersionText} is available: settings → updates"); return; }
+            var where = release.FileUrl != "" ? release.FileUrl : release.Page;
+            Ui.Confirm(this, $"Phoenix {release.VersionText} is available (you have {VersionName}).\n\n" +
+                             (release.FileUrl != "" ? "Open the download? Android then asks whether to install it." : "It has no Android file attached; open its page?"),
+                "Open", () => StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(where))));
+        }
+        catch (Exception ex) { App.SetStatus(""); if (byHand) Ui.Alert(this, "Couldn't check for updates.\n\n" + ex.Message); }
+    }
+
+    // ---------- backup and restore (Android's own file picker says where) ----------
+
+    public void StartBackup()
+    {
+        var i = new Intent(Intent.ActionCreateDocument);
+        i.AddCategory(Intent.CategoryOpenable);
+        i.SetType("application/octet-stream");
+        i.PutExtra(Intent.ExtraTitle, Halcyon.Services.Backup.SuggestedName);
+        try { StartActivityForResult(i, ReqBackup); } catch (Exception ex) { Ui.Alert(this, ex.Message); }
+    }
+
+    public void StartRestore()
+    {
+        var i = new Intent(Intent.ActionOpenDocument);
+        i.AddCategory(Intent.CategoryOpenable);
+        i.SetType("*/*");
+        try { StartActivityForResult(i, ReqRestore); } catch (Exception ex) { Ui.Alert(this, ex.Message); }
+    }
+
+    protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+        if (resultCode != Result.Ok || data?.Data is not { } uri) return;
+        try
+        {
+            if (requestCode == ReqBackup)
+            {
+                using var to = ContentResolver!.OpenOutputStream(uri) ?? throw new Exception("That place can't be written to.");
+                using var memory = new MemoryStream();
+                Halcyon.Services.Backup.Write(memory);
+                memory.Position = 0;
+                memory.CopyTo(to);
+                Ui.Toast(this, $"Backed up ({Math.Max(1, memory.Length / 1024)} KB).");
+            }
+            else if (requestCode == ReqRestore)
+            {
+                using var from = ContentResolver!.OpenInputStream(uri) ?? throw new Exception("That file can't be read.");
+                using var memory = new MemoryStream();
+                from.CopyTo(memory);
+                memory.Position = 0;
+                var m = Halcyon.Services.Backup.Stage(memory);
+                var when = DateTime.TryParse(m.Created, out var made) ? made.ToString("f") : m.Created;
+                new AlertDialog.Builder(this)
+                    .SetMessage($"Restore the backup made on {when} ({m.Device})?\n\nIt holds {m.Songs:N0} songs' details and {m.Playlists} playlists. The collection details and settings on this phone are replaced by the ones in the backup, and Phoenix restarts. Your music files are not touched.")!
+                    .SetPositiveButton("Restore", (_, _) => Restart())!
+                    .SetNegativeButton("Cancel", (_, _) => Halcyon.Services.Backup.Discard())!
+                    .SetOnCancelListener(new CancelAction(Halcyon.Services.Backup.Discard))!
+                    .Show();
+            }
+        }
+        catch (Exception ex) { Halcyon.Services.Backup.Discard(); Ui.Alert(this, ex.Message); }
+    }
+
+    class CancelAction(Action act) : Java.Lang.Object, IDialogInterfaceOnCancelListener
+    {
+        public void OnCancel(IDialogInterface? dialog) => act();
+    }
+
+    /// <summary>Closes Phoenix and starts it again (a restored library is put in place on the way back in).</summary>
+    void Restart()
+    {
+        P.Stop();
+        var launch = PackageManager!.GetLaunchIntentForPackage(PackageName!)!;
+        launch.AddFlags(ActivityFlags.ClearTask | ActivityFlags.NewTask);
+        StartActivity(launch);
+        Java.Lang.Runtime.GetRuntime()!.Exit(0);
     }
 
     protected override void OnDestroy()
@@ -148,6 +247,7 @@ public class MainActivity : Activity
         "podcasts" => Screens.Podcasts(this),
         "books" => BookScreens.Books(this),
         "playlists" => Screens.Playlists(this),
+        "radio" => MoreScreens.Radio(this),
         "settings" => SettingsScreen.Build(this),
         _ => Screens.Quickplay(this)
     };

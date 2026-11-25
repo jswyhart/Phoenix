@@ -129,6 +129,9 @@ public static class Catalog
                             Play = () => App.Player.PlayTracks(albums.SelectMany(a => a.Tracks))
                         });
                     break;
+                case "radio" when App.Settings.TabOn("radio") && Lib.Stations.FirstOrDefault(st => st.Url == pin.Key) is { } station:
+                    pins.Add(new QuickItem { Title = station.Name, Subtitle = "radio", Pin = pin, ArtPath = station.Art, Play = () => App.Player.PlayStation(station) });
+                    break;
                 case "playlist" when Lib.Playlists.FirstOrDefault(p => p.Id.ToString() == pin.Key) is { } pl:
                     pins.Add(new QuickItem
                     {

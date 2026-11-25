@@ -26,8 +26,12 @@ public static class BookScreens
             var all = App.Lib.Books;
             return Fmt.Join(Fmt.Plural(all.Count(b => b.IsAudio), "audiobook"), Fmt.Plural(all.Count(b => !b.IsAudio), "ebook"));
         };
+        var view = new ViewChoice("books");
+        var sorts = new[] { ("", "author"), ("title", "title"), ("added", "date added"), ("opened", "last opened"), ("progress", "progress") };
+        var shows = new[] { ("", "everything"), ("new", "not started"), ("started", "in progress"), ("done", "finished"), ("comic", "comics"), ("epub", "EPUB"), ("pdf", "PDF") };
         return page.Grid(() =>
         {
+            page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
             var books = App.Lib.Books.AsEnumerable();
             books = _tab switch
             {
@@ -38,6 +42,19 @@ public static class BookScreens
             };
             if (_tab != "progress")
                 books = books.OrderBy(b => b.AuthorOrUnknown, StringComparer.OrdinalIgnoreCase).ThenBy(b => b.Series, StringComparer.OrdinalIgnoreCase).ThenBy(b => b.Title, StringComparer.OrdinalIgnoreCase);
+            var byName = StringComparer.OrdinalIgnoreCase;
+            books = view.Order(books.Where(b => (view.Show switch
+            {
+                "new" => b.Progress <= 0.004 && !b.Finished, "started" => b.Progress > 0.004 && !b.Finished, "done" => b.Finished,
+                "comic" => b.Format == "comic", "epub" => b.Format == "epub", "pdf" => b.Format == "pdf", _ => true
+            }) && view.Matches(b.Title, b.Author, b.Series)), key => key switch
+            {
+                "title" => l => l.OrderBy(b => b.Title, byName),
+                "added" => l => l.OrderByDescending(b => b.DateAdded),
+                "opened" => l => l.OrderByDescending(b => b.LastOpened),
+                "progress" => l => l.OrderByDescending(b => b.Finished ? 1 : b.Progress).ThenBy(b => b.Title, byName),
+                _ => null
+            });
             return books.Select(b => new Row
             {
                 Title = b.Title,

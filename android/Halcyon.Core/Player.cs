@@ -20,6 +20,12 @@ public interface IMediaEngine
     event Action<string>? Failed;
 }
 
+/// <summary>An engine that can play faster or slower (podcasts and audiobooks).</summary>
+public interface ISpeedEngine
+{
+    float Speed { get; set; }
+}
+
 /// <summary>Play queue plus transport over a single media engine, for audio and video.</summary>
 public class Player
 {
@@ -32,6 +38,10 @@ public class Player
     long _offset;        // where the current (server-transcoded) stream started within the item
     int _gen;            // bumps whenever a different item starts, so late URL lookups are dropped
     bool _triedFallback;
+    double _vol = 1;        // the volume you set
+    double _fade = 1;       // the sleep timer turning it down at the end
+    double _speed = 1;
+    Timer? _sleepTimer;
 
     public List<PlayItem> Queue { get; } = new();
     public PlayItem? Current => _index >= 0 && _index < Queue.Count ? Queue[_index] : null;
@@ -55,10 +65,12 @@ public class Player
         _me = engine;
         _shuffle = App.Settings.Shuffle;
         Repeat = App.Settings.Repeat;
-        _me.Volume = (float)App.Settings.Volume;
+        _vol = App.Settings.Volume;
+        _me.Volume = (float)_vol;
         _me.Opened += () =>
         {
             _failStreak = 0;
+            if (_me is ISpeedEngine fast) fast.Speed = (float)_speed;
             var cur = Current;
             if (cur == null) return;
             if (_me.DurationMs > 0 && cur.DurationMs <= 0) cur.DurationMs = _me.DurationMs;
@@ -69,6 +81,7 @@ public class Player
         {
             var cur = Current;
             if (cur == null) return;
+            Listening.Left(cur, 0, true);
             if (cur.Track is { } t) { t.PlayCount++; t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
             if (cur.Episode is { } e) { e.Played = true; e.PositionMs = 0; App.Lib.Db.SaveEpisodeState(e); e.Raise(); }
             if (cur.Book is { } b && cur.BookPart == b.Parts.Count - 1)
@@ -127,7 +140,76 @@ public class Player
         }
     }
 
-    public double Volume { get => _me.Volume; set { _me.Volume = (float)value; App.Settings.Volume = value; } }
+    public double Volume { get => _vol; set { _vol = value; _me.Volume = (float)(_vol * _fade); App.Settings.Volume = value; } }
+
+    // ---------- sleep timer ----------
+
+    /// <summary>When playback will be paused by the sleep timer, if it is set.</summary>
+    public DateTime? SleepAt { get; private set; }
+    /// <summary>The sleep timer is set to "when this one ends".</summary>
+    public bool SleepAtEnd { get; private set; }
+    public bool SleepOn => SleepAt != null || SleepAtEnd;
+
+    /// <summary>Sets the sleep timer: after a time, at the end of what is playing, or (both empty) off.</summary>
+    public void SetSleep(TimeSpan? after, bool atEnd = false)
+    {
+        SleepAt = after is { } a ? DateTime.Now + a : null;
+        SleepAtEnd = atEnd && after == null;
+        _fade = 1;
+        _me.Volume = (float)_vol;
+        _sleepTimer?.Dispose();
+        // its own clock, so it still fires when the screen is off and nothing is being drawn
+        _sleepTimer = SleepAt == null ? null : new Timer(_ => App.Ui(SleepTick), null, 1000, 1000);
+        StateChanged?.Invoke();
+    }
+
+    public string SleepText => SleepAtEnd ? "sleep: when this ends"
+        : SleepAt is { } at ? $"sleep in {Math.Max(1, (int)Math.Ceiling((at - DateTime.Now).TotalMinutes))} min" : "";
+
+    /// <summary>Turns the sound down over the last seconds, then pauses.</summary>
+    public void SleepTick()
+    {
+        if (SleepAt is not { } at) return;
+        var left = (at - DateTime.Now).TotalSeconds;
+        if (left > 12) return;
+        if (left > 0) { _fade = Math.Clamp(left / 12, 0, 1); _me.Volume = (float)(_vol * _fade); return; }
+        SleepAt = null;
+        _sleepTimer?.Dispose();
+        _sleepTimer = null;
+        if (IsPlaying) Toggle();
+        _fade = 1;
+        _me.Volume = (float)_vol;
+        StateChanged?.Invoke();
+    }
+
+    // ---------- playback speed ----------
+
+    /// <summary>Speed can be changed for anything but radio, when the engine can do it.</summary>
+    public bool CanSpeed => Current is { Station: null } && _me is ISpeedEngine;
+
+    static string? SpeedKey(PlayItem? i) => i?.Episode is { } e ? "podcast:" + e.PodcastId : i?.Book is { } b ? "book:" + b.Id : null;
+
+    /// <summary>The speed of what is playing. A podcast series or an audiobook remembers its own; everything else starts at normal speed.</summary>
+    public double Speed
+    {
+        get => CanSpeed ? _speed : 1;
+        set
+        {
+            if (!CanSpeed) return;
+            _speed = Math.Clamp(value, 0.5, 3);
+            ((ISpeedEngine)_me).Speed = (float)_speed;
+            if (SpeedKey(Current) is { } key)
+            {
+                if (Math.Abs(_speed - 1) < 0.01) App.Settings.Speeds.Remove(key); else App.Settings.Speeds[key] = _speed;
+            }
+            StateChanged?.Invoke();
+        }
+    }
+
+    void LeaveCurrent()
+    {
+        if (Current is { Track: not null } c) Listening.Left(c, PositionMs, false);
+    }
     public long PositionMs => Current == null ? 0 : _offset + _me.PositionMs;
 
     // A transcoded stream doesn't know its real length, so trust the library's duration for those.
@@ -197,6 +279,7 @@ public class Player
     public void PlayAt(int index)
     {
         if (index < 0 || index >= Queue.Count) return;
+        LeaveCurrent();
         SaveEpisodePosition();
         if (Current != null) Current.IsCurrent = false;
         _index = index;
@@ -212,6 +295,10 @@ public class Player
         _triedFallback = false;
         IsPlaying = true;
         var gen = ++_gen;
+        item.Logged = false;
+        _speed = SpeedKey(item) is { } speedKey && App.Settings.Speeds.TryGetValue(speedKey, out var kept) ? Math.Clamp(kept, 0.5, 3) : 1;
+        if (_me is ISpeedEngine fast) fast.Speed = (float)_speed;
+        Listening.Started(item);
         if (item.Track is { } t) { t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
         CurrentChanged?.Invoke();
         StateChanged?.Invoke();
@@ -248,8 +335,17 @@ public class Player
 
     public void Next(bool auto = false)
     {
+        // "stop after this one": the next item is made ready, but left paused
+        var sleep = auto && SleepAtEnd;
+        if (sleep) SleepAtEnd = false;
+        Advance(auto);
+        if (sleep && IsPlaying) Toggle();
+    }
+
+    void Advance(bool auto)
+    {
         if (Queue.Count == 0) return;
-        if (auto && Repeat == 2) { Seek(0); _me.Play(); return; }
+        if (auto && Repeat == 2) { if (Current != null) Current.Logged = false; Seek(0); _me.Play(); return; }
         var pos = _order.IndexOf(_index);
         if (pos + 1 < _order.Count) PlayAt(_order[pos + 1]);
         else if (Repeat == 1 || !auto) { BuildOrder(_shuffle ? new Random().Next(Queue.Count) : 0); PlayAt(_order[0]); }
@@ -266,6 +362,7 @@ public class Player
 
     public void Stop()
     {
+        LeaveCurrent();
         SaveEpisodePosition();
         _gen++;
         _me.Stop();
@@ -323,6 +420,14 @@ public class Player
         }
         return item;
     }
+
+    public static PlayItem From(Station s) => new()
+    {
+        Title = s.Name, Subtitle = s.Subtitle == "" ? "radio" : "radio  ·  " + s.Subtitle, ArtPath = s.Art, Url = s.Url, Station = s
+    };
+
+    /// <summary>Tunes in to a radio station.</summary>
+    public void PlayStation(Station s) => Play(new[] { From(s) });
 
     /// <summary>Plays an audiobook from where it was left (or from the start).</summary>
     public void PlayBook(Book b, bool restart = false)

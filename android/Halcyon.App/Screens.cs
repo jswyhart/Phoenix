@@ -82,7 +82,7 @@ public static class Screens
             else rows.AddRange(items.Select(Tile));   // each section is a list down the screen, not a sideways strip
         }
         var page = new Page(a, "quickplay") { ReloadOnRatings = true };
-        page.Actions(("play liked", () => P.PlayTracks(Lib.Liked())), ("shuffle liked", () => P.PlayShuffled(Lib.Liked())), ("shuffle everything", () => P.PlayShuffled(Lib.Tracks)));
+        page.Actions(("play liked", () => P.PlayTracks(Lib.Liked())), ("shuffle liked", () => P.PlayShuffled(Lib.Liked())), ("shuffle everything", () => P.PlayShuffled(Lib.Tracks)), ("listening stats", () => a.Push(MoreScreens.Stats(a))));
         return page.List(() =>
         {
             var rows = new List<Row>();
@@ -120,29 +120,48 @@ public static class Screens
     {
         var tab = "artists";
         var songSort = new SongSort();
+        var view = new ViewChoice("music");
+        var albumSorts = new[] { ("", "artist"), ("title", "album title"), ("year", "year"), ("added", "date added"), ("plays", "most played"), ("recent", "last played") };
+        var shows = new[] { ("", "everything"), ("liked", "liked"), ("unplayed", "never played"), ("local", "on this phone"), ("server", "on servers") };
+        bool KeepSong(Track t) => (view.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, "local" => t.IsLocal, "server" => !t.IsLocal, _ => true }) && view.Matches(t.Title, t.Artist, t.Album);
+        bool KeepAlbum(Album al) => (view.Show switch { "liked" => al.Tracks.Any(t => t.Rating > 0), "unplayed" => al.Tracks.All(t => t.PlayCount == 0), "local" => al.Source == "local", "server" => al.Source != "local", _ => true })
+                                    && (view.Matches(al.Title, al.Artist) || al.Tracks.Any(t => view.Matches(t.Title)));
         var page = new Page(a, "music");
         page.Subtitle = () => Fmt.Join(Fmt.Plural(Catalog.Artists().Count, "artist"), Fmt.Plural(Lib.Albums.Count, "album"), Fmt.Plural(Lib.Tracks.Count, "song"));
         page.Chips(() => new[] { "artists", "genres", "albums", "songs" }, () => tab, t => tab = t);
         return page.Show(() =>
         {
             const string empty = "No music yet. Add songs to this device's Music folder or connect a server in settings.";
-            if (tab != "songs") page.Actions();
+            var byName = StringComparer.OrdinalIgnoreCase;
             switch (tab)
             {
                 case "genres":
-                    return new Content(Catalog.Genres().Select(g => new Row
+                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    return new Content(Catalog.Genres().Where(g => view.Matches(g)).Select(g => new Row
                     {
                         Title = g, Sub = Fmt.Plural(Catalog.AlbumsInGenre(g).Count, "album"),
                         Click = () => a.Push(new Page(a, g).Grid(() => Catalog.AlbumsInGenre(g).Select(al => AlbumRow(a, al)).ToList(), 150, 1f))
                     }).ToList(), Empty: empty);
                 case "albums":
-                    return new Content(Lib.Albums.Select(al => AlbumRow(a, al)).ToList(), 150, 1f, empty);
+                    page.Actions(Opts.Links(a, view, albumSorts, shows, page.Reload).ToArray());
+                    var albums = view.Order(Lib.Albums.Where(KeepAlbum), key => key switch
+                    {
+                        "title" => l => l.OrderBy(x => x.Title, byName),
+                        "year" => l => l.OrderBy(x => x.Year == 0 ? int.MaxValue : x.Year).ThenBy(x => x.Title, byName),
+                        "added" => l => l.OrderByDescending(x => x.DateAdded),
+                        "plays" => l => l.OrderByDescending(x => x.Tracks.Sum(t => t.PlayCount)).ThenBy(x => x.Title, byName),
+                        "recent" => l => l.OrderByDescending(x => x.Tracks.Max(t => t.LastPlayed)),
+                        _ => null
+                    });
+                    return new Content(albums.Select(al => AlbumRow(a, al)).ToList(), 150, 1f, Lib.Albums.Count == 0 ? empty : "No album matches.");
                 case "songs":
-                    var songs = songSort.Apply(Catalog.Songs());
-                    page.Actions(SortLink(a, songSort, () => page.Reload()));
+                    var songs = songSort.Apply(Catalog.Songs().Where(KeepSong));
+                    // the song list has its own sort (by column); "show" and "filter" come from the same bar as the albums
+                    page.Actions(new[] { SortLink(a, songSort, () => page.Reload()) }.Concat(Opts.Links(a, view, Opts.None, shows, page.Reload)).ToArray());
                     return new Content(songs.Select((t, i) => SongRow(a, t, () => songs, true, i)).ToList(), Empty: empty);
                 default:
-                    return new Content(Catalog.Artists().Select(name =>
+                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    return new Content(Catalog.Artists().Where(name => view.Matches(name)).Select(name =>
                     {
                         var albums = Catalog.AlbumsOf(name);
                         return new Row
@@ -205,6 +224,17 @@ public static class Screens
     public static Page Videos(MainActivity a)
     {
         var tab = "";
+        var view = new ViewChoice("videos");
+        var sorts = new[] { ("", "title"), ("year", "year"), ("added", "date added"), ("length", "length") };
+        var shows = new[] { ("", "everything"), ("local", "on this phone"), ("server", "on servers") };
+        List<VideoItem> Arrange(IEnumerable<VideoItem> videos) => view.Order(
+            videos.Where(v => (view.Show switch { "local" => v.Source == "local", "server" => v.Source != "local", _ => true }) && view.Matches(v.Title, v.Series, v.Collection)), key => key switch
+            {
+                "year" => l => l.OrderBy(v => v.Year == 0 ? int.MaxValue : v.Year).ThenBy(v => v.Title, StringComparer.OrdinalIgnoreCase),
+                "added" => l => l.OrderByDescending(v => v.DateAdded),
+                "length" => l => l.OrderByDescending(v => v.DurationMs),
+                _ => null
+            });
         var page = new Page(a, "videos");
         page.Subtitle = Catalog.VideoCounts;
         page.Chips(Catalog.VideoTabs, () => tab, t => tab = t);
@@ -216,12 +246,14 @@ public static class Screens
             switch (tab)
             {
                 case "movies":
-                    return new Content(Catalog.Movies().Select(v => PosterTile(a, v)).ToList(), 108, 1.5f, empty);
+                    page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
+                    return new Content(Arrange(Catalog.Movies()).Select(v => PosterTile(a, v)).ToList(), 108, 1.5f, empty);
                 case "shows":
                 case "collections":
                 case "folders":
                     var kind = tab;
-                    return new Content(Catalog.VideoGroups(kind).Select(g => new Row
+                    page.Actions(Opts.Links(a, view, Opts.None, Opts.None, page.Reload).ToArray());
+                    return new Content(Catalog.VideoGroups(kind).Where(g => view.Matches(g.Name)).Select(g => new Row
                     {
                         Title = g.Name, Sub = Fmt.Plural(g.Count, kind == "shows" ? "episode" : kind == "collections" ? "movie" : "video"),
                         Art = g.Art, ArtShape = kind == "folders" ? 3 : 2,
@@ -229,7 +261,8 @@ public static class Screens
                         Long = () => Menus.ForVideoGroup(a, kind, g, _ => { })
                     }).ToList(), Empty: empty);
                 default:
-                    var all = Catalog.AllVideos();
+                    page.Actions(Opts.Links(a, view, sorts, shows, page.Reload).ToArray());
+                    var all = Arrange(Catalog.AllVideos());
                     return new Content(all.Select(v => VideoRow(a, v, () => new List<VideoItem> { v }, false)).ToList(), Empty: empty);
             }
         });
@@ -304,11 +337,18 @@ public static class Screens
 
     static Page PictureGrid(MainActivity a, PicFolder f)
     {
-        var pics = Catalog.PicturesIn(f);
+        var everything = Catalog.PicturesIn(f);
+        var view = new ViewChoice("pictures");
+        static DateTime DateOf(PictureItem p) { try { return File.Exists(p.File) ? File.GetLastWriteTimeUtc(p.File) : DateTime.MinValue; } catch { return DateTime.MinValue; } }
+        List<PictureItem> Shown() => view.Order(everything.Where(p => view.Matches(p.Name)), key => key == "date" ? l => l.OrderByDescending(DateOf) : null);
         var page = new Page(a, f.Name);
-        page.Subtitle = () => Fmt.Plural(pics.Count, "picture");
-        page.Actions(("slideshow", () => a.ShowViewer(pics, 0, true)));
-        return page.Grid(() => pics.Select((p, i) => new Row { Art = p.ArtPath, Click = () => a.ShowViewer(pics, i, false) }).ToList(), 104, 1f, "No pictures in this folder.");
+        page.Subtitle = () => Shown().Count == everything.Count ? Fmt.Plural(everything.Count, "picture") : $"{Shown().Count} of {everything.Count} pictures";
+        return page.Show(() =>
+        {
+            var pics = Shown();
+            page.Actions(new[] { ("slideshow", (Action)(() => a.ShowViewer(pics, 0, true))) }.Concat(Opts.Links(a, view, new[] { ("", "name"), ("date", "date") }, Opts.None, page.Reload)).ToArray());
+            return new Content(pics.Select((p, i) => new Row { Art = p.ArtPath, Click = () => a.ShowViewer(pics, i, false) }).ToList(), 104, 1f, "No pictures here.");
+        });
     }
 
     // ---------- podcasts ----------
@@ -317,7 +357,11 @@ public static class Screens
     {
         var page = new Page(a, "podcasts");
         var busy = false;
-        page.Actions(
+        var tab = "my podcasts";
+        var view = new ViewChoice("podcasts");
+        var browser = new MoreScreens.PodcastBrowser();
+        page.Chips(() => new[] { "my podcasts", "sources" }, () => tab, t => { tab = t; if (t == "sources" && !browser.Opened) browser.Browse(page.Reload); });
+        void MineActions() => page.Actions(new (string, Action)[] {
             ("add podcast", () => Ui.Ask(a, "Add a podcast", "Podcast RSS feed address", "https://", async url =>
             {
                 if (string.IsNullOrWhiteSpace(url) || url.Trim() == "https://") return;
@@ -347,27 +391,43 @@ public static class Screens
                 App.SetStatus(failed > 0 ? $"{failed} podcast feed(s) could not be refreshed" : "");
                 busy = false;
                 page.Reload();
-            }));
-        return page.List(() => Lib.Podcasts.Select(p => new Row
+            }) }.Concat(Opts.Links(a, view, new[] { ("", "title"), ("author", "author") }, Opts.None, page.Reload)).ToArray());
+        return page.Show(() =>
+        {
+            if (tab == "sources") return MoreScreens.PodcastSources(a, page, browser);
+            MineActions();
+            var byName = StringComparer.OrdinalIgnoreCase;
+            var mine = view.Order(Lib.Podcasts.Where(p => view.Matches(p.Title, p.Author)), key => key == "author" ? l => l.OrderBy(p => p.Author == "" ? "\uFFFF" : p.Author, byName).ThenBy(p => p.Title, byName) : null);
+            return new Content(mine.Select(p => new Row
         {
             Title = p.Title, Sub = p.Author, Art = p.ArtUrl, ArtShape = 1,
             Click = () => a.Push(PodcastPage(a, p)),
             Long = () => Ui.Menu(a, p.Title,
                 ("Play newest episode", () => { var eps = Lib.Db.LoadEpisodes(p.Id); if (eps.Count > 0) P.Play(new[] { Player.From(eps[0], p) }); }),
                 ("Unsubscribe", () => { Lib.Db.DeletePodcast(p.Id); Lib.Podcasts = Lib.Db.LoadPodcasts(); page.Reload(); }))
-        }).ToList(), "No podcasts yet. Tap “add podcast” and paste a feed address.");
+        }).ToList(), Empty: Lib.Podcasts.Count == 0 ? "No podcasts yet.\n\nFind some under “sources”, or tap “add podcast” and paste a feed address." : "No podcast matches the filter.");
+        });
     }
 
     static Page PodcastPage(MainActivity a, Podcast p)
     {
         var episodes = Lib.Db.LoadEpisodes(p.Id);
+        var view = new ViewChoice("episodes");
+        var shows = new[] { ("", "all episodes"), ("unplayed", "unplayed"), ("video", "video"), ("audio", "audio") };
+        List<Episode> Shown() => episodes.Where(e => (view.Show switch { "unplayed" => !e.Played, "video" => e.IsVideo, "audio" => !e.IsVideo, _ => true }) && view.Matches(e.Title, e.Description)).ToList();
         var page = new Page(a, p.Title);
-        page.Subtitle = () => Fmt.Join(p.Author, Fmt.Plural(episodes.Count, "episode"));
+        page.Subtitle = () =>
+        {
+            var video = episodes.Count(e => e.IsVideo);
+            return Fmt.Join(p.Author, Shown().Count == episodes.Count ? Fmt.Plural(episodes.Count, "episode") : $"{Shown().Count} of {episodes.Count} episodes",
+                video == 0 ? "" : video == episodes.Count ? "a video podcast" : $"{video} in video");
+        };
         return page.List(() =>
         {
+            page.Actions(Opts.Links(a, view, Opts.None, shows, page.Reload).ToArray());
             var rows = new List<Row>();
             if (p.Description != "") rows.Add(Row.Note(p.Description));
-            rows.AddRange(episodes.Select(e => new Row
+            rows.AddRange(Shown().Select(e => new Row
             {
                 Title = e.Title, Dim = e.Played,
                 Sub = Fmt.Join(e.DateText, e.DurationText, e.IsVideo ? "video" : "", e.Played ? "played" : e.PositionMs > 0 ? "resume at " + Fmt.Time(e.PositionMs) : ""),
@@ -431,10 +491,13 @@ public static class Screens
     {
         var page = new Page(a, title) { ReloadOnRatings = playlist == null };
         var sort = new SongSort();
-        List<Track> Sorted() => sort.Apply(tracks());
+        var view = new ViewChoice("playlists");
+        var shows = new[] { ("", "everything"), ("liked", "liked"), ("unplayed", "never played") };
+        List<Track> Sorted() => sort.Apply(tracks().Where(t => (view.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, _ => true }) && view.Matches(t.Title, t.Artist, t.Album)));
         if (playlist != null) page.TitleSource = () => playlist.Name;
         page.Subtitle = () => Fmt.Join(Fmt.Plural(tracks().Count, "song"), Fmt.Time(tracks().Sum(t => t.DurationMs)));
-        void SetActions() => page.Actions(("play", () => P.PlayTracks(Sorted())), ("shuffle", () => P.PlayShuffled(tracks())), SortLink(a, sort, () => page.Reload()));
+        void SetActions() => page.Actions(new (string, Action)[] { ("play", () => P.PlayTracks(Sorted())), ("shuffle", () => P.PlayShuffled(Sorted())), SortLink(a, sort, () => page.Reload()) }
+            .Concat(Opts.Links(a, view, Opts.None, shows, page.Reload)).ToArray());
         SetActions();
         return page.List(() =>
         {

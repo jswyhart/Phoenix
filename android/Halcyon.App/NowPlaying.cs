@@ -43,6 +43,7 @@ public class NowPlayingView : LinearLayout
         }, 12);
         _bookmark.Visibility = ViewStates.Gone;
         ((LinearLayout)_topBar).AddView(_bookmark);
+        ((LinearLayout)_topBar).AddView(Ui.Icon(a, IconKind.More, Th.Fg, 22, () => MoreScreens.PlayerMenu(a), 12));   // sleep timer, speed, stats
         ((LinearLayout)_topBar).AddView(Ui.Icon(a, IconKind.Queue, Th.Fg, 22, () => { a.HideNowPlaying(); a.Push(Screens.Queue(a)); }, 12));
         AddView(_topBar, Ui.Fill());
 
@@ -165,7 +166,7 @@ public class NowPlayingView : LinearLayout
         var cur = P.Current;
         if (cur == null) { _a.HideNowPlaying(); return; }
         _title.Text = cur.Title;
-        _sub.Text = Fmt.Join(cur.Subtitle, cur.Album);
+        _sub.Text = Fmt.Join(cur.Subtitle, cur.Album, MoreScreens.ModeText);
         _bookmark.Visibility = cur.Book != null ? ViewStates.Visible : ViewStates.Gone;
         _play.SetImageDrawable(new IconDrawable(P.IsPlaying ? IconKind.Pause : IconKind.Play, Th.Fg));
         _shuffle.SetImageDrawable(new IconDrawable(IconKind.Shuffle, P.Shuffle ? Th.Accent : Th.FgFaint));
