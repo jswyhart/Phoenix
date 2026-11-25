@@ -668,7 +668,13 @@ public static class Smoke
         await Task.Delay(700);
         Check("visualizer runs in now playing", viz.IsVisible);
         var vizFrames = viz.Frames;
+        var vizAnalyses = viz.Analyses;
+        var vizClock = System.Diagnostics.Stopwatch.StartNew();
         await Task.Delay(1000);
+        var vizPerSecond = (viz.Analyses - vizAnalyses) / vizClock.Elapsed.TotalSeconds;
+        var vizFps = (viz.Frames - vizFrames) / vizClock.Elapsed.TotalSeconds;
+        Check("visualizer measures the sound about 60 times a second however fast the screen is", vizPerSecond < 68 && vizPerSecond > Math.Min(50, vizFps * 0.8),
+            $"{vizPerSecond:0} measurements a second at {vizFps:0} frames a second");
         Log.AppendLine($"INFO  visualizer drew {viz.Frames - vizFrames} frames in one second");
         Check("visualizer keeps up with the screen (more than 40 frames a second)", viz.Frames - vizFrames > 40, $"{viz.Frames - vizFrames} fps");
         if (Visualizer.UseGpu && D3DSurface.Problem == "")

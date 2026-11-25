@@ -39,6 +39,15 @@ public class Visualizer : FrameworkElement
     double _phase;
     double _k = 1;          // how much of a 1/30 s step this frame is; every movement is scaled by it
     double _historyDue;     // the waterfall still adds a row 30 times a second
+    // The sound is measured a fixed 60 times a second, whatever the screen does; what is drawn every frame is only the
+    // movement towards (and away from) the last measurement. Measuring on every frame of a fast screen made the picture
+    // twitch, and ran the animations too fast.
+    const double AnalyseEvery = 1000.0 / 60;
+    double _analyseDue = AnalyseEvery;
+    readonly double[] _target = new double[BarCount];
+    int _analyses;
+    /// <summary>How many times the sound has been measured (for the self-test).</summary>
+    public int Analyses => _analyses;
     readonly double[] _re = new double[FftSize], _im = new double[FftSize];
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     double _lastTick;
@@ -246,9 +255,18 @@ public class Visualizer : FrameworkElement
         if (dt < 1) return;
         _lastTick = t;
         _lastFrame = DateTime.UtcNow;
-        _k = Math.Clamp(dt / (1000.0 / 30), 0.2, 2.5);
+        _k = Math.Clamp(dt / (1000.0 / 30), 0.005, 2.5);
         _frames++;
-        if (!Hold) Update();
+        if (!Hold)
+        {
+            _analyseDue += dt;
+            if (_analyseDue >= AnalyseEvery * 0.9)
+            {
+                _analyseDue = Math.Clamp(_analyseDue - AnalyseEvery, 0, AnalyseEvery);
+                Analyse();
+            }
+            Step(false);
+        }
         // on the graphics card when it can be; otherwise through WPF's own drawing
         if (EnsureGpu())
         {
@@ -260,9 +278,17 @@ public class Visualizer : FrameworkElement
 
     // ---------- analysis ----------
 
-    /// <summary>Recomputes bar heights from the most recent samples.</summary>
+    /// <summary>Measures the sound and moves the picture one step, at once (tests, and anything not driven by the screen).</summary>
     public void Update()
     {
+        Analyse();
+        Step(true);
+    }
+
+    /// <summary>Measures the most recent samples: where each bar should be heading.</summary>
+    void Analyse()
+    {
+        _analyses++;
         var re = _re;
         var im = _im;
         Array.Clear(im);
@@ -297,7 +323,6 @@ public class Visualizer : FrameworkElement
         // Bars are spaced logarithmically from 40 Hz to 16 kHz, like a graphic equalizer.
         const double lo = 40, hi = 16000;
         var binHz = (double)SampleRate / FftSize;
-        double sum = 0;
         for (var b = 0; b < BarCount; b++)
         {
             var f0 = lo * Math.Pow(hi / lo, (double)b / BarCount);
@@ -306,8 +331,19 @@ public class Visualizer : FrameworkElement
             double max = 0;
             for (var i = i0; i <= i1; i++) max = Math.Max(max, Math.Sqrt(re[i] * re[i] + im[i] * im[i]));
             var db = 20 * Math.Log10(max / (FftSize / 4.0) + 1e-9);
-            var level = Math.Clamp((db + 66 + (Sensitivity - 1) * 7) / 60, 0, 1);
-            Bars[b] = Math.Max(level, Bars[b] - 0.045 * _k);      // fast attack, steady fall
+            _target[b] = Math.Clamp((db + 66 + (Sensitivity - 1) * 7) / 60, 0, 1);
+        }
+    }
+
+    /// <summary>Moves everything on screen by one frame's worth of time (<see cref="_k"/>).</summary>
+    void Step(bool snap)
+    {
+        var rise = snap ? 1 : 1 - Math.Exp(-_k * (1000.0 / 30) / 10);   // a bar climbs most of the way in about 10 ms
+        double sum = 0;
+        for (var b = 0; b < BarCount; b++)
+        {
+            var level = _target[b];
+            Bars[b] = level > Bars[b] ? Bars[b] + (level - Bars[b]) * rise : Math.Max(level, Bars[b] - 0.045 * _k);   // fast attack, steady fall
             _peaks[b] = Math.Max(Bars[b], _peaks[b] - 0.012 * _k); // caps hang, then drop slowly
             sum += Bars[b];
         }
