@@ -55,4 +55,5 @@ set `PHOENIX_DATA` to an empty scratch folder, then run `Phoenix.exe --smoke <ou
 - Selawik font (SIL Open Font License) in `mac/Assets/Fonts`.
 - Bergamot translation engine (Mozilla Public License 2.0) in `translate-engine/`; language packs are downloaded
   from Mozilla's Firefox Translations models when you ask for them.
-- NuGet packages: Microsoft.Data.Sqlite, Microsoft.Web.WebView2, NAudio, SharpCompress, TagLibSharp.
+- NuGet packages: Microsoft.Data.Sqlite, Microsoft.Web.WebView2, NAudio, SharpCompress, TagLibSharp, and Vortice.Windows
+  (Direct3D 11, Direct2D and Direct3D 9 bindings; the visualizer is drawn through them).

@@ -58,6 +58,48 @@ public static class Smoke
         FramePacer.Hold(); FramePacer.Release();
         Log.AppendLine($"INFO  frame pacer: enabled {FramePacer.Enabled}, available {FramePacer.Available}");
         Log.AppendLine($"INFO  library: {App.Lib.Tracks.Count} songs, {App.Lib.Albums.Count} albums");
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--viz") >= 0)
+        {
+            // how evenly frames arrive with each visualizer style on screen
+            win.ShowNow(true);
+            await Task.Delay(800);
+            var vz = win.VisualizerControl;
+            var sound = new float[4096];
+            var noise = new Random(7);
+            vz.Hold = true;
+            for (var style = 1; style < Visualizer.Styles.Length; style++)
+            {
+                win.SetVisualizer(style, 1);
+                for (var frame = 0; frame < 50; frame++)
+                {
+                    double f1 = 110 * (1 + frame % 5), f2 = 900 + 150 * (frame % 7), f3 = 5000 + 400 * (frame % 3);
+                    for (var i = 0; i < sound.Length; i++)
+                        sound[i] = (float)(0.45 * Math.Sin(2 * Math.PI * f1 * i / 48000) + 0.25 * Math.Sin(2 * Math.PI * f2 * i / 48000) + 0.12 * Math.Sin(2 * Math.PI * f3 * i / 48000) + 0.03 * (noise.NextDouble() - 0.5));
+                    vz.Feed(sound, 48000);
+                    vz.Update();
+                }
+                await Task.Delay(500);
+                var gaps = new List<double>();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                TimeSpan seen = default; double prev = 0;
+                void Tick(object? s0, EventArgs e0)
+                {
+                    if (e0 is System.Windows.Media.RenderingEventArgs r) { if (r.RenderingTime == seen) return; seen = r.RenderingTime; }
+                    var now = sw.Elapsed.TotalMilliseconds;
+                    if (prev > 0) gaps.Add(now - prev);
+                    prev = now;
+                }
+                var drawn = vz.Frames;
+                System.Windows.Media.CompositionTarget.Rendering += Tick;
+                await Task.Delay(2500);
+                System.Windows.Media.CompositionTarget.Rendering -= Tick;
+                var g = gaps.OrderBy(x => x).ToList();
+                if (g.Count < 10) { Log.AppendLine($"PERF  visualizer {Visualizer.Styles[style]}: too few frames (visible {vz.IsVisible})"); continue; }
+                Log.AppendLine($"PERF  visualizer {Visualizer.Styles[style],-16} {(vz.OnGpu ? "Direct3D 11" : "WPF"),-11} {g.Count,5} frames ({(vz.Frames - drawn) / 2.5:0}/s), median {g[g.Count / 2]:0.0} ms, 95% under {g[(int)(g.Count * 0.95)]:0.0} ms, worst {g[^1]:0.0} ms, {g.Count(x => x > 3.6)} late, {g.Count(x => x > 8)} over 8 ms");
+            }
+            Log.AppendLine($"INFO  visualizer size {vz.ActualWidth:0}x{vz.ActualHeight:0}; Direct3D problem: '{D3DSurface.Problem}'");
+            return;
+        }
         win.Navigate("music");
         var music = win.Page<MusicView>("music");
         async Task<long> Time(Action a)
@@ -620,6 +662,23 @@ public static class Smoke
         await Task.Delay(1000);
         Log.AppendLine($"INFO  visualizer drew {viz.Frames - vizFrames} frames in one second");
         Check("visualizer keeps up with the screen (more than 40 frames a second)", viz.Frames - vizFrames > 40, $"{viz.Frames - vizFrames} fps");
+        if (Visualizer.UseGpu && D3DSurface.Problem == "")
+        {
+            var gpuBefore = viz.GpuFrames;
+            viz.Feed(vizTone, 48000);
+            await Task.Delay(500);
+            var picture = viz.GpuSnapshot();
+            var lit = 0;
+            if (picture != null)
+            {
+                var px = new byte[picture.PixelWidth * picture.PixelHeight * 4];
+                picture.CopyPixels(px, picture.PixelWidth * 4, 0);
+                for (var i = 3; i < px.Length; i += 4) if (px[i] > 40) lit++;
+            }
+            Check("visualizer is drawn by the graphics card through Direct3D 11", viz.OnGpu && viz.GpuFrames - gpuBefore > 10 && lit > 500,
+                $"{viz.GpuFrames - gpuBefore} frames in half a second, {lit} lit pixels of {picture?.PixelWidth}x{picture?.PixelHeight}");
+        }
+        else Log.AppendLine($"INFO  visualizer drawn through WPF (Direct3D 11 not in use: '{D3DSurface.Problem}')");
         viz.Feed(vizTone, 48000);
         await Shot("20-visualizer");
         App.Settings.Visualizer = 2;

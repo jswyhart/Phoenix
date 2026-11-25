@@ -70,8 +70,7 @@ public class Visualizer : FrameworkElement
     readonly List<Spark> _sparks = new();
     readonly double[] _needle = new double[2];
 
-    static readonly Brush CapBrush = Frozen(new SolidColorBrush(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)));
-    static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
+    static readonly Fill Cap = Fill.Of(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF));
 
     // ---------- colour ----------
 
@@ -151,9 +150,10 @@ public class Visualizer : FrameworkElement
     }
 
     /// <summary>Bottom-to-top gradient for one bar.</summary>
-    Brush Gradient(double across) => Frozen(new LinearGradientBrush(
-        new GradientStopCollection { new(ColorAt(across, 0), 0), new(ColorAt(across, 0.5), 0.55), new(ColorAt(across, 1), 1) },
-        new Point(0, 1), new Point(0, 0)));
+    Fill Gradient(double across) => Fill.Up((ColorAt(across, 0), 0), (ColorAt(across, 0.5), 0.55), (ColorAt(across, 1), 1));
+
+    /// <summary>The whole rainbow, left to right.</summary>
+    Fill Rainbow(double level) => Fill.Right(Enumerable.Range(0, 7).Select(i => (ColorAt(i / 6.0, level), i / 6.0)).ToArray());
 
     // ---------- capture ----------
 
@@ -179,6 +179,8 @@ public class Visualizer : FrameworkElement
         _running = false;
         CompositionTarget.Rendering -= OnFrame;
         FramePacer.Release();
+        _gpu?.Dispose();
+        _gpu = null;
         _live = false;
         var c = _capture;
         _capture = null;
@@ -247,6 +249,12 @@ public class Visualizer : FrameworkElement
         _k = Math.Clamp(dt / (1000.0 / 30), 0.2, 2.5);
         _frames++;
         if (!Hold) Update();
+        // on the graphics card when it can be; otherwise through WPF's own drawing
+        if (EnsureGpu())
+        {
+            if (_gpu!.Draw(paint => Draw(paint, ActualWidth, ActualHeight))) return;
+            _gpuFailed = true;
+        }
         InvalidateVisual();
     }
 
@@ -406,82 +414,119 @@ public class Visualizer : FrameworkElement
 
     // ---------- drawing ----------
 
+    D3DSurface? _gpu;
+    bool _gpuFailed;
+    /// <summary>Set PHOENIX_VIZ=wpf to draw through WPF instead (for comparison).</summary>
+    public static bool UseGpu = Environment.GetEnvironmentVariable("PHOENIX_VIZ") != "wpf";
+    /// <summary>Whether the graphics card is drawing the visualizer through Direct3D 11 right now.</summary>
+    public bool OnGpu => _gpu?.Ready == true;
+    public int GpuFrames => _gpu?.Frames ?? 0;
+    /// <summary>What the graphics card last drew (for the self-test).</summary>
+    public System.Windows.Media.Imaging.BitmapSource? GpuSnapshot() => _gpu?.Snapshot();
+
+    bool EnsureGpu()
+    {
+        if (!UseGpu || _gpuFailed || !_running) return false;
+        double w = ActualWidth, h = ActualHeight;
+        if (w < 10 || h < 10) return false;
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        _gpu ??= new D3DSurface();
+        var before = _gpu.Image;
+        if (!_gpu.Resize((int)Math.Ceiling(w * scale), (int)Math.Ceiling(h * scale), scale))
+        {
+            _gpuFailed = true;
+            _gpu.Dispose();
+            _gpu = null;
+            return false;
+        }
+        if (!ReferenceEquals(before, _gpu.Image)) InvalidateVisual();   // a new picture: WPF has to be shown it once
+        return true;
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         double w = ActualWidth, h = ActualHeight;
         if (w < 10 || h < 10) return;
+        if (_gpu is { Ready: true, Image: { } image })
+        {
+            // the graphics card redraws this picture every frame by itself; WPF only has to place it
+            var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            dc.DrawImage(image, new Rect(0, 0, _gpu.PixelWidth / scale, _gpu.PixelHeight / scale));
+            return;
+        }
+        Draw(new WpfPaint(dc, VisualTreeHelper.GetDpi(this).PixelsPerDip), w, h);
+    }
+
+    void Draw(Paint p, double w, double h)
+    {
         switch (Mode)
         {
-            case 2: DrawBars(dc, w, h, mirrored: true); break;
-            case 3: DrawScope(dc, w, h); break;
-            case 4: DrawRadial(dc, w, h, starburst: false); break;
-            case 5: DrawWave(dc, w, h); break;
-            case 6: DrawRadial(dc, w, h, starburst: true); break;
-            case 7: DrawWaterfall(dc, w, h); break;
-            case 8: DrawDots(dc, w, h); break;
-            case 9: DrawLissajous(dc, w, h); break;
-            case 10: DrawCircularScope(dc, w, h); break;
-            case 11: DrawRipples(dc, w, h); break;
-            case 12: DrawFireworks(dc, w, h); break;
-            case 13: DrawTunnel(dc, w, h); break;
-            case 14: DrawMeters(dc, w, h); break;
-            default: DrawBars(dc, w, h, mirrored: false); break;
+            case 2: DrawBars(p, w, h, mirrored: true); break;
+            case 3: DrawScope(p, w, h); break;
+            case 4: DrawRadial(p, w, h, starburst: false); break;
+            case 5: DrawWave(p, w, h); break;
+            case 6: DrawRadial(p, w, h, starburst: true); break;
+            case 7: DrawWaterfall(p, w, h); break;
+            case 8: DrawDots(p, w, h); break;
+            case 9: DrawLissajous(p, w, h); break;
+            case 10: DrawCircularScope(p, w, h); break;
+            case 11: DrawRipples(p, w, h); break;
+            case 12: DrawFireworks(p, w, h); break;
+            case 13: DrawTunnel(p, w, h); break;
+            case 14: DrawMeters(p, w, h); break;
+            default: DrawBars(p, w, h, mirrored: false); break;
         }
     }
 
-    void DrawBars(DrawingContext dc, double w, double h, bool mirrored)
+    void DrawBars(Paint p, double w, double h, bool mirrored)
     {
         var slot = w / BarCount;
         var barW = Math.Max(2, slot - 4);
         var area = mirrored ? h * 0.42 : h * 0.72;
         var baseY = mirrored ? h * 0.5 : h;
         const double seg = 7;                     // LED-style segments
-        Brush? shared = Palette == 1 ? null : Gradient(0);
+        Fill? shared = Palette == 1 ? null : Gradient(0);
         for (var b = 0; b < BarCount; b++)
         {
             var x = b * slot + (slot - barW) / 2;
             var barH = Math.Floor(Bars[b] * area / seg) * seg;
-            var brush = shared ?? Gradient((double)b / BarCount);
+            var fill = shared ?? Gradient((double)b / BarCount);
             if (barH > 0)
             {
-                dc.PushClip(new RectangleGeometry(new Rect(x, baseY - barH, barW, barH)));
-                dc.DrawRectangle(brush, null, new Rect(x, baseY - area, barW, area));
-                dc.Pop();
+                p.PushClip(new Rect(x, baseY - barH, barW, barH));
+                p.Rect(fill, new Rect(x, baseY - area, barW, area));
+                p.Pop();
                 if (mirrored)
                 {
                     // the reflection below the centre line, dimmer
-                    dc.PushOpacity(0.45);
-                    dc.PushClip(new RectangleGeometry(new Rect(x, baseY, barW, barH)));
-                    dc.PushTransform(new ScaleTransform(1, -1, 0, baseY));
-                    dc.DrawRectangle(brush, null, new Rect(x, baseY - area, barW, area));
-                    dc.Pop(); dc.Pop(); dc.Pop();
+                    p.PushOpacity(0.45);
+                    p.PushClip(new Rect(x, baseY, barW, barH));
+                    p.PushFlip(baseY);
+                    p.Rect(fill, new Rect(x, baseY - area, barW, area));
+                    p.Pop(); p.Pop(); p.Pop();
                 }
             }
-            dc.DrawRectangle(CapBrush, null, new Rect(x, baseY - Math.Max(3, _peaks[b] * area) - 3, barW, 3));
+            p.Rect(Cap, new Rect(x, baseY - Math.Max(3, _peaks[b] * area) - 3, barW, 3));
         }
     }
 
-    void DrawScope(DrawingContext dc, double w, double h)
+    void DrawScope(Paint p, double w, double h)
     {
         const int points = 512;
         var mid = h * 0.5;
-        var geo = new StreamGeometry();
-        using (var g = geo.Open())
-            for (var i = 0; i < points; i++)
-            {
-                var s = _scope[FftSize - points * 2 + i * 2];
-                var p = new Point(w * i / (points - 1), mid - Math.Clamp(s * 2.2, -1, 1) * h * 0.4);
-                if (i == 0) g.BeginFigure(p, false, false); else g.LineTo(p, true, true);
-            }
-        geo.Freeze();
-        var stroke = Palette == 1
-            ? Frozen(new LinearGradientBrush(new GradientStopCollection(Enumerable.Range(0, 7).Select(i => new GradientStop(ColorAt(i / 6.0, 1), i / 6.0))), 0))
-            : (Brush)Frozen(new SolidColorBrush(ColorAt(0.5, 0.75)));
-        dc.DrawGeometry(null, Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF))), 7)), geo);   // soft glow
-        dc.DrawGeometry(null, Frozen(new Pen(stroke, 2.2)), geo);
+        Shape? line = null;
+        for (var i = 0; i < points; i++)
+        {
+            var s = _scope[FftSize - points * 2 + i * 2];
+            var at = new Point(w * i / (points - 1), mid - Math.Clamp(s * 2.2, -1, 1) * h * 0.4);
+            if (line == null) line = new Shape(at, false, false, points); else line.Line(at);
+        }
+        var stroke = Palette == 1 ? Rainbow(1) : Fill.Of(ColorAt(0.5, 0.75));
+        p.Path(line!, null, Fill.Of(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)), 7, round: false);   // soft glow
+        p.Path(line!, null, stroke, 2.2, round: false);
     }
 
-    void DrawRadial(DrawingContext dc, double w, double h, bool starburst)
+    void DrawRadial(Paint p, double w, double h, bool starburst)
     {
         var c = new Point(w / 2, h / 2);
         var size = Math.Min(w, h);
@@ -497,45 +542,39 @@ public class Visualizer : FrameworkElement
             var a = spin + 2 * Math.PI * i / spokes;
             double cos = Math.Cos(a), sin = Math.Sin(a);
             var len = level * reach;
-            var pen = Frozen(new Pen(Frozen(new SolidColorBrush(ColorAt((double)b / BarCount, level))), starburst ? 2 + level * 5 : Math.Max(2, size * 0.012)) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round });
-            dc.DrawLine(pen, new Point(c.X + cos * inner, c.Y + sin * inner), new Point(c.X + cos * (inner + len), c.Y + sin * (inner + len)));
+            p.Line(ColorAt((double)b / BarCount, level), starburst ? 2 + level * 5 : Math.Max(2, size * 0.012),
+                new Point(c.X + cos * inner, c.Y + sin * inner), new Point(c.X + cos * (inner + len), c.Y + sin * (inner + len)));
             if (!starburst)
             {
                 var cap = inner + _peaks[b] * reach + 5;
-                dc.DrawEllipse(CapBrush, null, new Point(c.X + cos * cap, c.Y + sin * cap), 1.6, 1.6);
+                p.Ellipse(Cap, null, 0, new Point(c.X + cos * cap, c.Y + sin * cap), 1.6, 1.6);
             }
         }
-        if (!starburst) dc.DrawEllipse(null, Frozen(new Pen(Frozen(new SolidColorBrush(ColorAt(0.5, 0.6))), 2)), c, inner - 4, inner - 4);
+        if (!starburst) p.Ellipse(null, Fill.Of(ColorAt(0.5, 0.6)), 2, c, inner - 4, inner - 4);
     }
 
-    void DrawWave(DrawingContext dc, double w, double h)
+    void DrawWave(Paint p, double w, double h)
     {
         // Two filled, smoothed spectrum curves: the live levels in front and the slower peak envelope behind.
-        StreamGeometry Curve(double[] levels, double scale)
+        Shape Curve(double[] levels, double scale)
         {
-            var geo = new StreamGeometry();
             var pts = new List<Point> { new(0, h - levels[0] * scale) };
             for (var b = 0; b < BarCount; b++) pts.Add(new Point(w * (b + 0.5) / BarCount, h - levels[b] * scale));
             pts.Add(new Point(w, h - levels[^1] * scale));
-            using (var g = geo.Open())
-            {
-                g.BeginFigure(new Point(0, h), true, true);
-                g.LineTo(pts[0], true, false);
-                g.PolyBezierTo(Smooth(pts), true, true);
-                g.LineTo(new Point(w, h), true, false);
-            }
-            geo.Freeze();
-            return geo;
+            var shape = new Shape(new Point(0, h), true, true, BarCount + 4);
+            shape.Line(pts[0]);
+            var smooth = Smooth(pts);
+            for (var i = 0; i + 2 < smooth.Count; i += 3) shape.Bezier(smooth[i], smooth[i + 1], smooth[i + 2]);
+            shape.Line(new Point(w, h));
+            return shape;
         }
-        var fill = Palette == 1
-            ? Frozen(new LinearGradientBrush(new GradientStopCollection(Enumerable.Range(0, 7).Select(i => new GradientStop(ColorAt(i / 6.0, 0.9), i / 6.0))), 0))
-            : Gradient(0);
-        dc.PushOpacity(0.28);
-        dc.DrawGeometry(fill, null, Curve(_peaks, h * 0.74));
-        dc.Pop();
-        dc.PushOpacity(0.85);
-        dc.DrawGeometry(fill, null, Curve(Bars, h * 0.70));
-        dc.Pop();
+        var fill = Palette == 1 ? Rainbow(0.9) : Gradient(0);
+        p.PushOpacity(0.28);
+        p.Path(Curve(_peaks, h * 0.74), fill, null);
+        p.Pop();
+        p.PushOpacity(0.85);
+        p.Path(Curve(Bars, h * 0.70), fill, null);
+        p.Pop();
     }
 
     /// <summary>Control points for a smooth curve through the given points (Catmull-Rom as cubic Béziers).</summary>
@@ -552,14 +591,13 @@ public class Visualizer : FrameworkElement
         return result;
     }
 
-    void DrawWaterfall(DrawingContext dc, double w, double h)
+    void DrawWaterfall(Paint p, double w, double h)
     {
         // A scrolling spectrogram: each row is a moment in time, newest at the bottom, receding upward.
         if (_history.Count == 0) return;
         var rows = HistoryRows;
         var area = h * 0.86;
         var rowH = area / rows;
-        var brushes = new Dictionary<int, Brush>();
         for (var r = 0; r < _history.Count; r++)
         {
             var levels = _history[r];
@@ -572,22 +610,14 @@ public class Visualizer : FrameworkElement
                 var level = levels[b];
                 if (level < 0.06) continue;
                 var c = ColorAt((double)b / BarCount, level);
-                var key = (c.R << 16 | c.G << 8 | c.B) & 0xF8F8F8 | (int)(depth * 7) << 24;
-                if (!brushes.TryGetValue(key, out var brush))
-                    brushes[key] = brush = Frozen(new SolidColorBrush(Color.FromArgb((byte)(255 * Math.Min(1, level * 1.2) * (0.25 + 0.75 * depth)), c.R, c.G, c.B)));
-                dc.DrawRectangle(brush, null, new Rect(inset + b * slot, y, Math.Max(1, slot - 1), Math.Max(1, rowH - 1)));
+                p.Rect(Fill.Of(c, (byte)(255 * Math.Min(1, level * 1.2) * (0.25 + 0.75 * depth))), new Rect(inset + b * slot, y, Math.Max(1, slot - 1), Math.Max(1, rowH - 1)));
             }
         }
     }
 
     // ---------- more styles ----------
 
-    static Pen PenOf(Color c, double width, byte alpha = 255) =>
-        Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B))), width) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round });
-
-    static Brush BrushOf(Color c, byte alpha = 255) => Frozen(new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B)));
-
-    void DrawDots(DrawingContext dc, double w, double h)
+    void DrawDots(Paint p, double w, double h)
     {
         // a dot-matrix equalizer: each column is a stack of round lamps
         const int rows = 18;
@@ -595,6 +625,7 @@ public class Visualizer : FrameworkElement
         var cell = Math.Min(slot, h * 0.78 / rows);
         var r = Math.Max(1.5, cell * 0.36);
         var top = h - rows * cell - h * 0.06;
+        var unlit = Fill.Of(ColorAt(0.5, 0.3), 0x16);
         for (var b = 0; b < BarCount; b++)
         {
             var x = b * slot + slot / 2;
@@ -603,14 +634,14 @@ public class Visualizer : FrameworkElement
             for (var row = 0; row < rows; row++)
             {
                 var y = top + (rows - 1 - row) * cell + cell / 2;
-                if (row < lit) dc.DrawEllipse(BrushOf(ColorAt((double)b / BarCount, (double)row / rows)), null, new Point(x, y), r, r);
-                else if (row == capRow - 1 && capRow > 0) dc.DrawEllipse(CapBrush, null, new Point(x, y), r, r);
-                else dc.DrawEllipse(BrushOf(ColorAt(0.5, 0.3), 0x16), null, new Point(x, y), r * 0.8, r * 0.8);
+                if (row < lit) p.Ellipse(Fill.Of(ColorAt((double)b / BarCount, (double)row / rows)), null, 0, new Point(x, y), r, r);
+                else if (row == capRow - 1 && capRow > 0) p.Ellipse(Cap, null, 0, new Point(x, y), r, r);
+                else p.Ellipse(unlit, null, 0, new Point(x, y), r * 0.8, r * 0.8);
             }
         }
     }
 
-    void DrawLissajous(DrawingContext dc, double w, double h)
+    void DrawLissajous(Paint p, double w, double h)
     {
         // each sample against the one a moment later: a steady tone draws a clean figure, music a restless knot
         const int points = 700, lag = 30;
@@ -619,73 +650,69 @@ public class Visualizer : FrameworkElement
         for (var i = 0; i < points; i++) peak = Math.Max(peak, Math.Abs(_scope[baseIdx + i]));
         var scale = Math.Min(w, h) * 0.42 / Math.Min(peak, 1f);
         var c = new Point(w / 2, h / 2);
-        var geo = new StreamGeometry();
-        using (var g = geo.Open())
-            for (var i = 0; i < points; i++)
-            {
-                double x = _scope[baseIdx + i], y = _scope[baseIdx + i + lag];
-                var p = new Point(c.X + (x - y) * 0.7071 * scale * 1.5, c.Y - (x + y) * 0.7071 * scale);
-                if (i == 0) g.BeginFigure(p, false, false); else g.LineTo(p, true, true);
-            }
-        geo.Freeze();
-        dc.DrawGeometry(null, PenOf(ColorAt(0.5, 0.6), 8, 0x30), geo);
-        dc.DrawGeometry(null, PenOf(ColorAt(0.25 + _energy, 1), 2), geo);
+        Shape? figure = null;
+        for (var i = 0; i < points; i++)
+        {
+            double x = _scope[baseIdx + i], y = _scope[baseIdx + i + lag];
+            var at = new Point(c.X + (x - y) * 0.7071 * scale * 1.5, c.Y - (x + y) * 0.7071 * scale);
+            if (figure == null) figure = new Shape(at, false, false, points); else figure.Line(at);
+        }
+        p.Path(figure!, null, Fill.Of(ColorAt(0.5, 0.6), 0x30), 8);
+        p.Path(figure!, null, Fill.Of(ColorAt(0.25 + _energy, 1)), 2);
     }
 
-    void DrawCircularScope(DrawingContext dc, double w, double h)
+    void DrawCircularScope(Paint p, double w, double h)
     {
         var size = Math.Min(w, h);
         var c = new Point(w / 2, h / 2);
         var radius = size * (0.22 + _energy * 0.05 + _beat * 0.015);
         const int points = 360;
-        var geo = new StreamGeometry();
-        using (var g = geo.Open())
-            for (var i = 0; i <= points; i++)
-            {
-                var s = _scope[FftSize - 2 * points + (i % points) * 2];
-                var a = 2 * Math.PI * i / points - Math.PI / 2;
-                var r = radius + Math.Clamp(s * 2.4, -1, 1) * size * 0.16;
-                var p = new Point(c.X + Math.Cos(a) * r, c.Y + Math.Sin(a) * r);
-                if (i == 0) g.BeginFigure(p, true, true); else g.LineTo(p, true, true);
-            }
-        geo.Freeze();
-        dc.DrawGeometry(BrushOf(ColorAt(0.5, 0.4), 0x18), null, geo);
-        dc.DrawGeometry(null, PenOf(ColorAt(0.5, 0.7), 9, 0x30), geo);
-        dc.DrawGeometry(null, PenOf(ColorAt(0.35 + _phase * 0.01 % 0.5, 1), 2.2), geo);
-        dc.DrawEllipse(null, PenOf(ColorAt(0.8, 0.5), 1.2, 0x80), c, radius * 0.55, radius * 0.55);
+        Shape? ring = null;
+        for (var i = 0; i <= points; i++)
+        {
+            var s = _scope[FftSize - 2 * points + (i % points) * 2];
+            var a = 2 * Math.PI * i / points - Math.PI / 2;
+            var r = radius + Math.Clamp(s * 2.4, -1, 1) * size * 0.16;
+            var at = new Point(c.X + Math.Cos(a) * r, c.Y + Math.Sin(a) * r);
+            if (ring == null) ring = new Shape(at, true, true, points + 1); else ring.Line(at);
+        }
+        p.Path(ring!, Fill.Of(ColorAt(0.5, 0.4), 0x18), null);
+        p.Path(ring!, null, Fill.Of(ColorAt(0.5, 0.7), 0x30), 9);
+        p.Path(ring!, null, Fill.Of(ColorAt(0.35 + _phase * 0.01 % 0.5, 1)), 2.2);
+        p.Ellipse(null, Fill.Of(ColorAt(0.8, 0.5), 0x80), 1.2, c, radius * 0.55, radius * 0.55);
     }
 
-    void DrawRipples(DrawingContext dc, double w, double h)
+    void DrawRipples(Paint p, double w, double h)
     {
         var c = new Point(w / 2, h / 2);
         var reach = Math.Sqrt(w * w + h * h) / 2;
         foreach (var (r, level, hue) in _ripples)
         {
             var fade = 1 - r;
-            dc.DrawEllipse(null, PenOf(ColorAt(hue, 0.4 + level * 0.6), 2 + level * 8 * fade, (byte)(220 * fade * fade)), c, r * reach, r * reach);
+            p.Ellipse(null, Fill.Of(ColorAt(hue, 0.4 + level * 0.6), (byte)(220 * fade * fade)), 2 + level * 8 * fade, c, r * reach, r * reach);
         }
         // the heart of it swells with the bass
         var core = Math.Min(w, h) * (0.05 + _energy * 0.12 + _beat * 0.05);
-        dc.DrawEllipse(BrushOf(ColorAt(0.5, 0.8), 0x40), null, c, core * 1.7, core * 1.7);
-        dc.DrawEllipse(BrushOf(ColorAt(0.5, 1), 0xC0), null, c, core, core);
+        p.Ellipse(Fill.Of(ColorAt(0.5, 0.8), 0x40), null, 0, c, core * 1.7, core * 1.7);
+        p.Ellipse(Fill.Of(ColorAt(0.5, 1), 0xC0), null, 0, c, core, core);
     }
 
-    void DrawFireworks(DrawingContext dc, double w, double h)
+    void DrawFireworks(Paint p, double w, double h)
     {
         foreach (var k in _sparks)
         {
             var life = Math.Clamp(k.Life, 0, 1);
-            var p = new Point(k.X * w, k.Y * h);
-            dc.DrawEllipse(BrushOf(ColorAt(k.Hue, 0.4 + life * 0.6), (byte)(255 * life * 0.35)), null, p, k.Size * 2.6 * life + 1, k.Size * 2.6 * life + 1);
-            dc.DrawEllipse(BrushOf(ColorAt(k.Hue, 1), (byte)(255 * life)), null, p, k.Size * life + 0.5, k.Size * life + 0.5);
+            var at = new Point(k.X * w, k.Y * h);
+            p.Ellipse(Fill.Of(ColorAt(k.Hue, 0.4 + life * 0.6), (byte)(255 * life * 0.35)), null, 0, at, k.Size * 2.6 * life + 1, k.Size * 2.6 * life + 1);
+            p.Ellipse(Fill.Of(ColorAt(k.Hue, 1), (byte)(255 * life)), null, 0, at, k.Size * life + 0.5, k.Size * life + 0.5);
         }
         // a low glow along the bottom shows the spectrum
         var slot = w / BarCount;
         for (var b = 0; b < BarCount; b++)
-            dc.DrawRectangle(BrushOf(ColorAt((double)b / BarCount, Bars[b]), 0x90), null, new Rect(b * slot + 1, h - 3 - Bars[b] * h * 0.10, Math.Max(1, slot - 2), 3 + Bars[b] * h * 0.10));
+            p.Rect(Fill.Of(ColorAt((double)b / BarCount, Bars[b]), 0x90), new Rect(b * slot + 1, h - 3 - Bars[b] * h * 0.10, Math.Max(1, slot - 2), 3 + Bars[b] * h * 0.10));
     }
 
-    void DrawTunnel(DrawingContext dc, double w, double h)
+    void DrawTunnel(Paint p, double w, double h)
     {
         // rings rush towards the viewer, faster when the music is loud, wobbling with the spectrum
         const int rings = 16, sides = 72;
@@ -697,21 +724,19 @@ public class Visualizer : FrameworkElement
             var t = (k + drift) / rings;                 // 0 far, 1 near
             var r = Math.Pow(t, 2.3) * reach;
             var spin = _phase * 0.12 * (k % 2 == 0 ? 1 : -1);
-            var geo = new StreamGeometry();
-            using (var g = geo.Open())
-                for (var i = 0; i <= sides; i++)
-                {
-                    var a = 2 * Math.PI * i / sides + spin;
-                    var rr = r * (1 + Bars[(i % sides) * BarCount / sides] * 0.12 * t + _beat * 0.03);
-                    var p = new Point(c.X + Math.Cos(a) * rr, c.Y + Math.Sin(a) * rr * 0.85);
-                    if (i == 0) g.BeginFigure(p, false, true); else g.LineTo(p, true, true);
-                }
-            geo.Freeze();
-            dc.DrawGeometry(null, PenOf(ColorAt(t, 0.3 + t * 0.7), 1 + t * 5 + _energy * 3 * t, (byte)(40 + 215 * t)), geo);
+            Shape? ring = null;
+            for (var i = 0; i <= sides; i++)
+            {
+                var a = 2 * Math.PI * i / sides + spin;
+                var rr = r * (1 + Bars[(i % sides) * BarCount / sides] * 0.12 * t + _beat * 0.03);
+                var at = new Point(c.X + Math.Cos(a) * rr, c.Y + Math.Sin(a) * rr * 0.85);
+                if (ring == null) ring = new Shape(at, false, true, sides + 1); else ring.Line(at);
+            }
+            p.Path(ring!, null, Fill.Of(ColorAt(t, 0.3 + t * 0.7), (byte)(40 + 215 * t)), 1 + t * 5 + _energy * 3 * t);
         }
     }
 
-    void DrawMeters(DrawingContext dc, double w, double h)
+    void DrawMeters(Paint p, double w, double h)
     {
         // two analog dials: bass on the left, treble on the right
         var radius = Math.Min(w * 0.22, h * 0.36);
@@ -722,29 +747,23 @@ public class Visualizer : FrameworkElement
             const double from = -150, to = -30;
             Point At(double deg, double r) { var a = deg * Math.PI / 180; return new Point(c.X + Math.Cos(a) * r, c.Y + Math.Sin(a) * r); }
             // dial face
-            var face = new StreamGeometry();
-            using (var g = face.Open())
-            {
-                g.BeginFigure(c, true, true);
-                g.LineTo(At(from, radius * 1.12), true, false);
-                g.ArcTo(At(to, radius * 1.12), new Size(radius * 1.12, radius * 1.12), 0, false, SweepDirection.Clockwise, true, false);
-            }
-            face.Freeze();
-            dc.DrawGeometry(BrushOf(Colors.White, 0x0C), PenOf(Colors.White, 1.5, 0x40), face);
+            var face = new Shape(c, true, true);
+            face.Line(At(from, radius * 1.12));
+            face.Arc(At(to, radius * 1.12), radius * 1.12);
+            p.Path(face, Fill.Of(Colors.White, 0x0C), Fill.Of(Colors.White, 0x40), 1.5);
             for (var t = 0; t <= 20; t++)
             {
                 var frac = t / 20.0;
                 var major = t % 5 == 0;
                 var colour = frac > 0.8 ? ColorAt(0.9, 1) : ColorAt(0.2, 0.6);
-                dc.DrawLine(PenOf(colour, major ? 2.4 : 1.2, major ? (byte)255 : (byte)150), At(from + (to - from) * frac, radius * (major ? 0.82 : 0.9)), At(from + (to - from) * frac, radius));
+                p.Line(Color.FromArgb(major ? (byte)255 : (byte)150, colour.R, colour.G, colour.B), major ? 2.4 : 1.2,
+                    At(from + (to - from) * frac, radius * (major ? 0.82 : 0.9)), At(from + (to - from) * frac, radius));
             }
             var angle = from + (to - from) * Math.Clamp(_needle[m], 0, 1);
-            dc.DrawLine(PenOf(Colors.Black, 6, 0x50), At(angle, 0), At(angle, radius * 0.95));
-            dc.DrawLine(PenOf(ColorAt(0.6, 1), 3), At(angle, 0), At(angle, radius * 0.95));
-            dc.DrawEllipse(BrushOf(ColorAt(0.6, 1)), null, c, radius * 0.06, radius * 0.06);
-            var label = new FormattedText(labels[m], System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI Semibold"),
-                Math.Max(11, radius * 0.1), BrushOf(Colors.White, 0xB0), VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            dc.DrawText(label, new Point(c.X - label.Width / 2, c.Y + radius * 0.14));
+            p.Line(Color.FromArgb(0x50, 0, 0, 0), 6, At(angle, 0), At(angle, radius * 0.95));
+            p.Line(ColorAt(0.6, 1), 3, At(angle, 0), At(angle, radius * 0.95));
+            p.Ellipse(Fill.Of(ColorAt(0.6, 1)), null, 0, c, radius * 0.06, radius * 0.06);
+            p.Label(labels[m], new Point(c.X, c.Y + radius * 0.14), Math.Max(11, radius * 0.1), Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
         }
     }
 }
