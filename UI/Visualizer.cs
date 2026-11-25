@@ -72,6 +72,12 @@ public class Visualizer : FrameworkElement
 
     // beat tracking and the animated styles' state
     double _bassAvg, _beat;
+    // Movement that would otherwise jump: the beat is an instant step up, and the loudness changes speed abruptly.
+    // What is drawn uses these eased copies instead.
+    double _pulse;          // the beat, rising over a few frames instead of in one
+    double _flow;           // loudness averaged over about half a second: sets how fast things travel and spin
+    double _travel;         // how far the tunnel has come, in rings
+    readonly double[] _soft = new double[BarCount];   // the bars, following over about 70 ms: for shapes a sudden bar would jolt
     DateTime _lastBeat;
     readonly Random _rnd = new();
     readonly List<(double r, double level, double hue)> _ripples = new();
@@ -245,15 +251,20 @@ public class Visualizer : FrameworkElement
     {
         // CompositionTarget.Rendering can fire more than once for the same screen frame: take exactly one step per frame,
         // so the visualizer runs at whatever rate the display refreshes at
+        // The step is the time between the moments the two frames are shown, which WPF reports. The time this code
+        // happens to run at wanders by a millisecond or two from frame to frame, and stepping by that made motion shake.
+        double shown = -1;
         if (e is RenderingEventArgs frame)
         {
             if (frame.RenderingTime == _lastRendering) return;
+            shown = (frame.RenderingTime - _lastRendering).TotalMilliseconds;
             _lastRendering = frame.RenderingTime;
         }
         var t = _clock.Elapsed.TotalMilliseconds;
         var dt = t - _lastTick;
         if (dt < 1) return;
         _lastTick = t;
+        if (shown > 0.5 && shown < 100 && Math.Abs(shown - dt) < 12) dt = shown;
         _lastFrame = DateTime.UtcNow;
         _k = Math.Clamp(dt / (1000.0 / 30), 0.005, 2.5);
         _frames++;
@@ -339,6 +350,7 @@ public class Visualizer : FrameworkElement
     void Step(bool snap)
     {
         var rise = snap ? 1 : 1 - Math.Exp(-_k * (1000.0 / 30) / 10);   // a bar climbs most of the way in about 10 ms
+        var ease = 1 - Math.Exp(-_k * (1000.0 / 30) / 70);
         double sum = 0;
         for (var b = 0; b < BarCount; b++)
         {
@@ -346,9 +358,12 @@ public class Visualizer : FrameworkElement
             Bars[b] = level > Bars[b] ? Bars[b] + (level - Bars[b]) * rise : Math.Max(level, Bars[b] - 0.045 * _k);   // fast attack, steady fall
             _peaks[b] = Math.Max(Bars[b], _peaks[b] - 0.012 * _k); // caps hang, then drop slowly
             sum += Bars[b];
+            _soft[b] = snap ? Bars[b] : _soft[b] + (Bars[b] - _soft[b]) * ease;
         }
         _energy = sum / BarCount;
-        _phase += (0.02 + _energy * 0.12) * _k;
+        _flow = snap ? _energy : _flow + (_energy - _flow) * (1 - Math.Exp(-_k * (1000.0 / 30) / 450));
+        _phase += (0.02 + _flow * 0.12) * _k;
+        _travel += (0.02 + _flow * 0.12) * _k * 0.7;
         _historyDue += _k;
         if (_historyDue >= 1 || _history.Count == 0)
         {
@@ -378,10 +393,12 @@ public class Visualizer : FrameworkElement
             if (_ripples.Count > 8) _ripples.RemoveAt(0);
             SpawnBurst(bass);
         }
+        // the drawn beat climbs in about 35 ms and then follows the real one down
+        _pulse = _beat > _pulse ? _pulse + (_beat - _pulse) * (1 - Math.Exp(-_k * (1000.0 / 30) / 35)) : _beat;
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (r, level, hue) = _ripples[i];
-            r += (0.012 + _energy * 0.03) * _k;
+            r += (0.012 + _flow * 0.03) * _k;
             if (r > 1) _ripples.RemoveAt(i); else _ripples[i] = (r, level, hue);
         }
         // sparks rise from the loudest bars between beats
@@ -634,13 +651,17 @@ public class Visualizer : FrameworkElement
         var rows = HistoryRows;
         var area = h * 0.86;
         var rowH = area / rows;
-        for (var r = 0; r < _history.Count; r++)
+        // Rows are added 30 times a second but slide upward continuously in between; the row still being formed is the
+        // live spectrum, rising into view from the bottom edge, so nothing pops in.
+        var slide = Math.Clamp(_historyDue, 0, 1);
+        for (var r = -1; r < _history.Count; r++)
         {
-            var levels = _history[r];
-            var depth = 1 - (double)r / rows;                    // 1 = newest
+            var levels = r < 0 ? Bars : _history[r];
+            var place = r + slide;
+            var depth = Math.Clamp(1 - place / rows, 0, 1);      // 1 = newest
             var inset = (1 - depth) * w * 0.18;                  // older rows narrow slightly, like perspective
             var slot = (w - inset * 2) / BarCount;
-            var y = h - (r + 1) * rowH;
+            var y = h - (place + 1) * rowH;
             for (var b = 0; b < BarCount; b++)
             {
                 var level = levels[b];
@@ -701,7 +722,7 @@ public class Visualizer : FrameworkElement
     {
         var size = Math.Min(w, h);
         var c = new Point(w / 2, h / 2);
-        var radius = size * (0.22 + _energy * 0.05 + _beat * 0.015);
+        var radius = size * (0.22 + _flow * 0.05 + _pulse * 0.015);
         const int points = 360;
         Shape? ring = null;
         for (var i = 0; i <= points; i++)
@@ -728,7 +749,7 @@ public class Visualizer : FrameworkElement
             p.Ellipse(null, Fill.Of(ColorAt(hue, 0.4 + level * 0.6), (byte)(220 * fade * fade)), 2 + level * 8 * fade, c, r * reach, r * reach);
         }
         // the heart of it swells with the bass
-        var core = Math.Min(w, h) * (0.05 + _energy * 0.12 + _beat * 0.05);
+        var core = Math.Min(w, h) * (0.05 + _energy * 0.12 + _pulse * 0.05);
         p.Ellipse(Fill.Of(ColorAt(0.5, 0.8), 0x40), null, 0, c, core * 1.7, core * 1.7);
         p.Ellipse(Fill.Of(ColorAt(0.5, 1), 0xC0), null, 0, c, core, core);
     }
@@ -754,21 +775,26 @@ public class Visualizer : FrameworkElement
         const int rings = 16, sides = 72;
         var c = new Point(w / 2, h / 2);
         var reach = Math.Sqrt(w * w + h * h) / 2 * 1.05;
-        var drift = _phase * 0.7 % 1;
+        var whole = Math.Floor(_travel);
+        var drift = _travel - whole;
         for (var k = rings - 1; k >= 0; k--)
         {
             var t = (k + drift) / rings;                 // 0 far, 1 near
             var r = Math.Pow(t, 2.3) * reach;
-            var spin = _phase * 0.12 * (k % 2 == 0 ? 1 : -1);
+            // each ring keeps its own direction of spin all the way from the far end to the viewer; going by its place
+            // in the queue instead made every ring flip direction each time a new one appeared
+            var name = (long)whole - k;
+            var spin = _phase * 0.12 * ((name & 1) == 0 ? 1 : -1);
             Shape? ring = null;
             for (var i = 0; i <= sides; i++)
             {
                 var a = 2 * Math.PI * i / sides + spin;
-                var rr = r * (1 + Bars[(i % sides) * BarCount / sides] * 0.12 * t + _beat * 0.03);
+                var rr = r * (1 + _soft[(i % sides) * BarCount / sides] * 0.12 * t + _pulse * 0.03);
                 var at = new Point(c.X + Math.Cos(a) * rr, c.Y + Math.Sin(a) * rr * 0.85);
                 if (ring == null) ring = new Shape(at, false, true, sides + 1); else ring.Line(at);
             }
-            p.Path(ring!, null, Fill.Of(ColorAt(t, 0.3 + t * 0.7), (byte)(40 + 215 * t)), 1 + t * 5 + _energy * 3 * t);
+            var seen = Math.Min(1, t * rings) * Math.Min(1, (1 - t) * rings * 2);   // fades in at the far end, out as it passes
+            p.Path(ring!, null, Fill.Of(ColorAt(t, 0.3 + t * 0.7), (byte)((40 + 215 * t) * seen)), 1 + t * 5 + _flow * 3 * t);
         }
     }
 
