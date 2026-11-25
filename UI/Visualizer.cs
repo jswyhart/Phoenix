@@ -170,6 +170,7 @@ public class Visualizer : FrameworkElement
         }
         catch { _capture = null; }   // no audio device: the visualizer just stays flat
         CompositionTarget.Rendering += OnFrame;
+        FramePacer.Hold();
     }
 
     public void Stop()
@@ -177,6 +178,7 @@ public class Visualizer : FrameworkElement
         if (!_running) return;
         _running = false;
         CompositionTarget.Rendering -= OnFrame;
+        FramePacer.Release();
         _live = false;
         var c = _capture;
         _capture = null;

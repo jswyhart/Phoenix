@@ -54,6 +54,9 @@ public static class Smoke
     static async Task RunPerf()
     {
         var win = App.Win;
+        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--no-pacer") >= 0) FramePacer.Enabled = false;
+        FramePacer.Hold(); FramePacer.Release();
+        Log.AppendLine($"INFO  frame pacer: enabled {FramePacer.Enabled}, available {FramePacer.Available}");
         Log.AppendLine($"INFO  library: {App.Lib.Tracks.Count} songs, {App.Lib.Albums.Count} albums");
         win.Navigate("music");
         var music = win.Page<MusicView>("music");
@@ -149,6 +152,7 @@ public static class Smoke
             if (times.Count < 10) { Log.AppendLine($"PERF  scroll {what}: too few frames"); return; }
             var sorted = times.OrderBy(x => x).ToList();
             var median = sorted[sorted.Count / 2];
+            Log.AppendLine($"INFO  waits ended early so far: {FramePacer.Nudges}");
             Log.AppendLine($"PERF  scroll {what}: {times.Count} frames, median {median:0.0} ms ({1000 / median:0} fps), 95% under {sorted[(int)(sorted.Count * 0.95)]:0.0} ms, worst {sorted[^1]:0.0} ms, " +
                            $"{times.Count(x => x > median * 1.8)} late frames (over {median * 1.8:0.0} ms), {times.Count(x => x > 8)} over 8 ms; moved to {area.VerticalOffset:0}; render tier {System.Windows.Media.RenderCapability.Tier >> 16}");
         }
@@ -178,7 +182,9 @@ public static class Smoke
                 dot.Opacity = flip ? 0.5 : 0.6;
             }
             System.Windows.Media.CompositionTarget.Rendering += Tick;
+            FramePacer.Hold();
             await Task.Delay(3000);
+            FramePacer.Release();
             System.Windows.Media.CompositionTarget.Rendering -= Tick;
             win.RemoveHidden(dot);
             var g = gaps.OrderBy(x => x).ToList();
@@ -207,7 +213,9 @@ public static class Smoke
                 dot.Opacity = flip ? 0.5 : 0.6;
             }
             System.Windows.Media.CompositionTarget.Rendering += Tick;
+            FramePacer.Hold();
             await Task.Delay(3000);
+            FramePacer.Release();
             System.Windows.Media.CompositionTarget.Rendering -= Tick;
             win.RemoveHidden(dot);
             var g = gaps.OrderBy(x => x).ToList();
@@ -242,7 +250,9 @@ public static class Smoke
                 move.Y = -Math.Round(Math.Abs(Math.Sin(now / 400)) * 300);
             }
             System.Windows.Media.CompositionTarget.Rendering += Tick;
+            FramePacer.Hold();
             await Task.Delay(3000);
+            FramePacer.Release();
             System.Windows.Media.CompositionTarget.Rendering -= Tick;
             content.RenderTransform = null;
             var g = gaps.OrderBy(x => x).ToList();
@@ -889,6 +899,7 @@ public static class Smoke
             await Task.Delay(900);
             Check("a wheel click glides over many frames to exactly one step on", Math.Abs(area.VerticalOffset - startAt - SmoothScroll.Step) < 0.6 && midway > startAt && midway < startAt + SmoothScroll.Step && SmoothScroll.Frames - framesBefore > 8,
                 $"moved {area.VerticalOffset - startAt:0.#} px in {SmoothScroll.Frames - framesBefore} frames, {midway - startAt:0.#} px after 40 ms");
+            Check("the frame pacer found the drawing system's refresh wait and can end it on time", FramePacer.Available, $"{FramePacer.Nudges} waits ended on time so far");
             SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120);
             await Task.Delay(1000);
             Check("quick clicks add up", Math.Abs(area.VerticalOffset - startAt - 4 * SmoothScroll.Step) < 0.6, $"{area.VerticalOffset - startAt:0.#} px");

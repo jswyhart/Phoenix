@@ -66,7 +66,7 @@ public static class SmoothScroll
         {
             s.Moving = true;
             lock (Active) Active.Add(new WeakReference<ScrollViewer>(sv));
-            if (!_hooked) { _hooked = true; _lastTicks = 0; CompositionTarget.Rendering += OnFrame; }
+            if (!_hooked) { _hooked = true; _lastTicks = 0; CompositionTarget.Rendering += OnFrame; FramePacer.Hold(); }
         }
     }
 
@@ -119,7 +119,7 @@ public static class SmoothScroll
         }
         lock (Active)
         {
-            if (Active.Count == 0) { CompositionTarget.Rendering -= OnFrame; _hooked = false; }
+            if (Active.Count == 0) { CompositionTarget.Rendering -= OnFrame; _hooked = false; FramePacer.Release(); }
         }
     }
 
