@@ -28,6 +28,8 @@ public partial class VideosView : UserControl
     List<VideoItem> _rows = new();
     bool _loading;
 
+    static TileLook VideoLook(object o) => o is VideoTile v ? new TileLook(v.ArtPath, v.Title, v.Caption, "\uE714") : default;
+
     public VideosView()
     {
         InitializeComponent();
@@ -166,6 +168,7 @@ public partial class VideosView : UserControl
                 RightCap.Text = $"MOVIES  {movies.Count}";
                 Tiles.TileWidth = 162;
                 Tiles.TileTemplate = (DataTemplate)FindResource("PosterTile");
+                Tiles.DrawWith(TileStyle.Poster, VideoLook);
                 Tiles.SetItems(movies.Select(v => new VideoTile(v, v.Title, string.Join("  ·  ", new[] { v.Year > 0 ? v.Year.ToString() : "", v.DurationText }.Where(s => s != "")))));
                 break;
             default:
@@ -173,6 +176,7 @@ public partial class VideosView : UserControl
                 RightCap.Text = $"VIDEOS  {everything.Count}";
                 Tiles.TileWidth = 220;
                 Tiles.TileTemplate = (DataTemplate)FindResource("WideTile");
+                Tiles.DrawWith(TileStyle.Wide, VideoLook);
                 Tiles.SetItems(everything.Select(v => new VideoTile(v, v.DisplayTitle, v.DurationText)));
                 break;
         }

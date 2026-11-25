@@ -95,6 +95,9 @@ public static class Menus
         return mi;
     }
 
+    /// <summary>What an album's tile shows in a cover grid.</summary>
+    public static TileLook AlbumLook(object o) => o is Album a ? new TileLook(a.ArtPath, a.Title, a.Subtitle, "\uE8D6", a.SourceBadge) : default;
+
     public static void Open(ContextMenu menu, UIElement target)
     {
         menu.PlacementTarget = target;

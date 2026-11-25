@@ -23,6 +23,7 @@ public partial class PicturesView : UserControl
     {
         InitializeComponent();
         // photos open on a single click
+        PicGrid.DrawWith(TileStyle.Picture, o => o is PictureItem pic ? new TileLook(pic.ArtPath, Tip: pic.Name) : default);
         PicGrid.ItemClicked += o => { PicGrid.SelectedItem = o; OpenViewer(_pics.IndexOf((PictureItem)o), false); };
         _slideTimer.Tick += (_, _) => Step(1);
         IsVisibleChanged += (_, _) => { if (IsVisible && !_loaded) _ = ReloadAsync(); };

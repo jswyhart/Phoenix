@@ -22,8 +22,12 @@
         </DataTemplate>
     </UserControl.Resources>
     <!-- A grid of tiles that only builds the rows on screen (plus one either side), so it stays quick with thousands of items. -->
-    <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
-                  ScrollChanged="Scroller_ScrollChanged">
-        <Grid x:Name="Surface" VerticalAlignment="Top"/>
-    </ScrollViewer>
+    <Grid>
+        <!-- when the graphics card draws the grid (Direct3D 11), its picture shows here, behind the scrolling area -->
+        <ui:GpuLayer x:Name="Layer" IsHitTestVisible="False"/>
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                      Background="Transparent" ScrollChanged="Scroller_ScrollChanged">
+            <Grid x:Name="Surface" VerticalAlignment="Top"/>
+        </ScrollViewer>
+    </Grid>
 </UserControl>

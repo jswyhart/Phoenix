@@ -37,13 +37,15 @@ public static class Art
     static int _fromWindows, _made;
     /// <summary>How many thumbnails came from Windows' own cache, and how many had to be made (for the self-test).</summary>
     public static (int FromWindows, int Made) ThumbnailCounts => (_fromWindows, _made);
-    public static void ForgetAll() { lock (Cache) Cache.Clear(); }
+    public static void ForgetAll() { lock (Cache) Cache.Clear(); if (Application.Current?.Dispatcher.CheckAccess() == true) D3DSurface.ForgetBitmaps(); }
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public static void Invalidate(string path)
     {
         lock (Cache)
             foreach (var k in Cache.Keys.Where(k => k.StartsWith(path + "|")).ToList()) Cache.Remove(k);
+        if (Application.Current?.Dispatcher.CheckAccess() == true) D3DSurface.ForgetBitmaps(path + "|");
+        else Application.Current?.Dispatcher.BeginInvoke(() => D3DSurface.ForgetBitmaps(path + "|"));
     }
 
     static async void OnPathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

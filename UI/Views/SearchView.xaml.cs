@@ -20,6 +20,7 @@ public partial class SearchView : UserControl
         TrackDrag.Attach(SongList, o => o is Track t ? new[] { t } : null, SongList);
         TrackDrag.Attach(AlbumGrid, o => o is TileCell { Item: Album a } ? a.Tracks : null);
         AlbumGrid.ItemContext += (o, el) => Menus.Open(Menus.ForAlbum((Album)o), el);
+        AlbumGrid.DrawWith(TileStyle.Album, Menus.AlbumLook);
         SongHdr.Changed += () => ShowSongs(_baseSongs);
         App.Lib.Changed += () => { if (_query != "") Search(_query); };
         App.Lib.TagsChanged += () => { if (_query != "") Search(_query); };

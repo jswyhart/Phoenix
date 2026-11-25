@@ -22,6 +22,7 @@ public partial class MusicView : UserControl
         AlbumGrid.ItemClicked += o => { _album = ReferenceEquals(_album, o) ? null : (Album)o; AlbumGrid.SelectedItem = _album; LoadSongs(); };
         AlbumGrid.ItemActivated += o => Menus.Play(((Album)o).Tracks);
         AlbumGrid.ItemContext += (o, el) => Menus.Open(Menus.ForAlbum((Album)o), el);
+        AlbumGrid.DrawWith(TileStyle.Album, Menus.AlbumLook);
         App.Lib.Changed += Reload;
         Header.Changed += LoadSongs;
         // drag songs, albums, artists or genres to the phone, disc and playlist icons in the lower left

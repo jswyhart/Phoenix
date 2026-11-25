@@ -33,6 +33,8 @@ public partial class BooksView : UserControl
         Tiles.ItemClicked += o => Tiles.SelectedItem = o;
         Tiles.ItemActivated += o => OpenBook(((BookTile)o).Book);
         Tiles.ItemContext += (o, el) => Menus.Open(MenuFor(((BookTile)o).Book), el);
+        Tiles.DrawWith(TileStyle.Book, o => o is BookTile b
+            ? new TileLook(b.ArtPath, b.Title, b.Caption, b.Glyph, Counter: b.Counter, Audio: b.IsAudio, Progress: b.ProgressWidth / 150) : default);
         App.Lib.Changed += Reload;
         // Progress changes while reading or listening; refresh when the page comes back into view.
         IsVisibleChanged += (_, _) => { if (IsVisible) Reload(); };
@@ -111,6 +113,7 @@ public partial class BooksView : UserControl
     /// <summary>For the self-test: rows of covers built right now.</summary>
     public int BuiltRows => Tiles.BuiltRows;
     public ScrollViewer TileArea => Tiles.ScrollArea;
+    public TileGrid Grid => Tiles;
 
     void Author_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

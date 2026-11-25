@@ -10,6 +10,10 @@ public class TileCell : Observable
     public object Item { get; init; } = null!;
     bool _sel;
     public bool IsSelected { get => _sel; set => Set(ref _sel, value); }
+    // what the tile shows, worked out once and kept while the grid is only being scrolled (see TileGrid.Gpu.cs)
+    internal TileLook Look;
+    internal string? ArtKey;
+    internal int LookEpoch = -1;
 }
 
 public partial class TileGrid : UserControl
@@ -28,7 +32,7 @@ public partial class TileGrid : UserControl
     bool _resizePending, _remeasureQueued;
     bool _stale;    // items changed while the grid was hidden or had no size yet: lay out when it is next shown
     /// <summary>Rows built right now (for the self-test): only what is on screen, never the whole list.</summary>
-    public int BuiltRows => _rows.Count;
+    public int BuiltRows => GpuMode ? _gpuRows : _rows.Count;
     public ScrollViewer ScrollArea => Scroller;
     readonly Dictionary<int, FrameworkElement> _rows = new();
 
@@ -39,6 +43,7 @@ public partial class TileGrid : UserControl
     public TileGrid()
     {
         InitializeComponent();
+        HookGpu();
         // resizes (and the page re-flowing around a mode switch) are handled once, after the dust settles
         SizeChanged += (_, e) =>
         {
@@ -55,13 +60,16 @@ public partial class TileGrid : UserControl
     {
         var selected = SelectedItem;
         _cells = items.Select(i => new TileCell { Item = i, IsSelected = ReferenceEquals(i, selected) }).ToList();
+        _hover = -1;
+        Surface.DataContext = null;
+        WatchItems();
         Arrange(true);
     }
 
     public object? SelectedItem
     {
         get => _cells.FirstOrDefault(c => c.IsSelected)?.Item;
-        set { foreach (var c in _cells) c.IsSelected = value != null && ReferenceEquals(c.Item, value); }
+        set { foreach (var c in _cells) c.IsSelected = value != null && ReferenceEquals(c.Item, value); if (GpuMode) QueueDraw(); }
     }
 
     FrameworkElement BuildRow(int index) => BuildRow(index, now: true);
@@ -145,6 +153,7 @@ public partial class TileGrid : UserControl
             return;
         }
         _stale = false;
+        if (GpuMode) { ArrangeGpu(); return; }
         if (rebuild) _toBuild.Clear();
         var cols = Math.Max(1, (int)((ActualWidth - 14) / TileWidth));
         if (cols != _cols) { _cols = cols; rebuild = true; }
@@ -176,11 +185,18 @@ public partial class TileGrid : UserControl
         }
         var rows = (_cells.Count + _cols - 1) / _cols;
         Surface.Height = rows * _rowH;
-        Fill();
+        FillRows();
     }
 
-    void Fill()
+    void FillRows()
     {
+        if (GpuMode)
+        {
+            // the tile under a still mouse changes as the grid moves beneath it
+            if (IsMouseOver) SetHover(IndexAt(Mouse.GetPosition(Scroller)));
+            DrawGpu();
+            return;
+        }
         if (_rowH <= 0) return;
         var rows = (_cells.Count + _cols - 1) / _cols;
         var view = Scroller.ViewportHeight > 0 ? Scroller.ViewportHeight : ActualHeight;
@@ -224,7 +240,7 @@ public partial class TileGrid : UserControl
         _rowH = h;
         foreach (var (i, row) in _rows) row.Margin = new Thickness(0, i * _rowH, 0, 0);
         Surface.Height = ((_cells.Count + _cols - 1) / _cols) * _rowH;
-        Fill();
+        FillRows();
     }
 
     bool _scrolling;
@@ -233,7 +249,7 @@ public partial class TileGrid : UserControl
     {
         if (e.VerticalChange == 0 && e.ViewportHeightChange == 0) return;
         _scrolling = e.VerticalChange != 0;
-        Fill();
+        FillRows();
         _scrolling = false;
     }
 

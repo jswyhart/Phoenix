@@ -162,6 +162,8 @@ public static class Smoke
             if (idle.Count > 10) Log.AppendLine($"PERF  idle before {what}: {idle.Count} frames, median {idle[idle.Count / 2]:0.0} ms, 95% under {idle[(int)(idle.Count * 0.95)]:0.0} ms, worst {idle[^1]:0.0} ms, {idle.Count(x => x > idle[idle.Count / 2] * 1.8)} late");
             times.Clear(); last = 0; counting = true;
             SmoothScroll.LayoutTimes = new List<double>();
+            D3DSurface.Timing = new long[6];
+            var allocBefore = GC.GetTotalAllocatedBytes();
             var gcBefore = GC.CollectionCount(0);
             // which pieces of work on the interface thread run long while the list is moving
             var slow = new Dictionary<string, (int n, double ms, double worst)>();
@@ -188,6 +190,13 @@ public static class Smoke
             hooks.OperationStarted -= onStart; hooks.OperationCompleted -= onDone;
             foreach (var note in gapNotes) Log.AppendLine($"PERF    {what}: {note}");
             foreach (var (name, v) in slow.OrderByDescending(x => x.Value.ms).Take(8)) Log.AppendLine($"PERF    slow work during {what}: {name}  x{v.n}, {v.ms:0} ms in all, worst {v.worst:0.0} ms");
+            if (D3DSurface.Timing is { } tm && tm[3] > 0)
+            {
+                double ms(long ticks) => ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency / tm[3];
+                Log.AppendLine($"PERF    {what}: {tm[3]} Direct3D redraws; each: drawing calls {ms(tm[0]):0.000} ms, finishing {ms(tm[1]):0.000} ms, handing to WPF {ms(tm[2]):0.000} ms; allocated {tm[4] / tm[3]} + {tm[5] / tm[3]} bytes");
+            }
+            D3DSurface.Timing = null;
+            Log.AppendLine($"PERF    {what}: {(GC.GetTotalAllocatedBytes() - allocBefore) / 1024 / 1024} MB allocated by the whole app during the scroll; {TileGrid.ArtRequests} covers asked for so far, {D3DSurface.BitmapCount} on the card");
             var lay = SmoothScroll.LayoutTimes!.OrderBy(x => x).ToList();
             SmoothScroll.LayoutTimes = null;
             if (lay.Count > 10) Log.AppendLine($"PERF  layout per step while scrolling {what}: median {lay[lay.Count / 2]:0.00} ms, 95% under {lay[(int)(lay.Count * 0.95)]:0.00} ms, worst {lay[^1]:0.0} ms, {lay.Count(x => x > 2)} over 2 ms of {lay.Count}; {GC.CollectionCount(0) - gcBefore} garbage collections");
@@ -959,6 +968,37 @@ public static class Smoke
             Check("a wheel click glides over many frames to exactly one step on", Math.Abs(area.VerticalOffset - startAt - SmoothScroll.Step) < 0.6 && midway > startAt && midway < startAt + SmoothScroll.Step && SmoothScroll.Frames - framesBefore > 8,
                 $"moved {area.VerticalOffset - startAt:0.#} px in {SmoothScroll.Frames - framesBefore} frames, {midway - startAt:0.#} px after 40 ms");
             Check("the frame pacer found the drawing system's refresh wait and can end it on time", FramePacer.Available, $"{FramePacer.Nudges} waits ended on time so far");
+            var tiles = win.Page<BooksView>("books").Grid;
+            if (TileGrid.GpuAllowed && D3DSurface.Available)
+            {
+                var drawsBefore = tiles.GpuDraws;
+                SmoothScroll.Wheel(area, -120);
+                await Task.Delay(900);
+                var shot = tiles.GpuSnapshot();
+                var solid = 0;
+                if (shot != null)
+                {
+                    var px = new byte[shot.PixelWidth * shot.PixelHeight * 4];
+                    shot.CopyPixels(px, shot.PixelWidth * 4, 0);
+                    for (var i = 3; i < px.Length; i += 4) if (px[i] > 200) solid++;
+                }
+                Check("cover grids are drawn by the graphics card through Direct3D 11", tiles.OnGpu && tiles.GpuDraws - drawsBefore > 8 && solid > 20000,
+                    $"{tiles.GpuDraws - drawsBefore} redraws for one wheel click, {solid} solid pixels of {shot?.PixelWidth}x{shot?.PixelHeight}, {D3DSurface.BitmapCount} covers on the card");
+                // the mouse over a tile: it lights up, and a click on it selects that book
+                var under = tiles.IndexAt(new Point(200, 60));
+                tiles.PointForTest(new Point(200, 60));
+                var lit = tiles.HoverIndex;
+                tiles.PressForTest(under);
+                var chosen = tiles.SelectedItem as BookTile;
+                Check("a tile drawn by the graphics card still knows the mouse: hover and click find the right book",
+                    under > 0 && lit == under && chosen != null && tiles.IndexAt(new Point(2000, 60)) == -1 && tiles.IndexAt(new Point(200, -5)) == -1,
+                    $"tile {under} under the pointer, lit {lit}, selected '{chosen?.Title}'");
+                tiles.SelectedItem = null;
+                tiles.PointForTest(new Point(-1, -1));
+                SmoothScroll.Wheel(area, 120);     // back to where the next check expects the list to be
+                await Task.Delay(900);
+            }
+            else Log.AppendLine($"INFO  cover grids built from WPF controls (Direct3D 11 not in use: '{D3DSurface.Problem}')");
             SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120); SmoothScroll.Wheel(area, -120);
             await Task.Delay(1000);
             Check("quick clicks add up", Math.Abs(area.VerticalOffset - startAt - 4 * SmoothScroll.Step) < 0.6, $"{area.VerticalOffset - startAt:0.#} px");
