@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
+using Color = System.Windows.Media.Color;
+using Colors = System.Windows.Media.Colors;
 using Halcyon.Core;
 using Halcyon.Services;
 
@@ -712,6 +714,75 @@ public static partial class Smoke
         Check("a dialog's title bar follows the dark setting instead of staying white", WindowTheme.Applied > themedBefore + 1 && darkBar.R < 40 && darkBar.G < 40 && darkBar.B < 40 && WindowTheme.LastCaption.R > 200 == (wasTheme != "dark"),
             $"title bar colour in dark mode #{darkBar.R:X2}{darkBar.G:X2}{darkBar.B:X2}");
         Check("the tag editor names its file-name layouts in words", TagFixes.InWords("%n - %a - %t") == "named:  number - artist - title");
+        await ThemesAsync();
+    }
+
+    /// <summary>Your own themes: saved, found, shown everywhere (now playing too), checked for contrast, imported, exported, removed.</summary>
+    static async Task ThemesAsync()
+    {
+        static Color Brush(string key) => ((System.Windows.Media.SolidColorBrush)Application.Current.Resources[key]).Color;
+        var S = App.Settings;
+        var wasTheme = S.Theme;
+        var mine = new Theme { Name = "smoke sunset", Base = "dark" };
+        mine.Set("Accent", Color.FromRgb(0x22, 0xAA, 0x55));
+        mine.Set("NowFg", Color.FromRgb(0xFF, 0xEE, 0xCC));
+        mine.Set("Fg", Themes.Default("Fg", dark: true));   // the same as the base: not kept
+        mine.TextFont = "Consolas";
+        var id = Themes.Save(mine);
+        var found = Themes.Find(id);
+        Check("a theme of yours is saved as a file and read back, keeping only the colours it changes",
+            File.Exists(Path.Combine(Themes.Folder, id + ".json")) && found.Name == "smoke sunset" && found.IsDark && found.Colours.Count == 2 && found.TextFont == "Consolas"
+            && Themes.All().Any(t => t.Id == id) && found.Get("Bg") == Themes.Default("Bg", dark: true));
+
+        App.ApplyTheme(id);
+        await Shot("42-theme-custom");
+        var grad = (System.Windows.Media.LinearGradientBrush)Application.Current.Resources["AccentGrad"];
+        var nowFg = ((System.Windows.Media.SolidColorBrush)App.Win.NowLayer.Resources["Fg"]).Color;
+        Check("applying a theme changes the accent, the bars, the fonts and the now playing colours",
+            Brush("Accent") == Color.FromRgb(0x22, 0xAA, 0x55) && Brush("Bg") == Themes.Default("Bg", dark: true) && grad.GradientStops[0].Color == Themes.Default("AccentStart", false)
+            && ((System.Windows.Media.FontFamily)Application.Current.Resources["TextFont"]).Source.StartsWith("Consolas,") && nowFg == Color.FromRgb(0xFF, 0xEE, 0xCC)
+            && Themes.Current.IsDark && Themes.TextFontName == "Consolas", $"accent #{Brush("Accent")}, now fg {nowFg}");
+
+        // the designer shows its copy live; closing it without saving brings the theme back
+        string? designed = "unset";
+        ThemeDesigner.Open(Themes.Current, r => designed = r);
+        var designer = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.Title == "Design a theme");
+        if (designer != null) await Shot("43-theme-designer", designer);
+        var whileOpen = Themes.Designing && !ReferenceEquals(Themes.Current, found);
+        designer?.Close();
+        await Task.Delay(50);
+        Check("the designer opens on a copy and closing it without saving puts the theme back",
+            designer != null && whileOpen && designed == null && !Themes.Designing && Themes.Current.Id == id && Brush("Accent") == Color.FromRgb(0x22, 0xAA, 0x55));
+
+        // an edit made by hand to the theme's file shows by itself
+        var edited = Themes.Find(id);
+        edited.Set("Accent", Color.FromRgb(0x10, 0x20, 0xF0));
+        File.WriteAllText(Path.Combine(Themes.Folder, id + ".json"), JsonSerializer.Serialize(edited, new JsonSerializerOptions { WriteIndented = true }));
+        var reloaded = await Until(() => Brush("Accent") == Color.FromRgb(0x10, 0x20, 0xF0), 4000);
+        Check("saving the theme file in another program shows the change straight away", reloaded, $"accent now {Brush("Accent")}");
+
+        Check("contrast is worked out the usual way and unreadable colours are pointed out",
+            Math.Abs(Themes.Contrast(Colors.Black, Colors.White) - 21) < 0.01 && Math.Abs(Themes.Contrast(Colors.Red, Colors.Red) - 1) < 0.01
+            && Themes.Problems(Themes.Light).Count == 0 && Themes.Problems(Themes.Dark).Count == 0
+            && Themes.Problems(new Theme { Colours = { ["Fg"] = "#EEEEEE" } }).Any(p => p.What == "text on the page"));
+
+        var export = Path.Combine(Path.GetTempPath(), "phoenix-smoke-theme.json");
+        Themes.Export(found, export);
+        var exported = Themes.Read(export);
+        var notTheme = Path.Combine(Path.GetTempPath(), "phoenix-smoke-not-theme.json");
+        File.WriteAllText(notTheme, "{\"hello\": 1}");
+        var imported = Themes.Import(export);
+        Check("an exported theme spells out every colour, imports as a theme of its own, and other JSON is turned away",
+            exported != null && exported.Colours.Count == Themes.Keys.Length && imported != null && imported.Id != id && imported.Get("Accent") == Color.FromRgb(0x22, 0xAA, 0x55)
+            && Themes.Import(notTheme) == null);
+
+        Themes.Delete(id);
+        if (imported != null) Themes.Delete(imported.Id);
+        App.ApplyTheme(id);   // gone: falls back to light
+        Check("a theme whose file is gone falls back to light", Themes.Current.Id == "light" && Brush("Bg") == Colors.White && !Themes.All().Any(t => t.Id == id));
+        try { File.Delete(export); File.Delete(notTheme); } catch { }
+        S.Theme = wasTheme;
+        App.ApplyTheme(wasTheme);
     }
 
     /// <summary>

@@ -150,11 +150,18 @@
                 <!-- SOFTWARE / Display -->
                 <StackPanel x:Name="PanelDisplay" Visibility="Collapsed">
                     <TextBlock Text="display" Style="{StaticResource Head}"/>
-                    <TextBlock Style="{StaticResource Label}" Text="BACKGROUND"/>
+                    <TextBlock Style="{StaticResource Label}" Text="THEME"/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <RadioButton x:Name="ThemeLight" Content="light" GroupName="theme" Foreground="{DynamicResource Fg}" Margin="0,0,18,0" Click="Theme_Click"/>
-                        <RadioButton x:Name="ThemeDark" Content="dark" GroupName="theme" Foreground="{DynamicResource Fg}" Click="Theme_Click"/>
+                        <ComboBox x:Name="ThemeBox" Width="260" SelectionChanged="ThemeBox_Changed"/>
+                        <Button Style="{StaticResource PillBtn}" Content="CUSTOMISE" Margin="10,0,0,0" Click="ThemeDesign_Click" ToolTip="Change this theme's colours and fonts, or make a new theme from it"/>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Style="{StaticResource TextBtn}" Content="import" Margin="0,0,16,0" Click="ThemeImport_Click" ToolTip="Add a theme file someone gave you"/>
+                        <Button x:Name="ThemeExportBtn" Style="{StaticResource TextBtn}" Content="export" Margin="0,0,16,0" Click="ThemeExport_Click" ToolTip="Save this theme as a file to share"/>
+                        <Button x:Name="ThemeDeleteBtn" Style="{StaticResource TextBtn}" Content="delete" Margin="0,0,16,0" Click="ThemeDelete_Click" ToolTip="Remove this theme (Phoenix goes back to its base, light or dark)"/>
+                        <Button Style="{StaticResource TextBtn}" Content="open themes folder" Click="ThemeFolder_Click" ToolTip="Your themes are small text files you can also edit by hand: Phoenix shows a change as soon as you save it"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ThemeNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>
                     <WrapPanel x:Name="TabChecks"/>

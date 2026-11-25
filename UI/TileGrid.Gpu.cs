@@ -203,7 +203,10 @@ public partial class TileGrid
     }
 
     Color Col(string key) => (TryFindResource(key) as SolidColorBrush)?.Color ?? Colors.Gray;
-    static readonly Halcyon.UI.Fill AccentGrad = Halcyon.UI.Fill.Right((Color.FromRgb(0xF0, 0x60, 0x3A), 0), (Color.FromRgb(0xD5, 0x35, 0x8F), 1));
+    static Halcyon.UI.Fill AccentGrad => Halcyon.UI.Fill.Right((Themes.Current.Get("AccentStart"), 0), (Themes.Current.Get("AccentEnd"), 1));
+
+    /// <summary>The theme changed: the tiles are drawn again in its colours.</summary>
+    public void ThemeChanged() { if (GpuMode) QueueDraw(); }
     static readonly Color BadgeBack = Color.FromArgb(0xC0, 0, 0, 0);
 
     void PaintTiles(D2DPaint p, double height, double scale)

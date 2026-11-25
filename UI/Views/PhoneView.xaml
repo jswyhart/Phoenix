@@ -13,7 +13,7 @@
             <TextBlock Text="phone" Style="{StaticResource H2}" FontSize="34"/>
             <Grid Width="120" Height="200" HorizontalAlignment="Left" Margin="0,6,0,18">
                 <Border BorderBrush="{DynamicResource FgFaint}" BorderThickness="3" CornerRadius="14" Background="{DynamicResource BgAlt}"/>
-                <Border Background="{StaticResource AccentGrad}" Margin="11,22,11,30"/>
+                <Border Background="{DynamicResource AccentGrad}" Margin="11,22,11,30"/>
                 <Ellipse Width="12" Height="12" Stroke="{DynamicResource FgFaint}" StrokeThickness="2" VerticalAlignment="Bottom" Margin="0,0,0,9"/>
             </Grid>
             <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource Accent}"/>

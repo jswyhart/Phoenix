@@ -31,6 +31,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        NowColours();
+        Themes.Changed += NowColours;
         P.Attach(Media);
         P.CurrentChanged += OnCurrentChanged;
         P.StateChanged += RefreshTransport;
@@ -688,6 +690,18 @@ public partial class MainWindow : Window
 
     // ---------- now playing ----------
 
+    /// <summary>The now playing screen has colours of its own: inside it, the usual names stand for the theme's Now... colours.</summary>
+    void NowColours()
+    {
+        var t = Themes.Current;
+        foreach (var (inside, key) in new[] { ("Fg", "NowFg"), ("FgDim", "NowFgDim"), ("FgFaint", "NowFgFaint"), ("BgAlt", "NowBgAlt"), ("Line", "NowLine"), ("Hover", "NowHover"), ("Selected", "NowSelected") })
+        {
+            var b = new SolidColorBrush(t.Get(key));
+            b.Freeze();
+            NowLayer.Resources[inside] = b;
+        }
+    }
+
     public void ShowNow(bool show)
     {
         if (!show && _full) ToggleFullscreen();
@@ -695,7 +709,7 @@ public partial class MainWindow : Window
         foreach (var view in _pages.Values.OfType<WebServiceView>()) view.Covered = show;
         foreach (Button b in Caption.Children)
         {
-            if (show) b.Foreground = Brushes.White; else b.ClearValue(ForegroundProperty);
+            if (show) b.SetResourceReference(ForegroundProperty, "NowFg"); else b.ClearValue(ForegroundProperty);
         }
         if (show) { BuildMosaic(); QueueList.ScrollIntoView(P.Current); LoadLyrics(); }
         UpdateVideoSurface();

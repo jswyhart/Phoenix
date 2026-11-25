@@ -4,7 +4,7 @@
         xmlns:ui="clr-namespace:Halcyon.UI"
         Title="Phoenix" Width="1320" Height="820" MinWidth="1080" MinHeight="620"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}"
-        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
+        FontFamily="{DynamicResource TextFont}" FontSize="13" UseLayoutRounding="True"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="Window_PreviewKeyDown">
     <Window.TaskbarItemInfo>
         <TaskbarItemInfo x:Name="Taskbar"/>
@@ -55,12 +55,12 @@
             </StackPanel>
         </Grid>
         <!-- the pink tab at the window edge marks the top navigation -->
-        <Rectangle Grid.Row="0" Width="7" Height="34" Fill="{StaticResource AccentGrad}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,3,0,0" IsHitTestVisible="False"/>
+        <Rectangle Grid.Row="0" Width="7" Height="34" Fill="{DynamicResource AccentGrad}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,3,0,0" IsHitTestVisible="False"/>
 
         <ContentControl x:Name="Host" Grid.Row="1" Focusable="False"/>
 
-        <!-- ===== now playing layer (always dark) ===== -->
-        <Grid x:Name="NowLayer" Grid.Row="0" Grid.RowSpan="2" Background="#0A0A0A" Visibility="Collapsed" TextElement.Foreground="White"
+        <!-- ===== now playing layer (its own colours: the theme's Now... ones, put in this grid's resources by MainWindow.NowColours) ===== -->
+        <Grid x:Name="NowLayer" Grid.Row="0" Grid.RowSpan="2" Background="{DynamicResource NowBg}" Visibility="Collapsed" TextElement.Foreground="{DynamicResource Fg}"
               MouseLeftButtonDown="NowLayer_MouseDown">
             <Grid.Resources>
                 <SolidColorBrush x:Key="Fg" Color="#FFFFFF"/>
@@ -91,15 +91,15 @@
                     <ColumnDefinition Width="360"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Bottom" Margin="0,0,40,0">
-                    <Border Width="240" Height="240" HorizontalAlignment="Left" Background="#1C1C1C" Margin="0,0,0,22">
+                    <Border Width="240" Height="240" HorizontalAlignment="Left" Background="{DynamicResource BgAlt}" Margin="0,0,0,22">
                         <Grid>
-                            <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource Icons}" FontSize="60" Foreground="#555" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource Icons}" FontSize="60" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             <Image x:Name="NowArt" ui:Art.Size="500" Stretch="UniformToFill"/>
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="NowTitle" FontSize="50" FontFamily="Segoe UI Light" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="NowArtist" FontSize="26" FontFamily="Segoe UI Light" Foreground="#D0D0D0" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="NowAlbum" FontSize="16" Foreground="#909090" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="NowTitle" FontSize="50" FontFamily="{DynamicResource HeadFont}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="NowArtist" FontSize="26" FontFamily="{DynamicResource HeadFont}" Opacity="0.82" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="NowAlbum" FontSize="16" Opacity="0.56" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                 </StackPanel>
                 <DockPanel x:Name="QueuePane" Grid.Column="1">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
@@ -110,7 +110,7 @@
                             <TextBlock x:Name="LyricsTabText" Text="lyrics" Style="{StaticResource H2}" Opacity="0.4"/>
                         </Button>
                     </StackPanel>
-                    <TextBlock x:Name="DjText" DockPanel.Dock="Top" FontSize="12" Foreground="#FF6FA5" Margin="8,0,0,6" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                    <TextBlock x:Name="DjText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource NowHighlight}" Margin="8,0,0,6" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
                     <DockPanel x:Name="LyricsPane" Visibility="Collapsed">
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8,4,0,0">
                             <Button x:Name="LyricsFindBtn" Style="{StaticResource TextBtn}" Content="find online" Click="LyricsFind_Click" Margin="0,0,14,0" ToolTip="Look this song up on LRCLIB (sends its title, artist and album)"/>
@@ -142,7 +142,7 @@
                                 </DockPanel>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                        <Setter TargetName="T" Property="Foreground" Value="#FF6FA5"/>
+                                        <Setter TargetName="T" Property="Foreground" Value="{DynamicResource NowHighlight}"/>
                                         <Setter TargetName="T" Property="FontWeight" Value="SemiBold"/>
                                     </DataTrigger>
                                 </DataTemplate.Triggers>
@@ -202,7 +202,7 @@
                             ToolTip="Phone. Drag and drop things here to sync with your phone.">
                         <Grid Width="18" Height="28">
                             <Border BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" BorderThickness="2" CornerRadius="3"/>
-                            <Rectangle Fill="{StaticResource AccentGrad}" Margin="4,5,4,8"/>
+                            <Rectangle Fill="{DynamicResource AccentGrad}" Margin="4,5,4,8"/>
                         </Grid>
                     </Button>
                     <Button x:Name="DiscTarget" Style="{StaticResource DropBtn}" Tag="disc" Click="DropTarget_Click" AllowDrop="True" DragEnter="DropTarget_DragEnter" DragLeave="DropTarget_DragLeave" DragOver="DropTarget_DragOver" Drop="DropTarget_Drop"

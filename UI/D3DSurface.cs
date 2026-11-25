@@ -432,16 +432,18 @@ public sealed class D2DPaint : Paint
     }
 
     /// <summary>The size a line of text takes up.</summary>
-    public Size Measure(string text, double size, string font = "Segoe UI", bool bold = false, double maxWidth = 4000)
+    public Size Measure(string text, double size, string? font = null, bool bold = false, double maxWidth = 4000)
     {
+        font ??= Themes.TextFontName;
         if (text == "") return default;
         var m = Layout(text, size, maxWidth, font, bold).Metrics;
         return new Size(Math.Min(m.WidthIncludingTrailingWhitespace, maxWidth), m.Height);
     }
 
     /// <summary>One line of text, cut short with "…" if it is wider than <paramref name="maxWidth"/>; returns its width.</summary>
-    public double Text(string text, Point at, double maxWidth, double size, WColor colour, string font = "Segoe UI", bool bold = false)
+    public double Text(string text, Point at, double maxWidth, double size, WColor colour, string? font = null, bool bold = false)
     {
+        font ??= Themes.TextFontName;
         if (text == "" || maxWidth < 4) return 0;
         var layout = Layout(text, size, maxWidth, font, bold);
         _rt.DrawTextLayout(V(at), layout, BrushFor(Fill.Of(colour), default), DrawTextOptions.Clip);

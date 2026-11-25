@@ -14,7 +14,7 @@
                     <Border Background="#C0000000" HorizontalAlignment="Left" VerticalAlignment="Top" Padding="6,3" Margin="0,6,0,0" x:Name="Badge">
                         <TextBlock Text="&#xE7F6;" FontFamily="{StaticResource Icons}" Foreground="White" FontSize="12" ToolTip="Audiobook"/>
                     </Border>
-                    <Border Height="4" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="{Binding ProgressWidth}" Background="{StaticResource AccentGrad}"/>
+                    <Border Height="4" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="{Binding ProgressWidth}" Background="{DynamicResource AccentGrad}"/>
                 </Grid>
                 <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
                 <TextBlock Text="{Binding Caption}" Foreground="{DynamicResource FgDim}" FontSize="12" TextTrimming="CharacterEllipsis"/>
@@ -22,7 +22,7 @@
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsAudio}" Value="False"><Setter TargetName="Badge" Property="Visibility" Value="Collapsed"/></DataTrigger>
                 <DataTrigger Binding="{Binding Counter}" Value=""><Setter TargetName="CounterBadge" Property="Visibility" Value="Collapsed"/></DataTrigger>
-                <DataTrigger Binding="{Binding Counter}" Value="read"><Setter TargetName="CounterBadge" Property="Background" Value="{StaticResource AccentGrad}"/></DataTrigger>
+                <DataTrigger Binding="{Binding Counter}" Value="read"><Setter TargetName="CounterBadge" Property="Background" Value="{DynamicResource AccentGrad}"/></DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>

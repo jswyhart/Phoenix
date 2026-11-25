@@ -16,7 +16,7 @@ public class TileCell : Observable
     internal int LookEpoch = -1;
 }
 
-public partial class TileGrid : UserControl
+public partial class TileGrid : UserControl, IThemed
 {
     public static readonly DependencyProperty TileTemplateProperty =
         DependencyProperty.Register(nameof(TileTemplate), typeof(DataTemplate), typeof(TileGrid));

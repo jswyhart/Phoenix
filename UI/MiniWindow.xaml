@@ -3,12 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:Halcyon.UI"
         Title="Phoenix" Width="380" Height="96" WindowStyle="None" ResizeMode="NoResize" Topmost="True" AllowsTransparency="False"
-        Background="{DynamicResource BgAlt}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13"
+        Background="{DynamicResource BgAlt}" Foreground="{DynamicResource Fg}" FontFamily="{DynamicResource TextFont}" FontSize="13"
         MouseLeftButtonDown="Window_MouseDown" ShowInTaskbar="True">
     <Border BorderBrush="{DynamicResource Line}" BorderThickness="1">
         <DockPanel>
             <Grid DockPanel.Dock="Bottom" Height="3" Background="{DynamicResource Line}">
-                <Rectangle x:Name="Progress" Fill="{StaticResource AccentGrad}" HorizontalAlignment="Left" Width="0"/>
+                <Rectangle x:Name="Progress" Fill="{DynamicResource AccentGrad}" HorizontalAlignment="Left" Width="0"/>
             </Grid>
             <Grid DockPanel.Dock="Left" Width="94" Background="{DynamicResource Line}">
                 <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>

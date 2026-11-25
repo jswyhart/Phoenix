@@ -267,7 +267,7 @@ public class MixView : FrameworkElement
         else if (_failed || !D3DSurface.Available)
         {
             var text = new FormattedText("Mixview needs Direct3D 11, which is not available here.", System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                new Typeface("Segoe UI"), 15, (Brush)FindResource("FgDim"), VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                new Typeface(Themes.TextFontName), 15, (Brush)FindResource("FgDim"), VisualTreeHelper.GetDpi(this).PixelsPerDip);
             dc.DrawText(text, new Point(28, 40));
         }
     }
@@ -276,7 +276,7 @@ public class MixView : FrameworkElement
 
     void Paint(D2DPaint p)
     {
-        Color fg = Res("Fg"), dim = Res("FgDim"), line = Res("FgFaint"), back = Res("BgAlt"), accent = Color.FromRgb(0xF0, 0x44, 0x7C);
+        Color fg = Res("Fg"), dim = Res("FgDim"), line = Res("FgFaint"), back = Res("BgAlt"), accent = Res("Accent");
         // the drift: every tile wanders a little around its place, each to its own slow rhythm
         Point At(Node n) => ReferenceEquals(n, _centre) ? new Point(n.X, n.Y)
             : new Point(n.X + Math.Sin(_time * 0.42 + n.Phase) * 7, n.Y + Math.Cos(_time * 0.33 + n.Phase * 1.7) * 6);

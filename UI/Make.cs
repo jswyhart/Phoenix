@@ -77,8 +77,9 @@ public static class Make
         var w = new Window
         {
             Title = title, Width = width, Height = height, ResizeMode = resize ? ResizeMode.CanResize : ResizeMode.NoResize, ShowInTaskbar = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, FontFamily = new FontFamily("Segoe UI"), FontSize = 13, UseLayoutRounding = true
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, FontSize = 13, UseLayoutRounding = true
         };
+        w.SetResourceReference(Control.FontFamilyProperty, "TextFont");
         if (App.Win is { IsLoaded: true } owner) w.Owner = owner;
         w.SetResourceReference(Control.BackgroundProperty, "Bg");
         w.SetResourceReference(Control.ForegroundProperty, "Fg");

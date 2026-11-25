@@ -60,7 +60,7 @@ public class ReaderWindow : Window
         Title = book.Author == "" ? book.Title : $"{book.Title} — {book.Author}";
         Width = 1180; Height = 860; MinWidth = 520; MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        FontFamily = new FontFamily("Segoe UI"); FontSize = 13;
+        SetResourceReference(FontFamilyProperty, "TextFont"); FontSize = 13;
         SetResourceReference(BackgroundProperty, "Bg");
         SetResourceReference(ForegroundProperty, "Fg");
 
@@ -223,8 +223,8 @@ public class ReaderWindow : Window
                 var path = Uri.UnescapeDataString(m.GetProperty("path").GetString() ?? "").TrimStart('/');
                 var found = _epub.Chapters.FindIndex(c => string.Equals(c.Href, path, StringComparison.OrdinalIgnoreCase));
                 if (found >= 0 && found != Chapter) { Chapter = found; _start = 0; }
-                var dark = App.Settings.Theme == "dark";
-                Run($"halcyon.init({JsonSerializer.Serialize(new { fontSize = App.Settings.ReaderFontSize, start = _start, bg = dark ? "#141414" : "#FFFFFF", fg = dark ? "#E8E8E8" : "#1A1A1A" })})");
+                var theme = Themes.Current;
+                Run($"halcyon.init({JsonSerializer.Serialize(new { fontSize = App.Settings.ReaderFontSize, start = _start, bg = Themes.Hex(theme.Get("Bg")), fg = Themes.Hex(Themes.Over(theme.Get("Fg"), theme.Get("Bg"))) })})");
                 break;
             case "state":
                 Page = m.GetProperty("page").GetInt32();

@@ -52,7 +52,7 @@ public class ComicWindow : Window
         Title = book.Author == "" ? book.Title : $"{book.Title} — {book.Author}";
         Width = 1000; Height = 900; MinWidth = 480; MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        FontFamily = new FontFamily("Segoe UI"); FontSize = 13;
+        SetResourceReference(FontFamilyProperty, "TextFont"); FontSize = 13;
         SetResourceReference(BackgroundProperty, "Bg");
         SetResourceReference(ForegroundProperty, "Fg");
 

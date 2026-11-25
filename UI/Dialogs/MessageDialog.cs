@@ -20,11 +20,12 @@ public static class MessageBox
         {
             Title = caption, Width = 480, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
-            FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 13
+            FontSize = 13
         };
         if (owner != null && owner.IsLoaded) w.Owner = owner;
         w.SetResourceReference(Window.BackgroundProperty, "Bg");
         w.SetResourceReference(Window.ForegroundProperty, "Fg");
+        w.SetResourceReference(Window.FontFamilyProperty, "TextFont");
 
         var panel = new StackPanel { Margin = new Thickness(24) };
         panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });

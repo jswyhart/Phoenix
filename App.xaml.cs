@@ -116,23 +116,6 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    public static void ApplyTheme(string name)
-    {
-        var dark = name == "dark";
-        void B(string key, string hex)
-        {
-            var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-            b.Freeze();
-            Current.Resources[key] = b;
-        }
-        B("Bg", dark ? "#141414" : "#FFFFFF");
-        B("BgAlt", dark ? "#1E1E1E" : "#F3F3F3");
-        B("Fg", dark ? "#F2F2F2" : "#1A1A1A");
-        B("FgDim", dark ? "#A6A6A6" : "#666666");
-        B("FgFaint", dark ? "#6A6A6A" : "#A9A9A9");
-        B("Line", dark ? "#2E2E2E" : "#E2E2E2");
-        B("Hover", dark ? "#16FFFFFF" : "#0E000000");
-        B("Selected", dark ? "#26FFFFFF" : "#1C000000");
-        WindowTheme.ApplyAll();
-    }
+    /// <summary>Shows a theme by id: "light", "dark", or one of yours from the themes folder (light if it is gone).</summary>
+    public static void ApplyTheme(string id) => Themes.Apply(Themes.Find(id));
 }

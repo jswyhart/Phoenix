@@ -125,7 +125,7 @@ public class TagEditorWindow : Window
         Width = 1240; Height = 700; MinWidth = 900; MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        FontFamily = new FontFamily("Segoe UI"); FontSize = 13; UseLayoutRounding = true;
+        SetResourceReference(FontFamilyProperty, "TextFont"); FontSize = 13; UseLayoutRounding = true;
         if (App.Win is { IsLoaded: true } owner) Owner = owner;
         SetResourceReference(BackgroundProperty, "Bg");
         SetResourceReference(ForegroundProperty, "Fg");

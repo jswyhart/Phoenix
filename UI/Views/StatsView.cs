@@ -71,7 +71,8 @@ public class StatsView : UserControl
         var numbers = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 18) };
         void Number(string value, string label)
         {
-            var big = new TextBlock { Text = value, FontSize = 46, FontFamily = new FontFamily("Segoe UI Light") };
+            var big = new TextBlock { Text = value, FontSize = 46 };
+            big.SetResourceReference(TextBlock.FontFamilyProperty, "HeadFont");
             numbers.Children.Add(Make.Column(big, Make.Text(label, 12, "FgDim")));
             ((FrameworkElement)numbers.Children[^1]).Margin = new Thickness(0, 0, 44, 0);
         }

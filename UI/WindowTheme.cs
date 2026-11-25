@@ -7,7 +7,8 @@ namespace Halcyon.UI;
 
 /// <summary>
 /// Makes the title bar Windows draws on every dialog and window follow Phoenix's light or dark setting. Left to
-/// itself Windows draws it white, which is the bright strip above a dark dialog.
+/// itself Windows draws it white, which is the bright strip above a dark dialog. With a custom theme the bar takes the
+/// theme's own page and text colours (Windows 11).
 /// </summary>
 public static class WindowTheme
 {
@@ -35,7 +36,7 @@ public static class WindowTheme
         {
             var handle = new WindowInteropHelper(window).Handle;
             if (handle == IntPtr.Zero) return;
-            var dark = App.Settings?.Theme == "dark" ? 1 : 0;
+            var dark = Themes.Current.IsDark ? 1 : 0;
             if (DwmSetWindowAttribute(handle, UseDark, ref dark, sizeof(int)) != 0) DwmSetWindowAttribute(handle, UseDarkOld, ref dark, sizeof(int));
             // Windows 11 can also take the exact colours, so the bar is the same shade as the window under it
             var back = Brush("Bg", dark == 1 ? Color.FromRgb(0x14, 0x14, 0x14) : Colors.White);

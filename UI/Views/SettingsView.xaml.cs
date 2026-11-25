@@ -109,8 +109,7 @@ public partial class SettingsView : UserControl
         }
         ShowCategory("software");
         RefreshFolders();
-        ThemeLight.IsChecked = S.Theme != "dark";
-        ThemeDark.IsChecked = S.Theme == "dark";
+        RefreshThemes();
         WriteTags.IsChecked = S.WriteTagsToFiles;
         JfUrl.Text = S.JellyfinUrl;
         JfUser.Text = S.JellyfinUser;
@@ -215,14 +214,6 @@ public partial class SettingsView : UserControl
         RefreshStatus();
         ScanStatus.Text = $"{App.Lib.Tracks.Count} songs and {App.Lib.Videos.Count} videos in your collection";
         RescanBtn.IsEnabled = true;
-    }
-
-    void Theme_Click(object sender, RoutedEventArgs e)
-    {
-        S.Theme = ThemeDark.IsChecked == true ? "dark" : "light";
-        S.Save();
-        App.ApplyTheme(S.Theme);
-        App.Win.ShowNow(false);
     }
 
     // ---------- jellyfin ----------

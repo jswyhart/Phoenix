@@ -15,8 +15,10 @@ namespace Halcyon.UI;
 /// from a dozen separate controls. A row like this costs a fraction of a millisecond to make, which is what lets a
 /// long list scroll without late frames on a fast display. The columns match <see cref="SongHeader"/>.
 /// </summary>
-public class SongRowView : FrameworkElement
+public class SongRowView : FrameworkElement, IThemed
 {
+    public void ThemeChanged() => InvalidateVisual();
+
     public static readonly DependencyProperty CompactProperty =
         DependencyProperty.Register(nameof(Compact), typeof(bool), typeof(SongRowView), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     /// <summary>Number, title, time and heart only (the song list beside an album).</summary>

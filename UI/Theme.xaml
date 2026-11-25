@@ -3,18 +3,21 @@
                     xmlns:core="clr-namespace:Halcyon.Core"
                     xmlns:ui="clr-namespace:Halcyon.UI">
 
-    <!-- Theme brushes (Bg, BgAlt, Fg, FgDim, FgFaint, Line, Hover, Selected) are set in App.ApplyTheme. -->
+    <!-- The theme's brushes (Bg, BgAlt, Fg, FgDim, FgFaint, Line, Hover, Selected, Accent, AccentGrad and the Now... ones) are set by Themes.Apply; Accent and AccentGrad here are only the defaults. -->
     <SolidColorBrush x:Key="Accent" Color="#E0447C"/>
     <LinearGradientBrush x:Key="AccentGrad" StartPoint="0,0" EndPoint="1,0">
         <GradientStop Color="#F0603A" Offset="0"/>
         <GradientStop Color="#D5358F" Offset="1"/>
     </LinearGradientBrush>
     <FontFamily x:Key="Icons">Segoe MDL2 Assets</FontFamily>
+    <!-- the theme's fonts (Themes.Apply sets them); these are the defaults -->
+    <FontFamily x:Key="TextFont">Segoe UI</FontFamily>
+    <FontFamily x:Key="HeadFont">Segoe UI Light</FontFamily>
 
     <!-- ===== tooltips (follow the theme) ===== -->
     <Style TargetType="ToolTip">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
-        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="FontStyle" Value="Normal"/>
         <Setter Property="HasDropShadow" Value="False"/>
@@ -34,7 +37,7 @@
     <!-- ===== context menus (follow the theme) ===== -->
     <Style TargetType="ContextMenu">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
-        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="FontStyle" Value="Normal"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -68,7 +71,7 @@
     </Style>
     <Style TargetType="MenuItem">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
-        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
         <Setter Property="Template">
@@ -166,7 +169,7 @@
     </Style>
     <Style x:Key="H2" TargetType="TextBlock">
         <Setter Property="FontSize" Value="24"/>
-        <Setter Property="FontFamily" Value="Segoe UI Light"/>
+        <Setter Property="FontFamily" Value="{DynamicResource HeadFont}"/>
         <Setter Property="Margin" Value="0,0,0,10"/>
     </Style>
 
@@ -174,7 +177,7 @@
     <Style x:Key="NavBig" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource FgFaint}"/>
         <Setter Property="FontSize" Value="40"/>
-        <Setter Property="FontFamily" Value="Segoe UI Light"/>
+        <Setter Property="FontFamily" Value="{DynamicResource HeadFont}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Margin" Value="0,0,24,0"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -209,7 +212,7 @@
     <!-- oversized faded word above a Quickplay row -->
     <Style x:Key="ZuneHead" TargetType="TextBlock">
         <Setter Property="FontSize" Value="58"/>
-        <Setter Property="FontFamily" Value="Segoe UI Light"/>
+        <Setter Property="FontFamily" Value="{DynamicResource HeadFont}"/>
         <Setter Property="Foreground" Value="{DynamicResource FgFaint}"/>
         <Setter Property="Opacity" Value="0.55"/>
         <Setter Property="Margin" Value="4,-4,0,0"/>
@@ -217,7 +220,7 @@
     </Style>
     <Style x:Key="NavTab" TargetType="RadioButton" BasedOn="{StaticResource NavBig}">
         <Setter Property="FontSize" Value="17"/>
-        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
         <Setter Property="Margin" Value="0,0,18,0"/>
     </Style>
 
@@ -402,7 +405,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RepeatButton">
-                    <Border Background="Transparent"><Border Height="3" Background="{StaticResource AccentGrad}"/></Border>
+                    <Border Background="Transparent"><Border Height="3" Background="{DynamicResource AccentGrad}"/></Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

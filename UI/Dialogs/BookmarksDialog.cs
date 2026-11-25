@@ -23,7 +23,7 @@ public class BookmarksDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
+        SetResourceReference(FontFamilyProperty, "TextFont");
         FontSize = 13;
         SetResourceReference(BackgroundProperty, "Bg");
         SetResourceReference(ForegroundProperty, "Fg");
