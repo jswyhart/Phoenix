@@ -101,10 +101,20 @@ public static class PodcastService
                 Published = DateTimeOffset.TryParse((string?)i.Element("pubDate"), out var d) ? d.ToUnixTimeSeconds() : 0,
                 DurationMs = ParseDuration((string?)i.Element(it + "duration")),
                 Description = Strip((string?)i.Element("description") ?? (string?)i.Element(it + "summary") ?? ""),
-                IsVideo = ((string?)enc?.Attribute("type") ?? "").StartsWith("video")
+                IsVideo = LooksLikeVideo((string?)enc?.Attribute("type") ?? "", media)
             });
         }
         return (podcast, episodes);
+    }
+
+    static readonly HashSet<string> VideoExts = new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".wmv" };
+
+    /// <summary>An episode is video when its feed says so, or (feeds are often careless) when its file is a video file.</summary>
+    public static bool LooksLikeVideo(string type, string url)
+    {
+        if (type.StartsWith("video", StringComparison.OrdinalIgnoreCase)) return true;
+        if (type.StartsWith("audio", StringComparison.OrdinalIgnoreCase)) return false;
+        try { return VideoExts.Contains(Path.GetExtension(new Uri(url).AbsolutePath)); } catch { return false; }
     }
 
     static long ParseDuration(string? s)

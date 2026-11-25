@@ -59,6 +59,43 @@ public static class CastMedia
         };
     }
 
+    static readonly HttpClient Sniffer = new(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = TimeSpan.FromSeconds(8) };
+
+    /// <summary>A stream's type as a cast device wants it named.</summary>
+    public static string StreamType(string contentType, string url)
+    {
+        var t = contentType.Split(';')[0].Trim().ToLowerInvariant();
+        return t switch
+        {
+            "audio/aacp" or "audio/aac" or "audio/x-aac" => "audio/aac",
+            "audio/mpeg" or "audio/mp3" or "audio/x-mpeg" => "audio/mpeg",
+            "application/vnd.apple.mpegurl" or "application/x-mpegurl" or "audio/mpegurl" or "audio/x-mpegurl" => "application/x-mpegURL",
+            "audio/ogg" or "application/ogg" => "audio/ogg",
+            "audio/flac" or "audio/x-flac" => "audio/flac",
+            _ when url.Split('?')[0].EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) => "application/x-mpegURL",
+            _ when t.StartsWith("audio/") => t,
+            _ => Mime(url)
+        };
+    }
+
+    /// <summary>
+    /// The type to tell the device for an item. A file's is known from its name; a radio station's address usually
+    /// has no file name at all, so the stream is asked what it is (MP3, AAC, a playlist of segments…). Telling a
+    /// Chromecast the wrong one makes it refuse the stream.
+    /// </summary>
+    public static async Task<string> TypeAsync(PlayItem item, string url)
+    {
+        if (item.Station == null) return Mime(url);
+        try
+        {
+            using var ask = new HttpRequestMessage(HttpMethod.Get, url);
+            ask.Headers.UserAgent.ParseAdd("PhoenixMediaPlayer/1.0");
+            using var answer = await Sniffer.SendAsync(ask, HttpCompletionOption.ResponseHeadersRead);
+            return StreamType(answer.Content.Headers.ContentType?.ToString() ?? "", answer.RequestMessage?.RequestUri?.ToString() ?? url);
+        }
+        catch { return StreamType("", url); }
+    }
+
     /// <summary>The address a device should fetch an item from: a file on this PC is offered by the small server below.</summary>
     public static string Url(PlayItem item, string deviceAddress)
     {
@@ -431,11 +468,11 @@ public sealed class DlnaDevice : CastDeviceBase
         $"<u:{action} xmlns:u=\"{service}\">{string.Concat(args.Select(a => $"<{a.Name}>{X(a.Value)}</{a.Name}>"))}</u:{action}></s:Body></s:Envelope>";
 
     /// <summary>The description of a song that a renderer shows on its display.</summary>
-    public static string Didl(string url, string mime, string title, string artist, string album, string art) =>
+    public static string Didl(string url, string mime, string title, string artist, string album, string art, bool live = false) =>
         "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">" +
         $"<item id=\"0\" parentID=\"-1\" restricted=\"1\"><dc:title>{X(title)}</dc:title><dc:creator>{X(artist)}</dc:creator><upnp:artist>{X(artist)}</upnp:artist><upnp:album>{X(album)}</upnp:album>" +
         (art != "" ? $"<upnp:albumArtURI>{X(art)}</upnp:albumArtURI>" : "") +
-        $"<upnp:class>object.item.audioItem.musicTrack</upnp:class><res protocolInfo=\"http-get:*:{mime}:DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000\">{X(url)}</res></item></DIDL-Lite>";
+        $"<upnp:class>{(live ? "object.item.audioItem.audioBroadcast" : "object.item.audioItem.musicTrack")}</upnp:class><res protocolInfo=\"http-get:*:{mime}:DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000\">{X(url)}</res></item></DIDL-Lite>";
 
     async Task<XDocument> CallAsync(string url, string service, string action, params (string, string)[] args)
     {
@@ -462,9 +499,10 @@ public sealed class DlnaDevice : CastDeviceBase
         _stopping = true;
         ResetState();
         string url = CastMedia.Url(item, Target.Address), art = CastMedia.ArtUrl(item, Target.Address);
+        var type = await CastMedia.TypeAsync(item, url);
         try { await CallAsync(_transportUrl, Transport, "Stop", ("InstanceID", "0")); } catch { }
         await CallAsync(_transportUrl, Transport, "SetAVTransportURI", ("InstanceID", "0"), ("CurrentURI", url),
-            ("CurrentURIMetaData", Didl(url, CastMedia.Mime(url), item.Title, item.Subtitle, item.Album, art)));
+            ("CurrentURIMetaData", Didl(url, type, item.Title, item.Subtitle, item.Album, art, item.Station != null)));
         await CallAsync(_transportUrl, Transport, "Play", ("InstanceID", "0"), ("Speed", "1"));
         _wasPlaying = false;
         _stopping = false;
@@ -691,16 +729,30 @@ public sealed class ChromecastDevice : CastDeviceBase
         _stopping = true;
         ResetState();
         string url = CastMedia.Url(item, Target.Address), art = CastMedia.ArtUrl(item, Target.Address);
-        var metadata = new Dictionary<string, object> { ["metadataType"] = 3, ["title"] = item.Title, ["artist"] = item.Subtitle, ["albumName"] = item.Album };
-        if (art != "") metadata["images"] = new[] { new { url = art } };
         _wasPlaying = false;
-        await SendAsync(_transport, Media, new
-        {
-            type = "LOAD", requestId = ++_request, autoplay = true, currentTime = Math.Max(0, startSeconds),
-            media = new { contentId = url, streamType = item.Station != null ? "LIVE" : "BUFFERED", contentType = CastMedia.Mime(url), metadata }
-        });
+        await SendAsync(_transport, Media, LoadMessage(item, url, art, await CastMedia.TypeAsync(item, url), startSeconds, ++_request));
         _stopping = false;
         Report(true, startSeconds, item.DurationMs / 1000.0);
+    }
+
+    /// <summary>
+    /// The "play this" message. A radio station is sent as a live stream: no starting position (a live stream has
+    /// none, and asking for one makes the device refuse it), described as plain media rather than as an album track.
+    /// </summary>
+    public static Dictionary<string, object> LoadMessage(PlayItem item, string url, string art, string contentType, double startSeconds, int request)
+    {
+        var live = item.Station != null;
+        var metadata = live
+            ? new Dictionary<string, object> { ["metadataType"] = 0, ["title"] = item.Title, ["subtitle"] = item.Subtitle }
+            : new Dictionary<string, object> { ["metadataType"] = 3, ["title"] = item.Title, ["artist"] = item.Subtitle, ["albumName"] = item.Album };
+        if (art != "") metadata["images"] = new[] { new Dictionary<string, object> { ["url"] = art } };
+        var message = new Dictionary<string, object>
+        {
+            ["type"] = "LOAD", ["requestId"] = request, ["autoplay"] = true,
+            ["media"] = new Dictionary<string, object> { ["contentId"] = url, ["streamType"] = live ? "LIVE" : "BUFFERED", ["contentType"] = contentType, ["metadata"] = metadata }
+        };
+        if (!live) message["currentTime"] = Math.Max(0, startSeconds);
+        return message;
     }
 
     Task MediaAsync(string type) => _mediaSession == 0 ? Task.CompletedTask : SendAsync(_transport, Media, new { type, mediaSessionId = _mediaSession, requestId = ++_request });

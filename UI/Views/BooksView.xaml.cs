@@ -27,9 +27,24 @@ public partial class BooksView : UserControl
     string? _author;
     bool _loading;
 
+    /// <summary>Sorting and filtering for the books on show.</summary>
+    public ViewOptions Options { get; } = new("books",
+        new[] { ("", "author"), ("title", "title"), ("added", "date added"), ("opened", "last opened"), ("progress", "progress") },
+        new[] { ("", "everything"), ("new", "not started"), ("started", "in progress"), ("done", "finished"), ("comic", "comics"), ("epub", "EPUB"), ("pdf", "PDF") });
+
+    public List<Book> ShownBooks { get; private set; } = new();
+
+    bool Keep(Book b) => (Options.Show switch
+    {
+        "new" => b.Progress <= 0.004 && !b.Finished, "started" => b.Progress > 0.004 && !b.Finished, "done" => b.Finished,
+        "comic" => b.Format == "comic", "epub" => b.Format == "epub", "pdf" => b.Format == "pdf", _ => true
+    }) && Options.Matches(b.Title, b.Author, b.Series);
+
     public BooksView()
     {
         InitializeComponent();
+        TopBar.Children.Add(Options);
+        Options.Changed += LoadBooks;
         Tiles.ItemClicked += o => Tiles.SelectedItem = o;
         Tiles.ItemActivated += o => OpenBook(((BookTile)o).Book);
         Tiles.ItemContext += (o, el) => Menus.Open(MenuFor(((BookTile)o).Book), el);
@@ -103,7 +118,16 @@ public partial class BooksView : UserControl
         books = _tab == "progress"
             ? books.OrderByDescending(b => b.LastOpened)
             : books.OrderBy(b => b.AuthorOrUnknown, StringComparer.OrdinalIgnoreCase).ThenBy(b => b.Series, StringComparer.OrdinalIgnoreCase).ThenBy(b => b.Title, StringComparer.OrdinalIgnoreCase);
-        var list = books.ToList();
+        var byName = StringComparer.OrdinalIgnoreCase;
+        var list = Options.Order(books.Where(Keep), key => key switch
+        {
+            "title" => l => l.OrderBy(b => b.Title, byName),
+            "added" => l => l.OrderByDescending(b => b.DateAdded),
+            "opened" => l => l.OrderByDescending(b => b.LastOpened),
+            "progress" => l => l.OrderByDescending(b => b.Finished ? 1 : b.Progress).ThenBy(b => b.Title, byName),
+            _ => null
+        });
+        ShownBooks = list;
         BookCap.Text = $"BOOKS  {list.Count}";
         Tiles.SetItems(list.Select(b => new BookTile(b, b.Title,
             string.Join("  ·  ", new[] { b.AuthorOrUnknown, b.IsAudio ? Fmt.Time(b.DurationMs) : b.Format, b.ProgressText }.Where(s => s != "")),

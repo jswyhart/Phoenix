@@ -26,6 +26,9 @@ public class RadioView : UserControl
     List<Radio.Group>? _genres, _countries;
     int _asked;
 
+    /// <summary>Sorting and filtering for "my stations".</summary>
+    public ViewOptions Options { get; } = new("radio", new[] { ("", "name"), ("country", "country"), ("genre", "genre") });
+
     public List<Station> Results => _results;
     public int SavedShown => _mine.Items.Count;
     public string Tab => _tab;
@@ -40,6 +43,10 @@ public class RadioView : UserControl
         var add = Make.Button("  add by address", "TextBtn", AddByAddress, "Add a station by its stream address", new Thickness(0, -4, 28, 6));
         DockPanel.SetDock(add, Dock.Right);
         mineHead.Children.Add(add);
+        Options.Margin = new Thickness(0, -6, 18, 4);
+        DockPanel.SetDock(Options, Dock.Right);
+        mineHead.Children.Add(Options);
+        Options.Changed += ShowMine;
         mineHead.Children.Add(Make.Styled("MY STATIONS", "Cap"));
         var mine = new DockPanel();
         DockPanel.SetDock(mineHead, Dock.Top);
@@ -243,7 +250,12 @@ public class RadioView : UserControl
 
     void ShowMine()
     {
-        Fill(_mine, App.Lib.Stations, saved: true);
+        Fill(_mine, Options.Order(App.Lib.Stations.Where(st => Options.Matches(st.Name, st.Tags, st.Country)), key => key switch
+        {
+            "country" => l => l.OrderBy(st => st.Country == "" ? "zz" : st.Country).ThenBy(st => st.Name, StringComparer.OrdinalIgnoreCase),
+            "genre" => l => l.OrderBy(st => st.Tags == "" ? "zz" : st.Tags, StringComparer.OrdinalIgnoreCase).ThenBy(st => st.Name, StringComparer.OrdinalIgnoreCase),
+            _ => null
+        }), saved: true);
         _mineHint.Visibility = App.Lib.Stations.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_results.Count > 0) Fill(_found, _results, saved: false);   // the + marks follow what is saved
     }

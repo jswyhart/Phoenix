@@ -14,9 +14,18 @@ public partial class PlaylistsView : UserControl
     PlaylistRow? _row;
     bool _loading;
 
+    /// <summary>Filtering for the songs of the playlist on show (the column headings sort them).</summary>
+    public ViewOptions Options { get; } = new("playlists", Array.Empty<(string, string)>(),
+        new[] { ("", "everything"), ("liked", "liked"), ("unplayed", "never played") });
+
+    bool Keep(Track t) => (Options.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, _ => true }) && Options.Matches(t.Title, t.Artist, t.Album);
+
     public PlaylistsView()
     {
         InitializeComponent();
+        Options.Margin = new Thickness(0, 0, 18, 0);
+        SongBar.Children.Insert(0, Options);
+        Options.Changed += () => { if (_row != null) Show(_row); };
         SongHdr.Changed += () => { if (_row != null) Show(_row); };
         // sorting is a view of the list: choosing another playlist starts from its own order again
         PlaylistList.SelectionChanged += (_, _) => { if (!_loading) SongHdr.Reset(); };
@@ -48,8 +57,8 @@ public partial class PlaylistsView : UserControl
     {
         _row = row;
         _baseSongs = SongsOf(row);
-        _songs = SongHdr.Sort.Apply(_baseSongs);
-        SongCap.Text = $"SONGS  {_songs.Count}   ·   {Fmt.Time(_songs.Sum(t => t.DurationMs))}";
+        _songs = SongHdr.Sort.Apply(Options.Active ? _baseSongs.Where(Keep) : _baseSongs);
+        SongCap.Text = (_songs.Count == _baseSongs.Count ? $"SONGS  {_songs.Count}" : $"SONGS  {_songs.Count} of {_baseSongs.Count}") + $"   ·   {Fmt.Time(_songs.Sum(t => t.DurationMs))}";
         RulesText.Visibility = row.Smart != null ? Visibility.Visible : Visibility.Collapsed;
         RulesText.Text = row.Smart != null ? Library.Describe(row.Smart) : "";
         SongList.ItemsSource = _songs;

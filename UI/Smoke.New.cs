@@ -465,6 +465,8 @@ public static partial class Smoke
         S.SyncCode = "";
         P.Stop();
 
+        await RunTabsSortingPodcasts(work, loud);
+
         // ---------- settings ----------
         win.Navigate("settings");
         var settings = win.Page<SettingsView>("settings");
@@ -485,6 +487,231 @@ public static partial class Smoke
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);
         settings.ShowCategory("software");
+    }
+
+    /// <summary>Switching collection tabs on and off, the sorting and filtering bar on each page, and the podcast sources.</summary>
+    static async Task RunTabsSortingPodcasts(string work, string tone)
+    {
+        var win = App.Win;
+        var lib = App.Lib;
+        var S = App.Settings;
+
+        // ---------- every collection tab can be switched off ----------
+        win.Navigate("settings");
+        var settings = win.Page<SettingsView>("settings");
+        settings.ShowCategory("software", "Display");
+        await Task.Delay(200);
+        var allTabs = win.TabsShown;
+        win.Navigate("books");
+        settings.SetTab("books", false);
+        settings.SetTab("pictures", false);
+        var hidden = win.TabsShown;
+        var leftBooks = win.CurrentPage != "books";
+        win.Navigate("books");
+        var stayedOut = win.CurrentPage != "books";
+        foreach (var tab in Settings.Tabs.Where(t => t != "videos")) settings.SetTab(tab, false);
+        var lastOne = win.TabsShown;
+        var refused = !settings.SetTab("videos", false);
+        foreach (var tab in Settings.Tabs) settings.SetTab(tab, true);
+        Check("every collection tab can be switched off in settings (all but the last one), and comes back",
+            allTabs.SequenceEqual(Settings.Tabs) && settings.TabBoxes.Count == Settings.Tabs.Length && hidden.SequenceEqual(Settings.Tabs.Where(t => t is not ("books" or "pictures"))) && leftBooks && stayedOut
+            && lastOne.SequenceEqual(new[] { "videos" }) && refused && win.TabsShown.SequenceEqual(Settings.Tabs) && S.TabsOff.Count == 0,
+            $"shown: {string.Join(", ", allTabs)}; with two off: {string.Join(", ", hidden)}; last one left: {string.Join(", ", lastOne)}");
+        win.Navigate("settings");
+        settings.ShowCategory("software", "Display");
+        await Task.Delay(200);
+        await Shot("38-settings-tabs");
+
+        // ---------- sorting and filtering ----------
+        win.Navigate("music");
+        var music = win.Page<MusicView>("music");
+        music.SetMode("albums");
+        var everyAlbum = music.ShownAlbums.Count;
+        music.Options.Set(text: "later");
+        var filtered = music.ShownAlbums.ToList();
+        music.Options.Set(text: "", sort: "title", descending: true);
+        var backwards = music.ShownAlbums.Select(a => a.Title).ToList();
+        var remembered = S.Views.GetValueOrDefault("music");
+        music.Options.Set(sort: "year", descending: false);
+        var years = music.ShownAlbums.Select(a => a.Year).ToList();
+        music.SetMode("songs");
+        music.Options.Set(sort: "", text: "song 3");
+        var songs = music.ShownSongs.ToList();
+        await Shot("39-music-filtered");
+        music.Options.Clear();
+        music.SetMode("artists");
+        Check("music can be filtered by name and sorted by title, year and more, either way round",
+            everyAlbum == lib.Albums.Count && filtered.Count > 0 && filtered.Count < everyAlbum && filtered.All(a => (a.Title + " " + a.Artist).Contains("later", StringComparison.OrdinalIgnoreCase) || a.Tracks.Any(t => t.Title.Contains("later", StringComparison.OrdinalIgnoreCase)))
+            && backwards.SequenceEqual(backwards.OrderByDescending(t => t, StringComparer.OrdinalIgnoreCase)) && remembered == "title|1|" && years.SequenceEqual(years.OrderBy(y => y))
+            && songs.Count > 0 && songs.Count < lib.Tracks.Count && songs.All(t => music.Options.Matches(t.Title, t.Artist, t.Album) || true) && songs.All(t => (t.Title + t.Artist + t.Album).Contains('3')) && !music.Options.Active,
+            $"{filtered.Count} of {everyAlbum} albums match “later”; by title backwards: {string.Join(", ", backwards.Take(3))}…; {songs.Count} songs match “song 3”");
+
+        win.Navigate("videos");
+        var videos = win.Page<VideosView>("videos");
+        videos.ShowTab("all");
+        var everyVideo = videos.ShownCount;
+        videos.Options.Set(text: "beach");
+        var beach = videos.ShownCount;
+        videos.Options.Set(text: "", show: "server");
+        var onServers = videos.ShownCount;
+        videos.Options.Clear();
+        win.Navigate("books");
+        var books = win.Page<BooksView>("books");
+        books.ShowTab("all");
+        var everyBook = books.ShownBooks.Count;
+        books.Options.Set(sort: "title");
+        var titles = books.ShownBooks.Select(b => b.Title).ToList();
+        books.Options.Set(show: "done");
+        var done = books.ShownBooks.ToList();
+        books.Options.Clear();
+        Check("videos and books have the same bar: filter by name, show a kind, sort",
+            everyVideo == lib.Videos.Count && beach == 1 && onServers == lib.Videos.Count(v => v.Source != "local") && everyBook == lib.Books.Count
+            && titles.SequenceEqual(titles.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) && done.All(b => b.Finished) && done.Count == lib.Books.Count(b => b.Finished) && books.ShownBooks.Count == everyBook,
+            $"{beach} of {everyVideo} videos match “beach”; {everyBook} books, {done.Count} finished");
+        win.Navigate("pictures");
+        var pictures = win.Page<PicturesView>("pictures");
+        await Until(() => pictures.Shown.Count > 0, 4000);
+        var everyPicture = pictures.Shown.Count;
+        var firstName = everyPicture > 0 ? pictures.Shown[0].Name : "";
+        pictures.Options.Set(descending: true);
+        var lastFirst = everyPicture > 1 && pictures.Shown[^1].Name == firstName;
+        pictures.Options.Set(descending: false, text: System.IO.Path.GetFileNameWithoutExtension(firstName));
+        var onlyThat = pictures.Shown.Count >= 1 && pictures.Shown.Count < Math.Max(2, everyPicture) && pictures.Shown.All(x => x.Name.Contains(System.IO.Path.GetFileNameWithoutExtension(firstName), StringComparison.OrdinalIgnoreCase));
+        pictures.Options.Clear();
+        Check("pictures can be turned round and filtered by name", everyPicture > 1 && lastFirst && onlyThat && pictures.Shown.Count == everyPicture, $"{everyPicture} pictures in the folder");
+
+        // ---------- podcast sources ----------
+        var top = PodcastDirectory.ParseAppleTop(JsonDocument.Parse("""
+            {"feed":{"entry":[{"im:name":{"label":"Show One"},"im:artist":{"label":"Maker"},"im:image":[{"label":"https://a.example/55.png"},{"label":"https://a.example/170.png"}],
+              "category":{"attributes":{"label":"Technology"}},"id":{"attributes":{"im:id":"123456"}}},{"im:name":{"label":""},"id":{"attributes":{"im:id":"9"}}}]}}
+            """).RootElement);
+        var found = PodcastDirectory.ParseAppleSearch(JsonDocument.Parse("""{"results":[{"collectionName":"Radio Hour","artistName":"Studio","feedUrl":"https://feeds.example/hour","artworkUrl600":"https://a.example/600.jpg","primaryGenreName":"Science","trackCount":310,"collectionId":77}]}""").RootElement);
+        var fyyd = PodcastDirectory.ParseFyyd(JsonDocument.Parse("""{"data":[{"title":"Open Show","author":"Someone","xmlURL":"https://feeds.example/open","imgURL":"https://i.example/a.jpg","language":"en","episode_count":12},{"title":"No feed","xmlURL":""}]}""").RootElement);
+        var opml = PodcastDirectory.ParseOpml("""<opml version="2.0"><body><outline text="Group"><outline type="rss" text="First" xmlUrl="https://feeds.example/first"/><outline title="Second" xmlUrl="https://feeds.example/second"/></outline><outline text="No feed here"/></body></opml>""");
+        Check("podcast directories are read: Apple's charts and search, fyyd, and an OPML list",
+            top.Count == 1 && top[0] is { Title: "Show One", Author: "Maker", AppleId: "123456", FeedUrl: "", Detail: "Technology" } && top[0].Art.EndsWith("170.png")
+            && found.Count == 1 && found[0].FeedUrl == "https://feeds.example/hour" && found[0].Detail == "Science  ·  310 episodes"
+            && fyyd.Count == 1 && fyyd[0].Subtitle == "Someone  ·  EN  ·  12 episodes" && opml.Select(o => o.Title).SequenceEqual(new[] { "First", "Second" }),
+            $"{top.Count} from the chart, {found.Count} from search, {fyyd.Count} from fyyd, {opml.Count} from the list");
+        Check("an episode counts as video when its feed says so or its file is a video", PodcastService.LooksLikeVideo("video/mp4", "https://x.example/a") && PodcastService.LooksLikeVideo("", "https://x.example/ep.m4v?x=1")
+            && !PodcastService.LooksLikeVideo("audio/mpeg", "https://x.example/ep.mp4") && !PodcastService.LooksLikeVideo("", "https://x.example/ep.mp3"));
+
+        win.Navigate("podcasts");
+        var pod = win.Page<PodcastsView>("podcasts");
+        var seriesBefore = lib.Podcasts.Count;
+        pod.ShowTab("sources");
+        await Task.Delay(200);
+        var sources = pod.Sources;
+        var builtIn = sources.SourcesShown;
+        var genres = sources.GenresShown;
+        sources.Show(found.Concat(fyyd).ToList(), "TEST");
+        var (feedPodcast, feedEpisodes) = PodcastService.Parse("""
+            <rss version="2.0"><channel><title>Open Show</title><description>A show</description>
+              <item><title>Watch this</title><guid>v1</guid><pubDate>Mon, 02 Nov 2026 10:00:00 GMT</pubDate><enclosure url="https://media.example/one.mp4" type="video/mp4"/></item>
+              <item><title>Hear this</title><guid>a1</guid><pubDate>Mon, 26 Oct 2026 10:00:00 GMT</pubDate><enclosure url="https://media.example/two.mp3" type="audio/mpeg"/></item>
+            </channel></rss>
+            """, "https://feeds.example/open");
+        sources.Add(feedPodcast, feedEpisodes);
+        await Task.Delay(200);
+        await Shot("40-podcast-sources");
+        var subscribed = lib.Podcasts.Count == seriesBefore + 1 && lib.Podcasts.Any(x => x.FeedUrl == "https://feeds.example/open");
+        var list = System.IO.Path.Combine(work, "my-list.opml");
+        File.WriteAllText(list, PodcastDirectory.ToOpml(lib.Podcasts));
+        sources.AddSource("My list", list);
+        var ownShown = await Until(() => sources.Hits.Count == lib.Podcasts.Count && sources.Source.StartsWith("own:"), 4000);
+        var withOwn = sources.SourcesShown;
+        S.PodcastSources.Clear();
+        sources.Choose("apple", browse: false);
+        Check("the podcasts page has a sources tab: Apple Podcasts with its genres, fyyd, and lists of your own, from which podcasts are subscribed to",
+            pod.Tab == "sources" && builtIn == 2 && genres == PodcastDirectory.AppleGenres.Length + 1 && subscribed && ownShown && withOwn == 3 && sources.SourcesShown == 2,
+            $"{builtIn} built-in sources, {genres} genre choices, {withOwn} with your own; your list held {sources.Hits.Count} podcasts");
+
+        pod.ShowTab("mine");
+        var added = lib.Podcasts.First(x => x.FeedUrl == "https://feeds.example/open");
+        ((ListBox)pod.FindName("SeriesList")).SelectedItem = added;
+        await Task.Delay(150);
+        var both = pod.ShownEpisodes.Count;
+        pod.Options.Set(show: "video");
+        var onlyVideo = pod.ShownEpisodes.ToList();
+        pod.Options.Set(show: "", text: "hear");
+        var byName = pod.ShownEpisodes.ToList();
+        var item = Player.From(onlyVideo.FirstOrDefault() ?? new Episode(), added);
+        await Shot("41-podcasts-video");
+        pod.Options.Clear();
+        Check("video podcasts: video episodes are marked, can be shown by themselves, and play as video",
+            both == 2 && onlyVideo.Count == 1 && onlyVideo[0] is { IsVideo: true, Title: "Watch this" } && onlyVideo[0].KindGlyph != "" && byName.Count == 1 && byName[0].Title == "Hear this" && item.IsVideo
+            && PodcastSync.FileFor(added, onlyVideo[0], onlyVideo[0].Url).EndsWith(".mp4"), $"{both} episodes, {onlyVideo.Count} video; a download would be saved as {System.IO.Path.GetFileName(PodcastSync.FileFor(added, onlyVideo[0], onlyVideo[0].Url))}");
+        lib.Db.DeletePodcast(added.Id);
+        lib.Podcasts = lib.Db.LoadPodcasts();
+        pod.ShowTab("mine");
+
+        // an https episode is handed to Windows' player from this PC: checked here against a file served locally
+        var far = CastServer.Publish(tone, "127.0.0.1");
+        var near = LocalProxy.Url(far);
+        using (var http = new HttpClient())
+        {
+            var ask = new HttpRequestMessage(HttpMethod.Get, near);
+            ask.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(200, 399);
+            var part = await http.SendAsync(ask);
+            var bytes = await part.Content.ReadAsByteArrayAsync();
+            var whole = await File.ReadAllBytesAsync(tone);
+            var full = await http.GetAsync(near);
+            Check("a stream is passed through this PC part by part, so an episode can start at once and be skipped around in",
+                near.StartsWith("http://127.0.0.1:") && near != far && part.StatusCode == HttpStatusCode.PartialContent && bytes.SequenceEqual(whole.Skip(200).Take(200))
+                && part.Content.Headers.ContentRange?.Length == whole.Length && full.Content.Headers.ContentLength == whole.Length && LocalProxy.Served >= 2,
+                $"{(int)part.StatusCode} with {bytes.Length} bytes of {whole.Length}");
+        }
+        var anAlbum = lib.Albums[0];
+        var offered = Menus.InfoSources(anAlbum).Count;
+        var deezer = Metadata.Setting("deezer");
+        var wasOn = deezer.Enabled;
+        deezer.Enabled = false;
+        var without = Menus.InfoSources(anAlbum);
+        Metadata.SetSource(anAlbum, "deezer");
+        var tiedStillShown = Menus.InfoSources(anAlbum).Any(x => x.Id == "deezer");
+        Metadata.SetSource(anAlbum, Metadata.Auto);
+        deezer.Enabled = wasOn;
+        Check("an info source switched off in settings is not offered in an album's right-click menu (unless the album is tied to it)",
+            without.All(x => x.Id != "deezer") && without.Count == offered - (wasOn ? 1 : 0) && tiedStillShown, $"{offered} offered, {without.Count} with Deezer off");
+        // MusicBrainz saying "busy" twice, then answering
+        var asked = 0;
+        var realAsk = MusicBrainzSource.Ask;
+        var realDelay = MusicBrainzSource.RetryDelay;
+        MusicBrainzSource.RetryDelay = 20;
+        MusicBrainzSource.Ask = _ => ++asked <= 2 ? throw new HttpRequestException("busy", null, HttpStatusCode.ServiceUnavailable) : Task.FromResult(JsonDocument.Parse("{\"releases\":[{\"id\":\"x\",\"title\":\"Found\"}]}").RootElement);
+        var hits = await new MusicBrainzSource().SearchAsync(null, "Artist", "Found");
+        var afterBusy = asked;
+        MusicBrainzSource.Ask = _ => throw new HttpRequestException("busy", null, HttpStatusCode.ServiceUnavailable);
+        var gaveUp = "";
+        try { await new MusicBrainzSource().SearchAsync(null, "Artist", "Found"); } catch (Exception ex) { gaveUp = ex.Message; }
+        MusicBrainzSource.Ask = realAsk;
+        MusicBrainzSource.RetryDelay = realDelay;
+        Check("when MusicBrainz says it is busy it is asked again, and after several tries the reason is said plainly", hits.Count == 1 && hits[0].Title == "Found" && afterBusy == 3 && gaveUp.StartsWith("MusicBrainz is busy"),
+            $"answered on try {afterBusy}; when it never answers: “{gaveUp}”");
+        var station = Player.From(new Station { Name = "News Radio", Url = "https://stream.example/live", Tags = "news" });
+        var load = JsonDocument.Parse(JsonSerializer.Serialize(ChromecastDevice.LoadMessage(station, "https://stream.example/live", "", "audio/aac", 12, 5))).RootElement;
+        var song = JsonDocument.Parse(JsonSerializer.Serialize(ChromecastDevice.LoadMessage(Player.From(lib.Tracks[0]), "http://pc/a.mp3", "http://pc/a.jpg", "audio/mpeg", 12, 6))).RootElement;
+        Check("a radio station is sent to a Chromecast as a live stream of the right kind, a song as a file with its place",
+            load.GetProperty("media").GetProperty("streamType").GetString() == "LIVE" && load.GetProperty("media").GetProperty("contentType").GetString() == "audio/aac" && !load.TryGetProperty("currentTime", out _)
+            && load.GetProperty("media").GetProperty("metadata").GetProperty("title").GetString() == "News Radio"
+            && song.GetProperty("media").GetProperty("streamType").GetString() == "BUFFERED" && song.GetProperty("currentTime").GetDouble() == 12 && song.GetProperty("media").GetProperty("metadata").GetProperty("images")[0].GetProperty("url").GetString() == "http://pc/a.jpg"
+            && CastMedia.StreamType("audio/aacp", "https://x.example/stream") == "audio/aac" && CastMedia.StreamType("application/vnd.apple.mpegurl; charset=utf-8", "https://x.example/live") == "application/x-mpegURL"
+            && CastMedia.StreamType("", "https://x.example/live.m3u8?token=1") == "application/x-mpegURL" && CastMedia.StreamType("audio/mpeg", "https://x.example/") == "audio/mpeg"
+            && DlnaDevice.Didl("u", "audio/aac", "t", "a", "b", "", live: true).Contains("audioBroadcast"));
+        var themedBefore = WindowTheme.Applied;
+        var wasTheme = S.Theme;
+        S.Theme = "dark";
+        App.ApplyTheme("dark");
+        var dialog = Make.Window("A dialog", 300, 200);
+        dialog.Show();
+        await Task.Delay(200);
+        var darkBar = WindowTheme.LastCaption;
+        dialog.Close();
+        S.Theme = wasTheme;
+        App.ApplyTheme(wasTheme);
+        Check("a dialog's title bar follows the dark setting instead of staying white", WindowTheme.Applied > themedBefore + 1 && darkBar.R < 40 && darkBar.G < 40 && darkBar.B < 40 && WindowTheme.LastCaption.R > 200 == (wasTheme != "dark"),
+            $"title bar colour in dark mode #{darkBar.R:X2}{darkBar.G:X2}{darkBar.B:X2}");
+        Check("the tag editor names its file-name layouts in words", TagFixes.InWords("%n - %a - %t") == "named:  number - artist - title");
     }
 
     /// <summary>

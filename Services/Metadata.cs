@@ -279,13 +279,35 @@ public class MusicBrainzSource : IMetaSource
         await Gate.WaitAsync();
         try
         {
-            var wait = _last.AddMilliseconds(1100) - DateTime.UtcNow;
-            if (wait > TimeSpan.Zero) await Task.Delay(wait);
-            try { return await Metadata.JsonAsync(url); }
-            finally { _last = DateTime.UtcNow; }
+            // MusicBrainz answers "503, busy" quite often, even to polite callers: ask again a few times, a little
+            // later each time, before giving up
+            for (var attempt = 0; ; attempt++)
+            {
+                var wait = _last.AddMilliseconds(1100) - DateTime.UtcNow;
+                if (wait > TimeSpan.Zero) await Task.Delay(wait);
+                try { return await Ask(url); }
+                catch (System.Net.Http.HttpRequestException ex) when (Busy(ex.StatusCode))
+                {
+                    if (attempt >= Retries) throw new Exception("MusicBrainz is busy right now and did not answer after several tries. Try again in a minute, or choose another source.");
+                    Retried++;
+                    await Task.Delay(RetryDelay * (attempt + 1));
+                }
+                finally { _last = DateTime.UtcNow; }
+            }
         }
         finally { Gate.Release(); }
     }
+
+    const int Retries = 4;
+    /// <summary>How long to wait before asking again, times the number of the attempt (shortened by the self-test).</summary>
+    public static int RetryDelay = 1500;
+    /// <summary>Times MusicBrainz was asked again after saying it was busy (for the self-test).</summary>
+    public static int Retried;
+    /// <summary>What fetches an address (the self-test stands in for MusicBrainz here).</summary>
+    public static Func<string, Task<JsonElement>> Ask = Metadata.JsonAsync;
+
+    static bool Busy(System.Net.HttpStatusCode? code) => code is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests
+        or System.Net.HttpStatusCode.BadGateway or System.Net.HttpStatusCode.GatewayTimeout;
 
     static string Q(string s) => Uri.EscapeDataString("\"" + s.Replace("\"", "") + "\"");
 

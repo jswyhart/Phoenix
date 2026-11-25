@@ -56,13 +56,36 @@ public partial class SettingsView
         ScrobbleResult.Text = Listening.LastResult;
     }
 
-    void RadioOn_Click(object sender, RoutedEventArgs e)
+    void RadioOn_Click(object sender, RoutedEventArgs e) => SetTab("radio", RadioOn.IsChecked == true);
+
+    // ---------- which collection tabs are shown ----------
+
+    /// <summary>Switches a collection tab on or off (the last one left stays on). Returns whether it was done.</summary>
+    public bool SetTab(string tab, bool on)
     {
-        S.RadioEnabled = RadioOn.IsChecked == true;
+        var done = S.SetTab(tab, on);
         Keep();
-        App.Win.ShowRadioTab();
+        App.Win.ShowTabs();
         App.Lib.NotifyChanged();   // quickplay shows or hides pinned stations
+        LoadTabs();
+        RadioOn.IsChecked = S.TabOn("radio");
+        if (!done) App.Win.SetStatus("one tab has to stay on");
+        return done;
     }
+
+    void LoadTabs()
+    {
+        TabChecks.Children.Clear();
+        foreach (var tab in Settings.Tabs)
+        {
+            var name = tab;
+            var box = new CheckBox { Content = tab, IsChecked = S.TabOn(tab), Margin = new Thickness(0, 4, 26, 4), MinWidth = 96 };
+            box.Click += (_, _) => SetTab(name, box.IsChecked == true);
+            TabChecks.Children.Add(box);
+        }
+    }
+
+    public List<CheckBox> TabBoxes => TabChecks.Children.OfType<CheckBox>().ToList();
 
     void Scrobble_Click(object sender, RoutedEventArgs e)
     {
@@ -133,6 +156,7 @@ public partial class SettingsView
 
     void LoadBackdrops()
     {
+        LoadTabs();
         BackdropsBox.IsChecked = S.Backdrops;
         var (artists, bytes) = Backdrops.Usage();
         BackdropUsage.Text = artists == 0 ? "No photos kept yet." : $"Photos of {artists} artist{(artists == 1 ? "" : "s")} kept, using {Storage.SizeText(bytes)}.";

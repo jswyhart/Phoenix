@@ -30,9 +30,29 @@ public partial class VideosView : UserControl
 
     static TileLook VideoLook(object o) => o is VideoTile v ? new TileLook(v.ArtPath, v.Title, v.Caption, "\uE714") : default;
 
+    /// <summary>Sorting and filtering for the videos on show.</summary>
+    public ViewOptions Options { get; } = new("videos",
+        new[] { ("", "title"), ("year", "year"), ("added", "date added"), ("length", "length") },
+        new[] { ("", "everything"), ("local", "on this PC"), ("server", "on servers") });
+
+    public int ShownCount { get; private set; }
+
+    bool Keep(VideoItem v) => (Options.Show switch { "local" => v.Source == "local", "server" => v.Source != "local", _ => true }) && Options.Matches(v.Title, v.Series, v.Collection);
+
+    /// <summary>The bar's order, on top of the order a tab has by itself.</summary>
+    List<VideoItem> Arrange(IEnumerable<VideoItem> videos, bool sort = true) => Options.Order(videos.Where(Keep), key => !sort ? null : key switch
+    {
+        "year" => list => list.OrderBy(v => v.Year == 0 ? int.MaxValue : v.Year).ThenBy(v => v.Title, StringComparer.OrdinalIgnoreCase),
+        "added" => list => list.OrderByDescending(v => v.DateAdded),
+        "length" => list => list.OrderByDescending(v => v.DurationMs),
+        _ => null
+    });
+
     public VideosView()
     {
         InitializeComponent();
+        TabStrip.Children.Add(Options);
+        Options.Changed += LoadContent;
         IsVisibleChanged += (_, _) => { if (IsVisible) ShowServices(); };
         ShowServices();
         Tiles.ItemActivated += o => Play(((VideoTile)o).Video);
@@ -151,20 +171,24 @@ public partial class VideosView : UserControl
         switch (_tab)
         {
             case "shows":
-                _rows = all.Where(v => IsShow(v) && string.Equals(v.Series, _group, StringComparison.OrdinalIgnoreCase) && (_season == null || v.Season == _season))
-                    .OrderBy(v => v.Season == 0 ? int.MaxValue : v.Season).ThenBy(v => v.Episode).ThenBy(v => v.Title, byTitle).ToList();
+                // episodes keep their running order unless another one is asked for
+                _rows = Arrange(all.Where(v => IsShow(v) && string.Equals(v.Series, _group, StringComparison.OrdinalIgnoreCase) && (_season == null || v.Season == _season))
+                    .OrderBy(v => v.Season == 0 ? int.MaxValue : v.Season).ThenBy(v => v.Episode).ThenBy(v => v.Title, byTitle));
+                ShownCount = _rows.Count;
                 RightCap.Text = $"EPISODES  {_rows.Count}";
                 RowList.ItemsSource = _rows;
                 break;
             case "folders":
-                _rows = all.Where(v => IsOther(v) && string.Equals(GroupOf(v), _group, StringComparison.OrdinalIgnoreCase)).OrderBy(v => v.Title, byTitle).ToList();
+                _rows = Arrange(all.Where(v => IsOther(v) && string.Equals(GroupOf(v), _group, StringComparison.OrdinalIgnoreCase)).OrderBy(v => v.Title, byTitle));
+                ShownCount = _rows.Count;
                 RightCap.Text = $"VIDEOS  {_rows.Count}";
                 RowList.ItemsSource = _rows;
                 break;
             case "movies":
             case "collections":
-                var movies = (_tab == "movies" ? all.Where(IsMovie) : all.Where(v => string.Equals(v.Collection, _group, StringComparison.OrdinalIgnoreCase) && v.Collection != ""))
-                    .OrderBy(v => v.Title, byTitle).ToList();
+                var movies = Arrange((_tab == "movies" ? all.Where(IsMovie) : all.Where(v => string.Equals(v.Collection, _group, StringComparison.OrdinalIgnoreCase) && v.Collection != ""))
+                    .OrderBy(v => v.Title, byTitle));
+                ShownCount = movies.Count;
                 RightCap.Text = $"MOVIES  {movies.Count}";
                 Tiles.TileWidth = 162;
                 Tiles.TileTemplate = (DataTemplate)FindResource("PosterTile");
@@ -172,7 +196,8 @@ public partial class VideosView : UserControl
                 Tiles.SetItems(movies.Select(v => new VideoTile(v, v.Title, string.Join("  ·  ", new[] { v.Year > 0 ? v.Year.ToString() : "", v.DurationText }.Where(s => s != "")))));
                 break;
             default:
-                var everything = all.OrderBy(v => v.DisplayTitle, byTitle).ToList();
+                var everything = Arrange(all.OrderBy(v => v.DisplayTitle, byTitle));
+                ShownCount = everything.Count;
                 RightCap.Text = $"VIDEOS  {everything.Count}";
                 Tiles.TileWidth = 220;
                 Tiles.TileTemplate = (DataTemplate)FindResource("WideTile");

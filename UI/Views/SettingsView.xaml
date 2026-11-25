@@ -155,6 +155,9 @@
                         <RadioButton x:Name="ThemeLight" Content="light" GroupName="theme" Foreground="{DynamicResource Fg}" Margin="0,0,18,0" Click="Theme_Click"/>
                         <RadioButton x:Name="ThemeDark" Content="dark" GroupName="theme" Foreground="{DynamicResource Fg}" Click="Theme_Click"/>
                     </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>
+                    <WrapPanel x:Name="TabChecks"/>
                     <TextBlock Style="{StaticResource Label}" Text="QUICKPLAY" Margin="0,22,0,3"/>
                     <CheckBox x:Name="QuickplayPlaysBox" Content="Clicking an album in quickplay plays it straight away" Margin="0,4,0,0" Click="QuickplayPlays_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: a click opens the album in your collection; right-click a tile to play it."/>

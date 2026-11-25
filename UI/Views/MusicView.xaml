@@ -7,7 +7,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <StackPanel Orientation="Horizontal" Margin="8,0,0,12">
+        <StackPanel x:Name="TopBar" Orientation="Horizontal" Margin="8,0,0,12">
             <RadioButton Style="{StaticResource NavTab}" Content="artists" Tag="artists" GroupName="musicTabs" IsChecked="True" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="genres" Tag="genres" GroupName="musicTabs" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="albums" Tag="albums" GroupName="musicTabs" Click="Tab_Click"/>

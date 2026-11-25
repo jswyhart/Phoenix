@@ -23,7 +23,7 @@
                 </ListBox>
             </DockPanel>
             <DockPanel Grid.Column="1" Margin="10,0,0,0">
-                <DockPanel DockPanel.Dock="Top">
+                <DockPanel x:Name="PicBar" DockPanel.Dock="Top">
                     <Button DockPanel.Dock="Right" Style="{StaticResource TextBtn}" Content="&#xE768;  play slideshow" Click="Slideshow_Click" Margin="0,-4,28,6"/>
                     <TextBlock x:Name="PicCap" Style="{StaticResource Cap}" Text="PICTURES"/>
                 </DockPanel>

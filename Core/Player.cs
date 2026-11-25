@@ -518,7 +518,8 @@ public class Player
         }
         if (!ReferenceEquals(Current, item)) return;
         Error?.Invoke("");
-        _me.Source = new Uri(item.Resolved);
+        // Windows' own player refuses https; the same stream is handed to it from this PC instead (see LocalProxy)
+        _me.Source = new Uri(item.Resolved.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? LocalProxy.Url(item.Resolved) : item.Resolved);
         _me.Play();
     }
 

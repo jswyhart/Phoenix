@@ -32,7 +32,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <StackPanel Orientation="Horizontal" Margin="8,0,0,12">
+        <StackPanel x:Name="TopBar" Orientation="Horizontal" Margin="8,0,0,12">
             <RadioButton Style="{StaticResource NavTab}" Content="all" Tag="all" GroupName="bookTabs" IsChecked="True" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="audiobooks" Tag="audio" GroupName="bookTabs" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="ebooks" Tag="ebook" GroupName="bookTabs" Click="Tab_Click"/>

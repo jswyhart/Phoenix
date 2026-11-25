@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     readonly DispatcherTimer _idleTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     readonly Smtc _smtc = new();
     string _page = "";
-    string _collPage = "music";
+    string _collPage = Settings.Tabs.FirstOrDefault(t => App.Settings.TabOn(t)) ?? "music";
     bool _dragging, _settingSeek, _full;
     WindowState _stateBeforeFull;
     MiniWindow? _mini;
@@ -72,7 +72,7 @@ public partial class MainWindow : Window
         };
 
         BuildTaskbarButtons();
-        ShowRadioTab();
+        ShowTabs();
         ShowWebTabs();
         ShowQueueTab(App.Settings.ShowLyrics);
         Navigate("quickplay");
@@ -269,7 +269,7 @@ public partial class MainWindow : Window
         _page = page;
         var web = page.StartsWith("web:") ? WebServices.Find(page[4..]) : null;
         if (page.StartsWith("web:") && (web == null || !WebServices.IsOn(web))) { page = "music"; web = null; }
-        if (page == "radio" && !App.Settings.RadioEnabled) page = "music";
+        if (Settings.Tabs.Contains(page) && !App.Settings.TabOn(page)) page = FirstTab;   // a tab that is switched off
         _page = page;
         var isColl = CollectionPages.Contains(page) || web != null;
         if (isColl) _collPage = page;
@@ -287,7 +287,7 @@ public partial class MainWindow : Window
     void NavBig_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((FrameworkElement)sender).Tag;
-        Navigate(tag == "collection" ? _collPage : tag);
+        Navigate(tag == "collection" ? (Settings.Tabs.Contains(_collPage) && !App.Settings.TabOn(_collPage) ? FirstTab : _collPage) : tag);
     }
 
     void Logo_Click(object sender, RoutedEventArgs e) => Navigate("quickplay");
@@ -481,16 +481,26 @@ public partial class MainWindow : Window
         return m;
     }
 
-    /// <summary>Shows or hides the radio tab, as chosen in settings; switching radio off also stops a station that is playing.</summary>
-    public void ShowRadioTab()
+    /// <summary>The first collection tab that is switched on.</summary>
+    static string FirstTab => Settings.Tabs.FirstOrDefault(App.Settings.TabOn) ?? "music";
+
+    /// <summary>
+    /// Shows the collection tabs that are switched on in settings and hides the rest. If the page on show was
+    /// switched off, the first tab that is still on takes its place; radio switched off also stops a station.
+    /// </summary>
+    public void ShowTabs()
     {
-        var on = App.Settings.RadioEnabled;
-        NavRadio.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        if (on) return;
-        if (_collPage == "radio") _collPage = "music";
-        if (_page == "radio") Navigate("music");
-        if (P.Current?.Station != null) P.Stop();
+        foreach (var tab in SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && Settings.Tabs.Contains(t)))
+            tab.Visibility = App.Settings.TabOn((string)tab.Tag) ? Visibility.Visible : Visibility.Collapsed;
+        if (Settings.Tabs.Contains(_collPage) && !App.Settings.TabOn(_collPage)) _collPage = FirstTab;
+        if (Settings.Tabs.Contains(_page) && !App.Settings.TabOn(_page)) Navigate(FirstTab);
+        if (!App.Settings.TabOn("radio") && P.Current?.Station != null) P.Stop();
     }
+
+    public void ShowRadioTab() => ShowTabs();
+
+    /// <summary>The collection tabs on show right now, in order.</summary>
+    public List<string> TabsShown => SubNav.Children.OfType<RadioButton>().Where(rb => rb.Visibility == Visibility.Visible && rb.Tag is string t && Settings.Tabs.Contains(t)).Select(rb => (string)rb.Tag).ToList();
 
     public bool RadioTabShown => NavRadio.Visibility == Visibility.Visible;
 

@@ -11,9 +11,49 @@ public partial class PodcastsView : UserControl
     List<Episode> _episodes = new();
     Podcast? _podcast;
 
+    /// <summary>Sorting for the series, and what to show of a series' episodes (with a filter by name).</summary>
+    public ViewOptions Options { get; } = new("podcasts",
+        new[] { ("", "title"), ("new", "new episodes"), ("author", "author") },
+        new[] { ("", "all episodes"), ("unplayed", "unplayed"), ("downloaded", "downloaded"), ("video", "video"), ("audio", "audio") });
+
+    public string Tab { get; private set; } = "mine";
+    public List<Episode> ShownEpisodes { get; private set; } = new();
+    public List<Podcast> ShownSeries => SeriesList.Items.Cast<Podcast>().ToList();
+    PodcastSourcesPane? _sources;
+    public PodcastSourcesPane Sources => _sources ??= MakeSources();
+
+    PodcastSourcesPane MakeSources()
+    {
+        var pane = new PodcastSourcesPane();
+        pane.Subscribed += id => Reload(id);
+        SourcesPane.Children.Add(pane);
+        return pane;
+    }
+
+    /// <summary>Shows "my podcasts" or "sources".</summary>
+    public void ShowTab(string tab)
+    {
+        Tab = tab == "sources" ? "sources" : "mine";
+        TabBar.Children.Clear();
+        foreach (var (id, label) in new[] { ("mine", "my podcasts"), ("sources", "sources") })
+        {
+            var b = Make.Button(label, "TextBtn", () => ShowTab(id), id == "sources" ? "Browse podcast directories and subscribe" : null, new Thickness(0, 0, 22, 0));
+            b.Opacity = id == Tab ? 1 : 0.5;
+            b.FontSize = 15;
+            TabBar.Children.Add(b);
+        }
+        Options.Visibility = Tab == "mine" ? Visibility.Visible : Visibility.Collapsed;
+        TabBar.Children.Add(Options);
+        MinePane.Visibility = Tab == "mine" ? Visibility.Visible : Visibility.Collapsed;
+        SourcesPane.Visibility = Tab == "sources" ? Visibility.Visible : Visibility.Collapsed;
+        if (Tab == "sources") Sources.Shown();
+    }
+
     public PodcastsView()
     {
         InitializeComponent();
+        ShowTab("mine");
+        Options.Changed += () => Reload(_podcast?.Id);
         // a background refresh found something, or downloads changed
         PodcastSync.Changed += () => Reload(_podcast?.Id);
         Reload(null);
@@ -21,7 +61,13 @@ public partial class PodcastsView : UserControl
 
     void Reload(long? selectId)
     {
-        var pods = App.Lib.Podcasts;
+        var byName = StringComparer.OrdinalIgnoreCase;
+        var pods = Options.Order(App.Lib.Podcasts, key => key switch
+        {
+            "new" => list => list.OrderByDescending(p => p.NewCount).ThenBy(p => p.Title, byName),
+            "author" => list => list.OrderBy(p => p.Author == "" ? "\uFFFF" : p.Author, byName).ThenBy(p => p.Title, byName),
+            _ => null
+        });
         SeriesCap.Text = $"SERIES  {pods.Count}";
         SeriesList.ItemsSource = null;
         SeriesList.ItemsSource = pods;
@@ -37,8 +83,13 @@ public partial class PodcastsView : UserControl
         PodTitle.Text = p?.Title ?? "";
         PodDesc.Text = p?.Description ?? "";
         _episodes = p == null ? new() : App.Lib.Db.LoadEpisodes(p.Id);
-        EpCap.Text = p == null ? "" : $"EPISODES  {_episodes.Count}";
-        EpisodeList.ItemsSource = _episodes;
+        // the bar's "show" and filter choose which of the series' episodes are listed
+        ShownEpisodes = _episodes.Where(e => (Options.Show switch { "unplayed" => !e.Played, "downloaded" => e.File != "", "video" => e.IsVideo, "audio" => !e.IsVideo, _ => true })
+                                             && Options.Matches(e.Title, e.Description)).ToList();
+        var video = _episodes.Count(e => e.IsVideo);
+        EpCap.Text = p == null ? "" : (ShownEpisodes.Count == _episodes.Count ? $"EPISODES  {_episodes.Count}" : $"EPISODES  {ShownEpisodes.Count} of {_episodes.Count}")
+            + (video == 0 ? "" : video == _episodes.Count ? "   ·   a video podcast" : $"   ·   {video} in video");
+        EpisodeList.ItemsSource = ShownEpisodes;
     }
 
     void Series_SelectionChanged(object sender, SelectionChangedEventArgs e) => ShowPodcast(SeriesList.SelectedItem as Podcast);
@@ -159,7 +210,7 @@ public partial class PodcastsView : UserControl
             m.Items.Add(Menus.Item("Remove download", () => PodcastSync.RemoveDownload(ep)));
             m.Items.Add(Menus.Item("Show in File Explorer", () => System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ep.File}\"")));
         }
-        else if (!ep.IsVideo) m.Items.Add(Menus.Item("Download", async () =>
+        else m.Items.Add(Menus.Item(ep.IsVideo ? "Download the video" : "Download", async () =>
         {
             App.Win.SetStatus($"downloading {ep.Title}…");
             try { if (_podcast != null) await PodcastSync.DownloadAsync(_podcast, ep); App.Win.SetStatus(""); }

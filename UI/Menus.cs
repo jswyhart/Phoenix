@@ -38,10 +38,18 @@ public static class Menus
         }
         root.Items.Add(Choice("Automatic (by weight)", Metadata.Auto));
         root.Items.Add(new Separator());
-        foreach (var s in Metadata.Sources) root.Items.Add(Choice(s.Ready ? s.Name : s.Name + " (needs its key)", s.Id, s.Ready));
+        // only the sources switched on in settings → metadata are offered (plus the one this album is tied to, if it was switched off since)
+        foreach (var s in InfoSources(a)) root.Items.Add(Choice(s.Ready ? s.Name : s.Name + " (needs its key)", s.Id, s.Ready));
         root.Items.Add(new Separator());
         root.Items.Add(Choice("Never fill in automatically", Metadata.Never));
         return root;
+    }
+
+    /// <summary>The sources the "Info source" menu lists for an album: those switched on in settings.</summary>
+    public static List<IMetaSource> InfoSources(Album a)
+    {
+        var tied = Metadata.SourceOf(a);
+        return Metadata.Sources.Where(s => Metadata.Setting(s.Id).Enabled || s.Id == tied).ToList();
     }
 
     static async void Identify(Track t)

@@ -16,9 +16,22 @@ public partial class MusicView : UserControl
     List<Album>? _gridAlbums;
     bool _gridStale = true;
 
+    /// <summary>Sorting and filtering for the albums and songs on show.</summary>
+    public ViewOptions Options { get; } = new("music",
+        new[] { ("", "artist"), ("title", "album title"), ("year", "year"), ("added", "date added"), ("plays", "most played"), ("recent", "last played") },
+        new[] { ("", "everything"), ("liked", "liked"), ("unplayed", "never played"), ("local", "on this PC"), ("server", "on servers") });
+
+    public List<Album> ShownAlbums => _gridAlbums ?? new();
+    public List<Track> ShownSongs => _songs;
+
+    bool Keep(Track t) => (Options.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, "local" => t.IsLocal, "server" => !t.IsLocal, _ => true })
+                          && Options.Matches(t.Title, t.Artist, t.Album);
+
     public MusicView()
     {
         InitializeComponent();
+        TopBar.Children.Add(Options);
+        Options.Changed += () => { _gridStale = true; LoadAlbums(); };
         AlbumGrid.ItemClicked += o => { _album = ReferenceEquals(_album, o) ? null : (Album)o; AlbumGrid.SelectedItem = _album; LoadSongs(); };
         AlbumGrid.ItemActivated += o => Menus.Play(((Album)o).Tracks);
         AlbumGrid.ItemContext += (o, el) => Menus.Open(Menus.ForAlbum((Album)o), el);
@@ -123,7 +136,27 @@ public partial class MusicView : UserControl
         if (_left != null && _mode == "artists") albums = albums.Where(a => string.Equals(a.Artist, _left, StringComparison.OrdinalIgnoreCase));
         if (_left != null && _mode == "genres") albums = albums.Where(a => a.Tracks.Any(t => string.Equals(t.Genre, _left, StringComparison.OrdinalIgnoreCase)));
         if (_mode == "albums") albums = albums.OrderBy(a => a.Title, StringComparer.OrdinalIgnoreCase);
-        return albums.ToList();
+        if (!Options.Active) return albums.ToList();
+        // an album is shown when it fits by name, or one of its songs does
+        albums = Options.Show switch
+        {
+            "liked" => albums.Where(a => a.Tracks.Any(t => t.Rating > 0)),
+            "unplayed" => albums.Where(a => a.Tracks.All(t => t.PlayCount == 0)),
+            "local" => albums.Where(a => a.Source == "local"),
+            "server" => albums.Where(a => a.Source != "local"),
+            _ => albums
+        };
+        if (Options.Text != "") albums = albums.Where(a => Options.Matches(a.Title, a.Artist) || a.Tracks.Any(t => Options.Matches(t.Title)));
+        var byName = StringComparer.OrdinalIgnoreCase;
+        return Options.Order(albums, sort => sort switch
+        {
+            "title" => list => list.OrderBy(a => a.Title, byName),
+            "year" => list => list.OrderBy(a => a.Year == 0 ? int.MaxValue : a.Year).ThenBy(a => a.Title, byName),
+            "added" => list => list.OrderByDescending(a => a.DateAdded),
+            "plays" => list => list.OrderByDescending(a => a.Tracks.Sum(t => t.PlayCount)).ThenBy(a => a.Title, byName),
+            "recent" => list => list.OrderByDescending(a => a.Tracks.Max(t => t.LastPlayed)),
+            _ => null
+        });
     }
 
     void LoadAlbums()
@@ -146,12 +179,19 @@ public partial class MusicView : UserControl
 
     void LoadSongs()
     {
-        if (_mode == "songs") _songs = Header.Sort.Apply(App.Lib.Tracks.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase));
+        var songFilter = Options.Show != "" || Options.Text != "";
+        if (_mode == "songs")
+        {
+            // the song list has its own column headings to sort by; the bar's "show" and filter apply to it too
+            var all = App.Lib.Tracks.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase);
+            _songs = Header.Sort.Apply(songFilter ? all.Where(Keep) : all);
+        }
         else if (_album != null) _songs = _album.Tracks.ToList();
         else
         {
             var tracks = FilteredAlbums().SelectMany(a => a.Tracks);
             if (_left != null && _mode == "genres") tracks = tracks.Where(t => string.Equals(t.Genre, _left, StringComparison.OrdinalIgnoreCase));
+            if (Options.Show is "liked") tracks = tracks.Where(t => t.Rating > 0);
             _songs = tracks.ToList();
         }
         RightCap.Text = $"SONGS  {_songs.Count}";

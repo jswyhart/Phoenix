@@ -80,6 +80,9 @@ public static class TagFixes
 
     public static readonly string[] Patterns = { "%n - %t", "%n. %t", "%n %t", "%a - %t", "%n - %a - %t", "%a - %b - %n - %t", "%t" };
 
+    /// <summary>A pattern as it is shown to you: "%n - %t" reads "number - title".</summary>
+    public static string InWords(string pattern) => "named:  " + pattern.Replace("%n", "number").Replace("%t", "title").Replace("%a", "artist").Replace("%b", "album");
+
     /// <summary>Reads fields out of a file name by a pattern: %n track number, %t title, %a artist, %b album. Null if the name does not fit.</summary>
     public static Dictionary<char, string>? FromFileName(string name, string pattern)
     {
@@ -106,7 +109,7 @@ public class TagEditorWindow : Window
     readonly ObservableCollection<TagRow> _rows;
     readonly DataGrid _grid = new();
     readonly TextBlock _status = Make.Text("", 12, "FgDim");
-    readonly ComboBox _pattern = new() { Width = 150, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+    readonly ComboBox _pattern = new() { Width = 220, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
     static readonly (string Header, string Path, double Width, bool Number)[] Columns =
     {
         ("#", "TrackNo", 44, true), ("Title", "Title", 250, false), ("Artist", "Artist", 170, false), ("Album artist", "AlbumArtist", 150, false),
@@ -167,9 +170,10 @@ public class TagEditorWindow : Window
         _grid.Columns.Add(new DataGridTextColumn { Header = "File", Width = new DataGridLength(1, DataGridLengthUnitType.Star), IsReadOnly = true, ElementStyle = textStyle, Binding = new Binding("File") { Mode = BindingMode.OneWay } });
         _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(ShowStatus);
 
-        _pattern.ItemsSource = TagFixes.Patterns;
+        // shown in words ("number - title") rather than as the pattern itself ("%n - %t")
+        _pattern.ItemsSource = TagFixes.Patterns.Select(TagFixes.InWords).ToList();
         _pattern.SelectedIndex = 0;
-        _pattern.ToolTip = "%n track number, %t title, %a artist, %b album";
+        _pattern.ToolTip = "How your files are named. Choose the layout that matches, then press FROM FILE NAMES to fill in the songs' details from their file names.";
 
         var fixes = new WrapPanel { Margin = new Thickness(16, 12, 16, 8) };
         void Fix(string label, Action run, string tip) => fixes.Children.Add(Make.Button(label, "PillBtn", () => { _grid.CommitEdit(DataGridEditingUnit.Row, true); run(); ShowStatus(); }, tip, new Thickness(0, 0, 8, 6)));
@@ -262,7 +266,7 @@ public class TagEditorWindow : Window
 
     void FromFileNames()
     {
-        var (done, skipped) = FromFileNames((string)_pattern.SelectedItem);
+        var (done, skipped) = FromFileNames(TagFixes.Patterns[Math.Max(0, _pattern.SelectedIndex)]);
         if (skipped > 0) App.Win.SetStatus($"{done} read from their file names; {skipped} did not fit the pattern");
     }
 

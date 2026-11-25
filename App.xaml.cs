@@ -25,6 +25,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         D3DSurface.Warm();       // Direct3D 11 for the visualizer and cover grids, set up while the window opens
+        WindowTheme.Enable();    // every dialog's title bar follows the light or dark setting
         SmoothScroll.Enable();   // the mouse wheel glides at the display's refresh rate instead of jumping
         // Let WPF render on the GPU (the default); never fall back to software unless the driver forces it.
         System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
@@ -132,5 +133,6 @@ public partial class App : Application
         B("Line", dark ? "#2E2E2E" : "#E2E2E2");
         B("Hover", dark ? "#16FFFFFF" : "#0E000000");
         B("Selected", dark ? "#26FFFFFF" : "#1C000000");
+        WindowTheme.ApplyAll();
     }
 }

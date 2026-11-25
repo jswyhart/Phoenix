@@ -6,6 +6,12 @@ using System.Text.Json.Serialization;
 
 namespace Halcyon.Core;
 
+public class PodcastSource
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+}
+
 public class Settings
 {
     public List<string> MusicFolders { get; set; } = new();
@@ -58,7 +64,25 @@ public class Settings
     public bool ScrobbleListenBrainz { get; set; }
     public string LastFmUser { get; set; } = "";
     public string ListenBrainzUser { get; set; } = "";
-    public bool RadioEnabled { get; set; } = true;        // show internet radio in the collection
+    /// <summary>The tabs of the collection that can be switched off, in the order they are shown.</summary>
+    public static readonly string[] Tabs = { "music", "videos", "pictures", "podcasts", "books", "playlists", "radio" };
+    public List<string> TabsOff { get; set; } = new();     // collection tabs that are hidden
+    public bool TabOn(string tab) => !TabsOff.Contains(tab);
+    /// <summary>Shows or hides a tab. The last tab left cannot be switched off (returns false).</summary>
+    public bool SetTab(string tab, bool on)
+    {
+        if (on) { TabsOff.Remove(tab); return true; }
+        if (TabsOff.Contains(tab)) return true;
+        if (Tabs.Count(TabOn) <= 1) return false;
+        TabsOff.Add(tab);
+        return true;
+    }
+    [JsonPropertyName("RadioEnabled")] public bool? RadioEnabledOld { get; set; }   // how an earlier version stored the radio tab's switch
+    [JsonIgnore] public bool RadioEnabled { get => TabOn("radio"); set => SetTab("radio", value); }
+    /// <summary>How each page is sorted and filtered: page -> "sort|descending|show".</summary>
+    public Dictionary<string, string> Views { get; set; } = new();
+    /// <summary>Podcast lists you added yourself to browse from: a name and the address (or file) of an OPML list.</summary>
+    public List<PodcastSource> PodcastSources { get; set; } = new();
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
     public bool CheckUpdates { get; set; } = true;        // ask GitHub once a day whether there is a newer Phoenix
     public bool AutoUpdate { get; set; }                  // download a newer Phoenix when one is found and install it when Phoenix is closed
@@ -102,6 +126,8 @@ public class Settings
         s.JellyfinToken = Dec(s.JellyfinTokenEnc);
         s.PlexToken = Dec(s.PlexTokenEnc);
         s.ApiKeys = s.ApiKeysEnc.ToDictionary(k => k.Key, k => Dec(k.Value));
+        if (s.RadioEnabledOld == false && !s.TabsOff.Contains("radio")) s.TabsOff.Add("radio");
+        s.RadioEnabledOld = null;
         if (s.SpotifyEnabled) { s.SpotifyEnabled = false; if (!s.WebServicesOn.Contains("spotify")) s.WebServicesOn.Add("spotify"); }
         return s;
     }

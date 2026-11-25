@@ -19,9 +19,28 @@ public partial class PicturesView : UserControl
     readonly DispatcherTimer _slideTimer = new() { Interval = TimeSpan.FromSeconds(4) };
     bool _loaded;
 
+    /// <summary>Sorting and filtering for the pictures of the folder on show.</summary>
+    public ViewOptions Options { get; } = new("pictures", new[] { ("", "name"), ("date", "date") });
+    List<PictureItem> _folderPics = new();
+
+    public List<PictureItem> Shown => _pics;
+
+    static DateTime DateOf(PictureItem p) { try { return File.Exists(p.File) ? File.GetLastWriteTimeUtc(p.File) : DateTime.MinValue; } catch { return DateTime.MinValue; } }
+
+    void ShowPics()
+    {
+        _pics = Options.Order(_folderPics.Where(p => Options.Matches(p.Name)), key => key == "date" ? list => list.OrderByDescending(DateOf) : null);
+        PicCap.Text = _pics.Count == _folderPics.Count ? $"PICTURES  {_pics.Count}" : $"PICTURES  {_pics.Count} of {_folderPics.Count}";
+        PicGrid.SetItems(_pics);
+    }
+
     public PicturesView()
     {
         InitializeComponent();
+        Options.Margin = new Thickness(0, -6, 18, 4);
+        DockPanel.SetDock(Options, Dock.Right);
+        PicBar.Children.Insert(1, Options);
+        Options.Changed += ShowPics;
         // photos open on a single click
         PicGrid.DrawWith(TileStyle.Picture, o => o is PictureItem pic ? new TileLook(pic.ArtPath, Tip: pic.Name) : default);
         PicGrid.ItemClicked += o => { PicGrid.SelectedItem = o; OpenViewer(_pics.IndexOf((PictureItem)o), false); };
@@ -58,7 +77,7 @@ public partial class PicturesView : UserControl
         FolderCap.Text = $"FOLDERS  {folders.Count}";
         FolderList.ItemsSource = folders;
         EmptyText.Visibility = folders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (folders.Count > 0) FolderList.SelectedIndex = 0; else { _pics = new(); PicGrid.SetItems(_pics); }
+        if (folders.Count > 0) FolderList.SelectedIndex = 0; else { _folderPics = new(); ShowPics(); }
     }
 
     void Folder_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -66,12 +85,11 @@ public partial class PicturesView : UserControl
         if (FolderList.SelectedItem is not PicFolder f) return;
         try
         {
-            _pics = f.Items ?? Directory.EnumerateFiles(f.Path).Where(p => Library.PictureExts.Contains(System.IO.Path.GetExtension(p)))
+            _folderPics = f.Items ?? Directory.EnumerateFiles(f.Path).Where(p => Library.PictureExts.Contains(System.IO.Path.GetExtension(p)))
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).Select(p => new PictureItem(System.IO.Path.GetFileName(p), p, "shell:" + p)).ToList();
         }
-        catch { _pics = new(); }
-        PicCap.Text = $"PICTURES  {_pics.Count}";
-        PicGrid.SetItems(_pics);
+        catch { _folderPics = new(); }
+        ShowPics();
     }
 
     // ---------- viewer ----------

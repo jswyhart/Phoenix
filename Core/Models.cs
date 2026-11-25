@@ -233,6 +233,9 @@ public class Episode : Observable
     public string DateText => Published > 0 ? DateTimeOffset.FromUnixTimeSeconds(Published).LocalDateTime.ToString("MMM d, yyyy") : "";
     public string DurationText => Fmt.Time(DurationMs);
     public double TitleOpacity => Played ? 0.45 : 1.0;
+    /// <summary>A small film mark in front of a video episode's name.</summary>
+    public string KindGlyph => IsVideo ? "\uE714" : "";
+    public string KindGap => IsVideo ? "  " : "";
 }
 
 public record Pin(string Kind, string Key, string Title);

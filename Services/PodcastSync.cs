@@ -49,7 +49,7 @@ public static class PodcastSync
     {
         var ext = "";
         try { ext = Path.GetExtension(new Uri(address).AbsolutePath).ToLowerInvariant(); } catch { }
-        if (!AudioExts.Contains(ext)) ext = ".mp3";
+        if (!AudioExts.Contains(ext) && !(e.IsVideo && ext is ".mp4" or ".m4v" or ".mov" or ".webm" or ".mkv")) ext = e.IsVideo ? ".mp4" : ".mp3";
         var date = e.Published > 0 ? DateTimeOffset.FromUnixTimeSeconds(e.Published).LocalDateTime.ToString("yyyy-MM-dd") + " " : "";
         return Path.Combine(Folder, Clean(p.Title, 80), Clean(date + e.Title, 120) + ext);
     }
