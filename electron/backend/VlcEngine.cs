@@ -9,11 +9,20 @@ namespace Phoenix.Backend;
 /// Playback through VLC's engine (libVLC): plays local files and network streams in practically any format,
 /// with seeking handled by the engine. A second, silent decoder supplies samples to the visualizer. Video is not
 /// given a window: VLC hands each frame to <see cref="VideoOut"/>, which passes it on to the Electron window.
+/// For crossfading, music alternates between two players: the next song starts on the other one while the last
+/// fades out. The equalizer and volume levelling are VLC's own, set as the Windows app's settings say.
 /// </summary>
 public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
 {
     readonly LibVLC _vlc;
     readonly MediaPlayer _mp;
+    /// <summary>The second player music crossfades onto (made the first time it is needed).</summary>
+    MediaPlayer? _mp2;
+    /// <summary>The player that is heard now and that the controls work: <see cref="_mp"/> or <see cref="_mp2"/>.</summary>
+    volatile MediaPlayer _cur;
+    /// <summary>A player whose song was handed over early for a crossfade: its own end must not count as the end again.</summary>
+    volatile MediaPlayer? _handedOver;
+    bool _isVideo;
     // libVLC must not be re-entered from its own callback threads, and Stop can block: all commands go through one worker.
     readonly BlockingCollection<Action> _ops = new();
     bool _awaitingOpen;
@@ -30,8 +39,9 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
     public VlcEngine()
     {
         InitializeLibVlc();
-        // no --quiet: it would also silence the log callback below, which keeps only warnings and errors anyway
-        _vlc = new LibVLC("--no-video-title-show", "--no-osd");
+        // no --quiet: it would also silence the log callback below, which keeps only warnings and errors anyway.
+        // The equalizer uses the standard ten bands (31 Hz to 16 kHz), as the Windows app's does.
+        _vlc = new LibVLC("--no-video-title-show", "--no-osd", "--no-equalizer-vlcfreqs");
         // VLC's own errors go to vlc.log next to the library, for troubleshooting (it is kept small)
         var log = Path.Combine(AppPaths.DataDir, "vlc.log");
         try { if (File.Exists(log) && new FileInfo(log).Length > 256_000) File.Delete(log); } catch { }
@@ -41,15 +51,10 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
             try { lock (LogLock) File.AppendAllText(log, $"{DateTime.Now:HH:mm:ss} {e.Level} {e.Module}: {e.Message}\n"); } catch { }
         };
         _mp = new MediaPlayer(_vlc) { EnableKeyInput = false, EnableMouseInput = false };
+        _cur = _mp;
         Video = new VideoOut(_mp);
-        _mp.Playing += (_, _) => MainLoop.Post(() =>
-        {
-            if (!_awaitingOpen) return;
-            _awaitingOpen = false;
-            Opened?.Invoke();
-        });
-        _mp.EndReached += (_, _) => MainLoop.Post(() => { StopAnalysis(); Ended?.Invoke(); });
-        _mp.EncounteredError += (_, _) => MainLoop.Post(() => Failed?.Invoke("the file or stream could not be opened"));
+        Hook(_mp);
+        _fadeTimer = MainLoop.Every(100, FadeTick);
         new Thread(() => { foreach (var op in _ops.GetConsumingEnumerable()) try { op(); } catch { } }) { IsBackground = true, Name = "vlc" }.Start();
     }
 
@@ -150,19 +155,155 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
 
     Media Open(string url) => url.Contains("://") ? new Media(_vlc, new Uri(url)) : new Media(_vlc, url, FromType.FromPath);
 
+    void Hook(MediaPlayer mp)
+    {
+        mp.Playing += (_, _) => MainLoop.Post(() =>
+        {
+            if (!ReferenceEquals(mp, _cur) || !_awaitingOpen) return;
+            _awaitingOpen = false;
+            Opened?.Invoke();
+        });
+        mp.EndReached += (_, _) => MainLoop.Post(() =>
+        {
+            // a song handed over early (crossfade) already counted as ended; one that faded out on its own just stops
+            if (ReferenceEquals(mp, _handedOver)) { _handedOver = null; return; }
+            if (!ReferenceEquals(mp, _cur)) return;
+            StopAnalysis();
+            Ended?.Invoke();
+        });
+        mp.EncounteredError += (_, _) => MainLoop.Post(() => { if (ReferenceEquals(mp, _cur)) Failed?.Invoke("the file or stream could not be opened"); });
+    }
+
+    MediaPlayer Other(MediaPlayer mp)
+    {
+        if (!ReferenceEquals(mp, _mp)) return _mp;
+        if (_mp2 == null)
+        {
+            _mp2 = new MediaPlayer(_vlc) { EnableKeyInput = false, EnableMouseInput = false };
+            Hook(_mp2);
+            if (_eq != null) _mp2.SetEqualizer(_eq);
+        }
+        return _mp2;
+    }
+
+    /// <summary>Options VLC is given for each song (volume levelling); set by the host from the settings.</summary>
+    public Func<string, bool, IEnumerable<string>> MediaOptions = (_, _) => Array.Empty<string>();
+
     public void Load(string url, bool isVideo)
     {
         _url = url;
         _awaitingOpen = true;
         _analysisWanted = !isVideo;
+        var options = MediaOptions(url, isVideo).ToList();
+        // the next song of a crossfade starts on the other player while the last one fades out
+        var crossfade = !isVideo && !_isVideo && _handedOver != null && ReferenceEquals(_handedOver, _cur) && _fadeSeconds > 0;
+        var from = _cur;
+        var to = isVideo ? _mp : crossfade ? Other(from) : from;
+        _isVideo = isVideo;
+        if (!ReferenceEquals(to, from) && !crossfade) { var old = from; _ops.Add(() => old.Stop()); }
+        _cur = to;
+        if (crossfade) { _fading = from; _fadeStart = DateTime.UtcNow; _fadeIn = to; }
+        else { _fading = null; _fadeIn = null; }
+        var startVolume = crossfade ? 0 : _volume;
+        var speed = _speed;
         _ops.Add(() =>
         {
             using var media = Open(url);
-            _mp.Play(media);
-            _mp.Volume = _volume;
-            if (Math.Abs(_speed - 1) > 0.001) _mp.SetRate(_speed);
+            foreach (var o in options) media.AddOption(o);
+            if (!isVideo && !ReferenceEquals(to, _mp)) media.AddOption(":no-video");
+            to.Play(media);
+            to.Volume = startVolume;
+            to.Mute = _muted;
+            if (Math.Abs(speed - 1) > 0.001) to.SetRate(speed);
         });
         RestartAnalysis();
+    }
+
+    // ---------- crossfade ----------
+
+    double _fadeSeconds;
+    MediaPlayer? _fading, _fadeIn;
+    DateTime _fadeStart;
+    readonly Timer _fadeTimer;
+
+    /// <summary>Seconds songs overlap (0: back to back). Videos, podcasts and audiobooks are never crossfaded.</summary>
+    public double Crossfade { get => _fadeSeconds; set => _fadeSeconds = Math.Clamp(value, 0, 12); }
+    /// <summary>How many songs have handed over to the next early, for a crossfade (self-test).</summary>
+    public int Handovers { get; private set; }
+    /// <summary>Whether what is playing now may hand over early (music; set by the host for each item).</summary>
+    public bool FadeThis { get; set; }
+
+    void FadeTick()
+    {
+        // near the end of a song: say it has ended, so the next one starts while this one fades out
+        var cur = _cur;
+        if (_fadeSeconds > 0 && FadeThis && !_isVideo && _handedOver == null && _fading == null && cur.IsPlaying)
+        {
+            long length = cur.Length, at = cur.Time;
+            if (length > _fadeSeconds * 3000 && at > 0 && length - at <= _fadeSeconds * 1000)
+            {
+                Handovers++;
+                _handedOver = cur;
+                StopAnalysis();
+                Ended?.Invoke();
+                // nothing came next (the end of the list): the song plays out, fading
+                if (ReferenceEquals(_cur, cur) && _fading == null) { _fading = cur; _fadeIn = null; _fadeStart = DateTime.UtcNow; }
+            }
+        }
+        if (_fading == null) return;
+        var t = Math.Clamp((DateTime.UtcNow - _fadeStart).TotalSeconds / Math.Max(0.5, _fadeSeconds), 0, 1);
+        int down = (int)Math.Round(_volume * (1 - t)), up = (int)Math.Round(_volume * t);
+        var fading = _fading;
+        var fadeIn = _fadeIn;
+        _ops.Add(() =>
+        {
+            fading.Volume = down;
+            if (fadeIn != null) fadeIn.Volume = up;
+        });
+        if (t >= 1)
+        {
+            if (!ReferenceEquals(fading, _cur)) _ops.Add(() => fading.Stop());
+            // stopped before its own end: that end will not come, so the next song may hand over in its turn
+            if (ReferenceEquals(_handedOver, fading) && !ReferenceEquals(fading, _cur)) _handedOver = null;
+            _fading = null;
+            _fadeIn = null;
+        }
+    }
+
+    // ---------- equalizer ----------
+
+    Equalizer? _eq;
+
+    /// <summary>Ten bands' gains in decibels (31 Hz to 16 kHz), or null for no equalizer.</summary>
+    public void SetEqualizer(double[]? gains)
+    {
+        _ops.Add(() =>
+        {
+            if (gains == null || gains.All(g => Math.Abs(g) < 0.05))
+            {
+                _eq = null;
+                _mp.UnsetEqualizer();
+                _mp2?.UnsetEqualizer();
+                return;
+            }
+            var eq = new Equalizer();
+            for (uint b = 0; b < Math.Min(eq.BandCount, (uint)gains.Length); b++) eq.SetAmp((float)Math.Clamp(gains[b], -12, 12), b);
+            // as on Windows: whatever the bands lift is taken off the whole, so loud songs don't clip
+            eq.SetPreamp((float)-Math.Max(0, gains.Max()));
+            _eq = eq;
+            _mp.SetEqualizer(eq);
+            _mp2?.SetEqualizer(eq);
+        });
+    }
+
+    /// <summary>The equalizer's band frequencies in hertz (for the self-test).</summary>
+    public float[] BandFrequencies
+    {
+        get
+        {
+            using var eq = new Equalizer();
+            return Enumerable.Range(0, (int)eq.BandCount).Select(i => eq.BandFrequency((uint)i)).ToArray();
+        }
     }
 
     // ---------- video thumbnails ----------
@@ -225,22 +366,41 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
         }
     }
 
-    public void Play() { _ops.Add(() => _mp.SetPause(false)); _ops.Add(() => _an?.SetPause(false)); }
-    public void Pause() { _ops.Add(() => _mp.SetPause(true)); _ops.Add(() => _an?.SetPause(true)); }
-    public void Stop() { _awaitingOpen = false; _ops.Add(() => _mp.Stop()); StopAnalysis(); }
-    public long PositionMs => Math.Max(0, _mp.Time);
-    public long DurationMs => Math.Max(0, _mp.Length);
+    public void Play() { var c = _cur; var f = _fading; _ops.Add(() => { c.SetPause(false); if (f != null && !ReferenceEquals(f, c)) f.SetPause(false); }); _ops.Add(() => _an?.SetPause(false)); }
+    public void Pause() { var c = _cur; var f = _fading; _ops.Add(() => { c.SetPause(true); if (f != null && !ReferenceEquals(f, c)) f.SetPause(true); }); _ops.Add(() => _an?.SetPause(true)); }
+
+    public void Stop()
+    {
+        _awaitingOpen = false;
+        var c = _cur;
+        // the end of the list, reached by a crossfade's early hand-over: the last song plays out, fading
+        if (ReferenceEquals(_handedOver, c) && ReferenceEquals(_fading, c)) { StopAnalysis(); return; }
+        _handedOver = null;
+        var others = new[] { _mp, _mp2 }.Where(m => m != null && !ReferenceEquals(m, c)).ToList();
+        _fading = _fadeIn = null;
+        _ops.Add(() => { c.Stop(); foreach (var o in others) o!.Stop(); });
+        StopAnalysis();
+    }
+
+    public long PositionMs => Math.Max(0, _cur.Time);
+    public long DurationMs => Math.Max(0, _cur.Length);
 
     public void SeekTo(long ms)
     {
-        _ops.Add(() => _mp.Time = ms);
+        var c = _cur;
+        _ops.Add(() => c.Time = ms);
         _ops.Add(() => { if (_an is { IsPlaying: true }) _an.Time = ms; });
     }
 
     public float Volume
     {
         get => _volume / 100f;
-        set { _volume = (int)Math.Clamp(value * 100, 0, 100); _ops.Add(() => _mp.Volume = _volume); }
+        set
+        {
+            _volume = (int)Math.Clamp(value * 100, 0, 100);
+            var c = _cur;
+            if (_fading == null) _ops.Add(() => c.Volume = _volume);
+        }
     }
 
     float _speed = 1;
@@ -248,14 +408,14 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
     public float Speed
     {
         get => _speed;
-        set { _speed = Math.Clamp(value, 0.25f, 4f); var r = _speed; _ops.Add(() => _mp.SetRate(r)); _ops.Add(() => _an?.SetRate(r)); }
+        set { _speed = Math.Clamp(value, 0.25f, 4f); var r = _speed; var c = _cur; _ops.Add(() => c.SetRate(r)); _ops.Add(() => _an?.SetRate(r)); }
     }
 
     bool _muted;
     public bool Muted
     {
         get => _muted;
-        set { _muted = value; _ops.Add(() => _mp.Mute = value); }
+        set { _muted = value; _ops.Add(() => { _mp.Mute = value; if (_mp2 != null) _mp2.Mute = value; }); }
     }
 
     // ---------- visualizer feed ----------
@@ -312,8 +472,8 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
     {
         var an = _an;
         if (an == null || !_analysisOn || _syncTimer == null) return;
-        var target = _mp.Time;
-        var playing = _mp.IsPlaying;
+        var target = _cur.Time;
+        var playing = _cur.IsPlaying;
         _ops.Add(() =>
         {
             if (!an.IsPlaying && playing && an.State == VLCState.Paused) an.SetPause(false);
@@ -339,7 +499,8 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
             _syncTimer?.Dispose();
             _ops.CompleteAdding();
             // Stop on a side thread with a deadline: a hung network stream must not keep the app from closing.
-            Task.Run(() => { try { _an?.Stop(); _mp.Stop(); } catch { } }).Wait(2000);
+            _fadeTimer.Dispose();
+            Task.Run(() => { try { _an?.Stop(); _mp.Stop(); _mp2?.Stop(); } catch { } }).Wait(2000);
         }
         catch { }
     }

@@ -24,6 +24,7 @@ public static partial class Api
         RegisterMetadata();
         RegisterTools();
         RegisterNow();
+        RegisterPlayback();
         Updates.Register();
     }
 

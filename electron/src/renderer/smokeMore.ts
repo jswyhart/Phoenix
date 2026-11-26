@@ -141,10 +141,11 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   check("the sleep timer switches off", !st.sleepOn && st.sleep === "");
   await call("player.speed", { value: 1.5 });
   st = await call<PlayerState>("player.state");
-  const p1 = st.pos;
-  await sleep(1000);
-  const p2 = (await call<PlayerState>("player.state")).pos;
-  check("playback speed changes, and the clock runs faster", st.canSpeed && st.speed === 1.5 && p2 - p1 > 1250, `${st.speed}×, ${p2 - p1} ms in a second`);
+  const p1 = st.pos, t1 = performance.now();
+  await sleep(1500);
+  const p2 = (await call<PlayerState>("player.state")).pos, t2 = performance.now();
+  const rate = (p2 - p1) / (t2 - t1);
+  check("playback speed changes, and the clock runs faster", st.canSpeed && st.speed === 1.5 && rate > 1.25, `${st.speed}×, the clock ran ${rate.toFixed(2)}× as fast`);
   await call("player.speed", { value: 1 });
   await call("player.stop");
 
@@ -224,6 +225,50 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runCare(check, shot, settle, songs);
   await runTools(check, shot, settle, songs);
   await runNow(check, shot, settle, until, songs);
+  await runPlayback(check, shot, settle, until, songs);
+}
+
+// ---------- playback: equalizer, levelling, crossfade ----------
+
+async function runPlayback(check: Check, shot: Shot, settle: Settle, until: Until, songs: Song[]) {
+  const bands = await call<number[]>("playback.bands");
+  check("the equalizer has the standard ten bands, 31 Hz to 16 kHz", bands.length === 10 && Math.abs(bands[0] - 31) < 2 && Math.abs(bands[9] - 16000) < 100, bands.map(Math.round).join(", "));
+  let pb = await call<any>("playback.set", { eqEnabled: true, eqPreset: "rock" });
+  check("an equalizer preset sets the bands", pb.eqPreset === "rock" && pb.eqGains[0] === 5 && pb.eqGains[9] === 4.5, pb.eqGains.join(","));
+  pb = await call<any>("playback.set", { band: 2, gain: -3.3 });
+  check("moving a band by hand makes it custom", pb.eqPreset === "custom" && pb.eqGains[2] === -3.5, `${pb.eqPreset} ${pb.eqGains[2]}`);
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Playback");
+  await settle(400);
+  check("settings: playback shows crossfade, levelling and ten equalizer sliders", document.querySelectorAll("input.eqband").length === 10 && text("#root").includes("CROSSFADE") && text("#root").includes("Play every song at about the same loudness"));
+  await shot("39-settings-playback");
+  await call("playback.set", { eqEnabled: false, eqPreset: "flat" });
+
+  pb = await call<any>("playback.set", { levelling: true, levelMeasure: true });
+  await call("player.volume", { value: 0 });
+  await call("play.tracks", { ids: [songs[0].id] });
+  const lv = await call<{ options: string[] }>("smoke.playback", { id: songs[0].id });
+  await call("player.stop");
+  check("levelling asks VLC for ReplayGain, and evens out a song without tags", lv.options.some(o => o === ":audio-replay-gain-mode=track") && lv.options.includes(":audio-filter=normvol"), lv.options.join(" "));
+  await call("playback.set", { levelling: false });
+
+  // crossfade: the next song starts before the last one has ended
+  await call("player.volume", { value: 0 });
+  await call("playback.set", { crossfade: 1 });
+  const before = (await call<{ handovers: number }>("smoke.playback", { id: songs[0].id })).handovers;
+  await call("play.tracks", { ids: songs.slice(0, 3).map(s => s.id), start: songs[0].id });
+  const started = Date.now();
+  await until(async () => (await call<PlayerState>("player.state")).current?.title === songs[1].title, 8000);
+  const took = Date.now() - started;
+  const after = (await call<{ handovers: number }>("smoke.playback", { id: songs[0].id })).handovers;
+  const st = await call<PlayerState>("player.state");
+  check("with crossfade, the next song starts before the last one ends", after === before + 1 && st.current?.title === songs[1].title && took < 3900 && st.playing, `${took} ms, ${after - before} hand-over`);
+  await sleep(600);
+  check("and plays on", (await call<PlayerState>("player.state")).pos > 200);
+  await call("player.stop");
+  await call("playback.set", { crossfade: 0 });
+  settings.showCategory("software");
 }
 
 // ---------- Mixview, lyrics, quickplay clicks, display settings ----------

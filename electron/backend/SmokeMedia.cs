@@ -69,6 +69,11 @@ public static partial class Api
             return new { copy, tracks = Lib.Tracks.Count };
         });
         Rpc.On("smoke.deleteFile", p => { File.Delete(p.Str("path")); return !File.Exists(p.Str("path")); });
+        Rpc.On("smoke.playback", p => new
+        {
+            handovers = Program.Engine.Handovers,
+            options = LevelOptions(Lib.ById[p.Long("id")].SourceId, false).ToList()
+        });
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>

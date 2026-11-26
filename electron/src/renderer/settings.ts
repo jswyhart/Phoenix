@@ -8,6 +8,7 @@ import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSect
 import { customTabsSection, streamingPanel } from "./settingsWeb";
 import { metadataPanel } from "./settingsMeta";
 import { loadDisplay, lyricsSection, photosSection, quickplaySection } from "./settingsDisplay";
+import { playbackPanel } from "./settingsPlayback";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -44,11 +45,11 @@ export function fitPath(path: string, width: number, font = '14px "Selawik"'): s
 
 export interface SettingsPage extends Page {
   showCategory(pivot: string, category?: string): void; shown_(): string; refreshFolders(): Promise<void>;
-  updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>; meta: ReturnType<typeof metadataPanel>;
+  updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>; meta: ReturnType<typeof metadataPanel>; playback: ReturnType<typeof playbackPanel>;
 }
 
 const GROUPS: Record<string, string[]> = {
-  software: ["Collection", "Metadata", "Listening", "Translation", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex", "Streaming"],
+  software: ["Collection", "Metadata", "Playback", "Listening", "Translation", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex", "Streaming"],
 };
 
 export function settingsPage(): SettingsPage {
@@ -213,9 +214,9 @@ export function settingsPage(): SettingsPage {
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
   const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
-  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection();
+  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), playback = playbackPanel();
   const display = { shown: async () => { await loadDisplay(); quick.shown(); photos.shown(); lyrics.shown(); } };
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display] };
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display], Playback: [playback] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -227,6 +228,7 @@ export function settingsPage(): SettingsPage {
     Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
       row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
     Translation: h("div", h("div.h2", "translation and lyrics"), lyrics.el),
+    Playback: playback.el,
     Streaming: streaming.el,
     Listening: listening.el,
     Storage: storage.el,
@@ -293,5 +295,5 @@ export function settingsPage(): SettingsPage {
   showCategory("software");
   paintFolders();
   void refreshStatus();
-  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening, meta };
+  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening, meta, playback };
 }

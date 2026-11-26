@@ -76,6 +76,7 @@ public class Settings
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
     public bool Levelling { get; set; }                   // play every song at about the same loudness
     public bool LevelByAlbum { get; set; }                // keep an album's loud and quiet songs as they are to each other
+    public bool LevelMeasure { get; set; } = true;        // songs without ReplayGain tags are measured (desktop: evened out as they play)
     public bool EqEnabled { get; set; }
     public string EqPreset { get; set; } = "flat";
     public double[] EqGains { get; set; } = new double[10];
