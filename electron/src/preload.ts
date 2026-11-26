@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld("phoenix", {
   trash: (path: string): Promise<boolean> => ipcRenderer.invoke("phoenix:trash", path),
   /** Closes Phoenix (an update or going back is put in place once it has closed). */
   quit: (): Promise<void> => ipcRenderer.invoke("phoenix:quit"),
+  /** Opens (true) or closes (false) the mini player. */
+  mini: (on: boolean): Promise<void> => ipcRenderer.invoke("phoenix:mini", on),
+  miniState: (): Promise<unknown> => ipcRenderer.invoke("phoenix:miniState"),
   videoSocket: (): Promise<string> => ipcRenderer.invoke("phoenix:videoSocket"),
   /** Self-test only (started with --smoke): where to write results; null otherwise. */
   smoke: smokeArg ? smokeArg.slice("--phoenix-smoke=".length) : null,

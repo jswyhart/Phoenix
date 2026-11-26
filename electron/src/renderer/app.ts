@@ -1,5 +1,15 @@
 // The window: header navigation, the page in the middle, the now-playing layer, and the transport bar.
 import { call, clock, host, Init, on, PlayerState, time } from "./api";
+
+/** A second of silence as a WAV (for the system's media controls; see paintSession). */
+function silentWav(): string {
+  const rate = 8000, n = rate, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const text = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  text(0, "RIFF"); v.setUint32(4, 36 + n, true); text(8, "WAVE"); text(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); text(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
 import { booksPage } from "./books";
 import { carePage } from "./care";
 import { mixviewPage, MixviewPage } from "./mixview";
@@ -21,7 +31,7 @@ import { Page, shell } from "./shell";
 import { runSmoke } from "./smoke";
 import { videosPage } from "./videos";
 import { customTabPage, loadWeb, onWeb, remote, serviceById, WebServicePage, webState } from "./web";
-import { art, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Slider } from "./ui";
+import { art, artUrl, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Slider } from "./ui";
 
 const makers: Record<string, () => Page> = {
   quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
@@ -52,6 +62,8 @@ async function start() {
   const status = h("div.status.ell");
   const search = h("input", { type: "text", placeholder: "search", spellcheck: false });
   const logo = h("button.logo", { title: "Quickplay", onclick: () => navigate("quickplay"), tabIndex: -1 }, h("img", { src: "phoenix.svg", alt: "", draggable: false }));
+  const miniBtn = iconBtn("mini", "Mini player: a small window that stays on top", () => void host.mini(true));
+  miniBtn.style.marginRight = "14px";
   const sub = new Map<string, HTMLElement>();
   const subNav = h("div.subnav");
   /**
@@ -80,7 +92,7 @@ async function start() {
   const header = h("div.header",
     h("div.top",
       h("div", backBtn, topNav("quickplay", "QUICKPLAY"), topNav("collection", "COLLECTION"), topNav("settings", "SETTINGS"), status),
-      h("div", h("div.searchbox", search, icon("search", 12)), logo)),
+      h("div", miniBtn, h("div.searchbox", search, icon("search", 12)), logo)),
     subNav);
   // pages are swapped in the first slot; streaming services' pages stay in the second (a <webview> taken out of the
   // window would stop playing and lose its place), shown or moved out of sight
@@ -275,6 +287,7 @@ async function start() {
     heartBtn.classList.toggle("heartfull", rated > 0);
     heartBtn.style.opacity = cur?.trackId == null ? "" : rated < 0 ? "0.45" : "";
     paintClock(s.pos, s.dur);
+    paintSession(s);
     const changed = (cur?.title ?? "") !== lastTitle || before?.index !== s.index || (before?.current == null) !== (cur == null);
     lastTitle = cur?.title ?? "";
     now.playerChanged(s, changed);
@@ -286,6 +299,33 @@ async function start() {
     const mode = [sleep, s.canSpeed && Math.abs(s.speed - 1) > 0.01 ? `${s.speed}× speed` : ""].filter(x => x).join("  ·  ");
     moreBtn.classList.toggle("on", mode !== "");
     moreBtn.title = mode || "Sleep timer, playback speed";
+  }
+
+  // ---------- the system's media controls (macOS Now Playing, Linux MPRIS, media keys) ----------
+  // Chromium shows a page's media session to the system only while the page itself plays something, so a silent
+  // sound loops while Phoenix plays (the sound is VLC's, in the helper).
+  const silence = new Audio(silentWav());
+  silence.loop = true;
+  silence.volume = 0.01;
+  const session = navigator.mediaSession;
+  try {
+    session.setActionHandler("play", () => { if (!shell.player.playing) toggle(); });
+    session.setActionHandler("pause", () => { if (shell.player.playing) toggle(); });
+    session.setActionHandler("nexttrack", () => void call("player.next"));
+    session.setActionHandler("previoustrack", () => void call("player.prev"));
+    session.setActionHandler("seekto", d => { if (d.seekTime != null) void call("player.seek", { ms: Math.round(d.seekTime * 1000) }); });
+    session.setActionHandler("stop", () => void call("player.stop"));
+  } catch { /* an older engine without some actions */ }
+  let lastSession = "";
+  function paintSession(s: PlayerState) {
+    const cur = s.current;
+    const key = `${cur?.title}|${cur?.subtitle}|${cur?.art}`;
+    if (key !== lastSession) {
+      lastSession = key;
+      session.metadata = cur ? new MediaMetadata({ title: cur.title, artist: cur.subtitle, album: cur.album, artwork: cur.art ? [{ src: artUrl(cur.art, 512), sizes: "512x512", type: "image/jpeg" }] : [] }) : null;
+    }
+    session.playbackState = !cur ? "none" : s.playing ? "playing" : "paused";
+    if (s.playing && cur && !cur.isVideo) void silence.play().catch(() => {}); else silence.pause();
   }
 
   function paintClock(pos: number, dur: number) {
@@ -350,7 +390,9 @@ async function start() {
   if (host.smoke) void runSmoke();
 }
 
-start().catch(e => {
+// the mini player's window loads this same page with #mini
+if (location.hash === "#mini") void import("./mini").then(m => m.startMini());
+else start().catch(e => {
   document.getElementById("root")!.append(h("div.center-note", h("div.h2", "Phoenix couldn't start"), h("div.note", String(e?.message ?? e))));
   if (host.smoke) void host.smokeDone(`FAIL  app starts  ${e?.message ?? e}\n1 FAILED\n`, 1);
 });

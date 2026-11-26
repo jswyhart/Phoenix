@@ -13,6 +13,8 @@ export interface Host {
   relaunch(): Promise<void>;
   quit(): Promise<void>;
   trash(path: string): Promise<boolean>;
+  mini(on: boolean): Promise<void>;
+  miniState(): Promise<{ open: boolean; visible?: boolean; onTop?: boolean; text?: string }>;
   setFullscreen(on: boolean): Promise<void>;
   videoSocket(): Promise<string>;
   smoke: string | null;

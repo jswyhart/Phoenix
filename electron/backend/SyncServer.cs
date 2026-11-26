@@ -67,6 +67,7 @@ public class SyncServer
         }
         catch (Exception ex)
         {
+            Program.LogError("phone sync start", ex);
             LastError = ex is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse }
                 ? $"Port {port} is already in use: another copy of Phoenix (or Halcyon) with phone sync on is running on this computer."
                 : ex.Message;

@@ -204,7 +204,7 @@ async function artResponse(url: URL): Promise<Response> {
   return new Response(new Uint8Array(jpeg), { headers: { "content-type": "image/jpeg", "cache-control": "no-cache" } });
 }
 
-const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' phoenix: data: blob:; connect-src 'self' ws://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' phoenix: data: blob:; media-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml", ".png": "image/png", ".ttf": "font/ttf", ".txt": "text/plain; charset=utf-8",
@@ -221,8 +221,33 @@ function appResponse(url: URL): Response {
 
 // ---------- window ----------
 
+let mini: BrowserWindow | null = null;
+
 function fromOurPage(e: Electron.IpcMainInvokeEvent): boolean {
-  return !!win && e.sender === win.webContents && e.senderFrame === win.webContents.mainFrame && (e.senderFrame?.url ?? "").startsWith("phoenix://app/");
+  const ours = [win, mini].find(w => !!w && e.sender === w.webContents);
+  return !!ours && e.senderFrame === ours.webContents.mainFrame && (e.senderFrame?.url ?? "").startsWith("phoenix://app/");
+}
+
+/** The mini player: a small window that stays on top; the main window is hidden while it is open (as on Windows). */
+function showMini(on: boolean) {
+  if (on && !mini) {
+    mini = new BrowserWindow({
+      width: 380, height: 96, resizable: false, frame: false, alwaysOnTop: true, skipTaskbar: false, title: "Phoenix", show: false,
+      backgroundColor: "#f3f3f3", fullscreenable: false, maximizable: false,
+      webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, spellcheck: false,
+        additionalArguments: [`--phoenix-platform=${isMac ? "mac" : isWin ? "win" : "linux"}`] },
+    });
+    mini.webContents.on("will-navigate", e => e.preventDefault());
+    mini.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    mini.once("ready-to-show", () => { mini?.show(); mini?.setAlwaysOnTop(true, "floating"); win?.hide(); });
+    mini.on("closed", () => { mini = null; if (win && !win.isVisible()) win.show(); });
+    void mini.loadURL("phoenix://app/index.html#mini");
+  } else if (!on && mini) {
+    const m = mini;
+    win?.show();
+    win?.focus();
+    m.close();
+  }
 }
 
 function handle(channel: string, fn: (...args: any[]) => unknown) {
@@ -327,6 +352,7 @@ else {
     backend.onEvent = (name, data) => {
       if (name === "helper-exit") { if (!quitting) fail(String(data)); return; }
       win?.webContents.send("phoenix:event", name, data);
+      mini?.webContents.send("phoenix:event", name, data);
     };
     try { await backend.ready; }
     catch (e) { fail(backend.fatal ?? (e as Error).message); return; }
@@ -364,6 +390,9 @@ else {
       return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0];
     });
     handle("phoenix:quit", async () => { if (!smokeDir) await quit(0); });
+    handle("phoenix:mini", (on: unknown) => showMini(!!on));
+    // self-test: whether the mini player is open, and what it shows
+    handle("phoenix:miniState", async () => mini ? { open: true, visible: mini.isVisible(), onTop: mini.isAlwaysOnTop(), text: String(await mini.webContents.executeJavaScript("document.body.innerText")) } : { open: false });
     handle("phoenix:trash", async (file: unknown) => {
       if (typeof file !== "string" || !path.isAbsolute(file) || !fs.existsSync(file)) return false;
       try { await shell.trashItem(file); return true; } catch { return false; }

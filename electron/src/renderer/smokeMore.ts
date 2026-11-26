@@ -227,6 +227,26 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runNow(check, shot, settle, until, songs);
   await runPlayback(check, shot, settle, until, songs);
   await runPodcastDownloads(check, shot, settle, until);
+  await runMini(check, until, songs);
+}
+
+// ---------- the mini player and the system's media controls ----------
+
+async function runMini(check: Check, until: Until, songs: Song[]) {
+  await call("player.volume", { value: 0 });
+  await call("play.tracks", { ids: [songs[0].id] });
+  await until(() => navigator.mediaSession.playbackState === "playing", 4000);
+  const md = navigator.mediaSession.metadata;
+  check("the system's media controls are told what is playing", md?.title === songs[0].title && md?.artist === "Quiet Trio" && navigator.mediaSession.playbackState === "playing",
+    `${md?.title} / ${md?.artist} / ${navigator.mediaSession.playbackState}`);
+  await host.mini(true);
+  await until(async () => (await host.miniState()).visible === true && ((await host.miniState()).text ?? "").includes(songs[0].title), 6000);
+  const m = await host.miniState();
+  check("the mini player opens and shows the song", m.open && !!m.visible && (m.text ?? "").includes(songs[0].title), JSON.stringify(m));
+  await host.mini(false);
+  await until(async () => !(await host.miniState()).open, 4000);
+  check("back to full view closes the mini player", !(await host.miniState()).open);
+  await call("player.stop");
 }
 
 // ---------- podcast downloads ----------
