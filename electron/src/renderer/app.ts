@@ -2,8 +2,11 @@
 import { call, clock, host, Init, on, PlayerState, time } from "./api";
 import { booksPage } from "./books";
 import { carePage } from "./care";
+import { mixviewPage, MixviewPage } from "./mixview";
+import { menuHooks } from "./songs";
 import { installDialogs } from "./dialogs";
 import { installTools } from "./tools";
+import { loadDisplay } from "./settingsDisplay";
 import { musicPage } from "./music";
 import { NowPlaying } from "./nowplaying";
 import { installPhoneMenu, phonePage } from "./phone";
@@ -22,7 +25,7 @@ import { art, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Sli
 
 const makers: Record<string, () => Page> = {
   quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
-  books: booksPage, playlists: playlistsPage, radio: radioPage, phone: phonePage, search: searchPage, settings: settingsPage, stats: statsPage, care: carePage,
+  books: booksPage, playlists: playlistsPage, radio: radioPage, phone: phonePage, search: searchPage, settings: settingsPage, stats: statsPage, care: carePage, mixview: mixviewPage,
 };
 
 async function start() {
@@ -33,6 +36,7 @@ async function start() {
   shell.queue = init.queue;
   shell.tabs = init.tabs;
   await loadWeb();
+  await loadDisplay();
   void call<{ canIdentify: boolean }>("meta.state").then(m => { shell.canIdentify = m.canIdentify; });
   const root = document.getElementById("root")!;
 
@@ -215,6 +219,7 @@ async function start() {
     h("div.right", moreBtn, shuffleBtn, prevBtn, playBtn, nextBtn, repeatBtn, muteBtn, volume.el));
 
   const now = new NowPlaying(transport);
+  shell.nowPlaying = now;
   shell.showNow = show => now.show(show);
   shell.nowOpen = () => now.open;
   shell.video = now.videoView;
@@ -339,6 +344,7 @@ async function start() {
   installPhoneMenu();
   installDialogs();
   installTools();
+  menuHooks.mixview = (key, artist) => { navigate("mixview"); void get<MixviewPage>("mixview").show(key, artist); };
   navigate("quickplay");
   paintPlayer(init.player);
   if (host.smoke) void runSmoke();

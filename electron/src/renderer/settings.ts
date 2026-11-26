@@ -7,6 +7,7 @@ import { h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 import { customTabsSection, streamingPanel } from "./settingsWeb";
 import { metadataPanel } from "./settingsMeta";
+import { loadDisplay, lyricsSection, photosSection, quickplaySection } from "./settingsDisplay";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -47,7 +48,7 @@ export interface SettingsPage extends Page {
 }
 
 const GROUPS: Record<string, string[]> = {
-  software: ["Collection", "Metadata", "Listening", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex", "Streaming"],
+  software: ["Collection", "Metadata", "Listening", "Translation", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex", "Streaming"],
 };
 
 export function settingsPage(): SettingsPage {
@@ -212,7 +213,9 @@ export function settingsPage(): SettingsPage {
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
   const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, viz], Streaming: [streaming], Metadata: [meta] };
+  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection();
+  const display = { shown: async () => { await loadDisplay(); quick.shown(); photos.shown(); lyrics.shown(); } };
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -222,7 +225,8 @@ export function settingsPage(): SettingsPage {
       scanStatus),
     Metadata: meta.el,
     Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
-      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, viz.el),
+      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
+    Translation: h("div", h("div.h2", "translation and lyrics"), lyrics.el),
     Streaming: streaming.el,
     Listening: listening.el,
     Storage: storage.el,

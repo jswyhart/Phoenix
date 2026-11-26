@@ -44,7 +44,7 @@ export interface TileData { key: string; title: string; caption: string; art: st
 export interface PlayerState {
   current: null | {
     title: string; subtitle: string; album: string; art: string; isVideo: boolean; trackId: number | null; rating: number; isBook: boolean; bookId: number | null;
-    isStation: boolean; stationUrl: string | null; isEpisode: boolean;
+    isStation: boolean; stationUrl: string | null; isEpisode: boolean; artist: string;
   };
   index: number; playing: boolean; shuffle: boolean; repeat: number; volume: number; muted: boolean; pos: number; dur: number;
   sleep: string; sleepOn: boolean; sleepAtEnd: boolean; canSpeed: boolean; speed: number;

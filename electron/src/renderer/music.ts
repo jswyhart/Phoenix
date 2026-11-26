@@ -10,6 +10,8 @@ interface MusicView { counts: string; empty: boolean; left: string[] | null; sel
 export interface MusicPage extends Page {
   setMode(mode: string): void; state(): { mode: string; left: string[]; albums: number; songs: Song[]; counts: string }; ready(): Promise<void>;
   bar: ViewBar; tabRow: HTMLElement;
+  /** Shows an album: its artist on the left, the album chosen and its songs. */
+  openAlbum(key: string): Promise<void>;
 }
 
 export function musicPage(): MusicPage {
@@ -115,5 +117,12 @@ export function musicPage(): MusicPage {
     state: () => ({ mode, left: leftItems.slice(1), albums: albums.tiles.length, songs, counts: count.textContent ?? "" }),
     ready: () => pending,
     bar, tabRow: tabBar.el,
+    openAlbum: async key => {
+      const a = await call<{ artist: string } | null>("album.info", { key });
+      if (!a) return;
+      mode = "artists"; sel = a.artist; album = key;
+      load(false);
+      await pending;
+    },
   };
 }

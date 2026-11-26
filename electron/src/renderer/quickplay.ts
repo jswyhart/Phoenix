@@ -2,6 +2,7 @@
 import { call, on } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { h, menuAt, pill, textBtn, TileGrid } from "./ui";
+import type { MusicPage } from "./music";
 
 interface QuickTile { title: string; caption: string; art: string; play: { type: string; key: string }; pin: null | { kind: string; key: string; title: string } }
 interface QuickView { empty: boolean; pins: QuickTile[]; fresh: QuickTile[]; history: QuickTile[]; liked: QuickTile[] }
@@ -9,14 +10,17 @@ interface QuickView { empty: boolean; pins: QuickTile[]; fresh: QuickTile[]; his
 export function quickplayPage(): Page {
   const grid = () => {
     const g = new TileGrid<QuickTile>("small");
-    g.onClick = t => void call("quick.play", t.item.play);
+    g.onClick = t => {
+      if (t.item.play.type === "album" && !shell.display.quickplayPlays) { shell.navigate("music"); void shell.get<MusicPage>("music").openAlbum(t.item.play.key); }
+      else void call("quick.play", t.item.play);
+    };
+    g.onContext = (t, e) => menuAt([
+      { label: "Play", action: () => call("quick.play", t.item.play) },
+      t.item.pin ? { label: "Unpin from quickplay", action: () => call("pin.toggle", t.item.pin) } : null,
+    ], e);
     return g;
   };
   const pins = grid(), fresh = grid(), history = grid(), liked = grid();
-  pins.onContext = (t, e) => {
-    const pin = t.item.pin;
-    if (pin) menuAt([{ label: "Play", action: () => call("quick.play", t.item.play) }, { label: "Unpin from quickplay", action: () => call("pin.toggle", pin) }], e);
-  };
   const hint = (text: string) => h("div.note", { style: { margin: "16px 16px 0 6px" } }, text);
   const pinsHint = hint("Right-click an artist, album or playlist and choose “Pin to quickplay” to keep it here.");
   const historyHint = hint("What you play shows up here.");

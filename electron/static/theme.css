@@ -251,3 +251,35 @@ input[type="range"] { accent-color: var(--accent); }
 .tagrow.sel { background: var(--selected); }
 .tagrow.changed > input:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .tagrow .grow { flex: 1 1 0; min-width: 120px; padding-left: 8px; }
+
+/* now playing: lyrics and artist photos */
+.now .panetabs { display: flex; gap: 18px; flex: none; }
+.now .queue .panetab { color: #777; cursor: pointer; }
+.now .queue .panetab:hover { color: #bbb; }
+.now .queue .panetab.on { color: #fff; }
+.now .lyrics { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; }
+.now .lyriclines { flex: 1 1 0; overflow-y: auto; min-height: 0; font-size: 17px; line-height: 1.55; color: #e8e8e8; padding-right: 8px; user-select: text; }
+.now .lyriclines.synced .lyricline { opacity: 0.45; transition: opacity 0.25s; }
+.now .lyriclines.synced .lyricline.sung { opacity: 1; color: #fff; }
+.now .lyricnote { color: #8a8a8a; font-size: 12px; margin: 8px 0 4px 0; }
+.now .lyricbtns { display: flex; gap: 14px; flex: none; }
+.now .lyricbtns .textbtn { color: #aaa; }
+.now .lyricbtns .textbtn:hover { color: #fff; }
+.now .backdrop { position: absolute; inset: 0; }
+.now .backdrop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 2s; }
+.now .backdrop img.on { opacity: 0.55; }
+
+/* mixview */
+.mixstage { position: absolute; inset: 0; overflow: hidden; }
+.mixlines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mixlines line { stroke: var(--fg-faint); stroke-width: 1; }
+.mixtile { position: absolute; left: 0; top: 0; cursor: pointer; will-change: transform; }
+.mixtile .mixart { background: var(--bg-alt); overflow: hidden; position: relative; }
+.mixtile .mixart img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mixtile .mixglyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--fg-faint); }
+.mixtile:hover .mixart { outline: 2px solid var(--accent); }
+.mixtile.centre .mixart { outline: 2px solid var(--fg-faint); }
+.mixtile .mixtitle { text-align: center; font-size: 12.5px; margin-top: 5px; width: 150px; margin-left: calc(50% - 75px); }
+.mixtile .mixsub { text-align: center; font-size: 11px; color: var(--fg-dim); width: 150px; margin-left: calc(50% - 75px); }
+.mixtile.centre .mixtitle { font-size: 17px; font-weight: 600; width: 320px; margin-left: calc(50% - 160px); margin-top: 8px; }
+.mixtile.centre .mixsub { font-size: 13px; width: 320px; margin-left: calc(50% - 160px); }

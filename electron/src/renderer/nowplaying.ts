@@ -2,7 +2,7 @@
 // or the video itself. Double-click or F11 for full screen.
 import { call, host, on, PlayerState, QueueItem, time } from "./api";
 import { shell } from "./shell";
-import { art, artUrl, h, iconBtn, MenuEntry, menuAt, setArt, VList } from "./ui";
+import { art, artUrl, h, iconBtn, MenuEntry, menuAt, message, setArt, textBtn, VList } from "./ui";
 import { VideoView } from "./video";
 import { decodeScope, dominantColor, Viz } from "./viz";
 
@@ -29,6 +29,20 @@ export class NowPlaying {
   private lastArt: string | null = null;
   private vizOn = false;
   private mosaicBuilt = false;
+  // the side pane shows the queue or the song's lyrics (as on Windows)
+  private lyricsPane = h("div.lyrics");
+  private lyricsLines = h("div.lyriclines");
+  private lyricsNote = h("div.lyricnote");
+  private lyrics: { synced: boolean; source: string; lines: { ms: number; text: string }[] } | null = null;
+  private lyricsFor: number | null = null;
+  private lineNow = -1;
+  private paneTabs: { queue: HTMLElement; lyrics: HTMLElement };
+  // artist photos behind the song, when switched on in settings → display
+  private backdrop = h("div.backdrop.hidden", h("img"), h("img"));
+  private photos: string[] = [];
+  private photoArtist = "";
+  private photoIndex = 0;
+  private photoTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private transport: HTMLElement) {
     this.viz = new Viz(this.canvas);
@@ -43,10 +57,26 @@ export class NowPlaying {
         if (i >= 0) menuAt([{ label: "Play", action: () => call("player.playAt", { index: i }) }, { label: "Remove from now playing", action: () => call("player.removeAt", { index: i }) }], e);
       },
     });
-    this.queuePane = h("div.queue", h("div.h2", "now playing"), this.queue.el);
+    const tab = (label: string, lyrics: boolean) => h("div.h2.panetab", { onclick: () => void this.showLyrics(lyrics) }, label);
+    this.paneTabs = { queue: tab("now playing", false), lyrics: tab("lyrics", true) };
+    this.lyricsPane.append(this.lyricsLines, this.lyricsNote,
+      h("div.lyricbtns",
+        textBtn("find on LRCLIB", () => void this.lyricsAction("lyrics.find", "looking on LRCLIB…")),
+        textBtn("from a file…", async () => {
+          const file = await host.openFile("Lyrics for this song", [{ name: "Lyrics", extensions: ["lrc", "txt"] }]);
+          if (file) await this.lyricsAction("lyrics.import", "", { file });
+        }),
+        textBtn("paste", async () => {
+          let text = "";
+          try { text = await navigator.clipboard.readText(); } catch { /* nothing to paste */ }
+          if (text.trim() === "") { await message("Copy the lyrics first, then choose paste."); return; }
+          await this.lyricsAction("lyrics.import", "", { text });
+        }),
+        textBtn("remove", () => void this.lyricsAction("lyrics.remove", ""))));
+    this.queuePane = h("div.queue", h("div.panetabs", this.paneTabs.queue, this.paneTabs.lyrics), this.queue.el, this.lyricsPane);
     this.info = h("div.info", h("div.words", h("div.cover", this.cover), this.title, this.artist, this.album), this.queuePane);
     this.vizBtn = iconBtn("visualizer", "Visualizer style and colours (V and C cycle them)", () => menuAt(this.vizMenu(), this.vizBtn));
-    this.el = h("div.now.hidden", this.mosaic, this.shade, this.canvas, this.info, this.video,
+    this.el = h("div.now.hidden", this.mosaic, this.backdrop, this.shade, this.canvas, this.info, this.video,
       h("div.bar",
         iconBtn("back", "Back to collection (Esc)", () => this.show(false)),
         this.vizBtn,
@@ -59,13 +89,120 @@ export class NowPlaying {
       if (this.vizOn) this.viz.feed({ bars: f.bars, peaks: f.peaks, scope: decodeScope(f.scope) });
     });
     document.addEventListener("mousemove", () => { if (this.full) this.wake(); });
+    on("tick", (t: { pos: number }) => this.follow(t.pos));
+    this.paintPaneTabs();
   }
+
+  // ---------- lyrics ----------
+
+  private showingLyrics() { return shell.display.showLyrics; }
+
+  async showLyrics(on: boolean) {
+    const d = await call<typeof shell.display>("display.set", { showLyrics: on });
+    shell.display = d;
+    this.paintPaneTabs();
+    if (on) await this.loadLyrics(true);
+  }
+
+  private paintPaneTabs() {
+    const lyrics = this.showingLyrics();
+    this.paneTabs.queue.classList.toggle("on", !lyrics);
+    this.paneTabs.lyrics.classList.toggle("on", lyrics);
+    this.queue.el.classList.toggle("hidden", lyrics);
+    this.lyricsPane.classList.toggle("hidden", !lyrics);
+  }
+
+  /** The lyrics of the song playing (looked up online by itself only if that is switched on in settings). */
+  async loadLyrics(force = false) {
+    const id = shell.player.current?.trackId ?? null;
+    if (!force && id === this.lyricsFor) return;
+    this.lyricsFor = id;
+    if (id == null) { this.paintLyrics(null, shell.player.current ? "Lyrics are for songs in your collection." : "Nothing is playing."); return; }
+    this.paintLyrics(null, "");
+    const l = await call<typeof this.lyrics>("lyrics.get", { id, auto: true });
+    if (this.lyricsFor !== id) return;
+    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, or take them from a file or the clipboard.");
+  }
+
+  private async lyricsAction(method: string, busy: string, extra: Record<string, string> = {}) {
+    const id = shell.player.current?.trackId;
+    if (id == null) return;
+    if (busy) this.lyricsNote.textContent = busy;
+    try {
+      const l = await call<typeof this.lyrics>(method, { id, ...extra });
+      this.paintLyrics(l, l ? "" : "No lyrics for this song.");
+    } catch (e: any) { this.lyricsNote.textContent = String(e.message ?? e); }
+  }
+
+  private paintLyrics(l: typeof this.lyrics, note: string) {
+    this.lyrics = l;
+    this.lineNow = -1;
+    this.lyricsLines.replaceChildren(...(l?.lines ?? []).map(x => h("div.lyricline", x.text || "\u00a0")));
+    this.lyricsLines.classList.toggle("synced", !!l?.synced);
+    this.lyricsNote.textContent = note || (l ? (l.synced ? "" : "") + l.source : "");
+    this.follow(shell.player.pos);
+  }
+
+  /** Timed lyrics follow the song: the line being sung is lit and kept in view. */
+  private follow(ms: number) {
+    const l = this.lyrics;
+    if (!l?.synced || !this.open) return;
+    let found = -1;
+    for (let i = 0; i < l.lines.length; i++) { if (l.lines[i].ms <= ms) found = i; else break; }
+    if (found === this.lineNow) return;
+    this.lyricsLines.children[this.lineNow]?.classList.remove("sung");
+    this.lineNow = found;
+    const line = this.lyricsLines.children[found] as HTMLElement | undefined;
+    if (!line) return;
+    line.classList.add("sung");
+    this.lyricsLines.scrollTo({ top: line.offsetTop - this.lyricsLines.clientHeight / 2 + line.offsetHeight / 2, behavior: "smooth" });
+  }
+
+  // ---------- artist photos ----------
+
+  private async loadPhotos() {
+    const artist = shell.player.current?.artist ?? "";
+    const on = shell.display.backdrops;
+    if (!on || !artist || shell.player.current?.isVideo) { this.photos = []; this.photoArtist = ""; this.paintPhotos(); return; }
+    if (artist === this.photoArtist) return;
+    this.photoArtist = artist;
+    const found = await call<string[]>("backdrops.for", { artist });
+    if (this.photoArtist !== artist) return;
+    this.photos = found;
+    this.photoIndex = 0;
+    this.paintPhotos();
+  }
+
+  private paintPhotos() {
+    clearInterval(this.photoTimer);
+    const has = this.photos.length > 0;
+    this.backdrop.classList.toggle("hidden", !has);
+    this.layout();
+    if (!has) return;
+    const [a, b] = [...this.backdrop.querySelectorAll("img")] as HTMLImageElement[];
+    const showNext = () => {
+      const front = this.photoIndex % 2 === 0 ? a : b, back = front === a ? b : a;
+      setArt(front, this.photos[this.photoIndex % this.photos.length], 0);
+      front.classList.add("on");
+      back.classList.remove("on");
+      this.photoIndex++;
+    };
+    showNext();
+    if (this.photos.length > 1) this.photoTimer = setInterval(showNext, 12000);
+  }
+
+  /** For the self-test. */
+  get lyricsShown() { return { lines: this.lyrics?.lines.length ?? 0, synced: this.lyrics?.synced ?? false, now: this.lineNow, note: this.lyricsNote.textContent ?? "" }; }
+  get photosShown() { return this.photos.length; }
 
   show(show: boolean) {
     if (!show && this.full) this.toggleFullscreen();
     this.open = show;
     this.el.classList.toggle("hidden", !show);
-    if (show) { void this.buildMosaic(); this.queueChanged(); this.queue.reveal(shell.player.index); }
+    if (show) {
+      void this.buildMosaic(); this.queueChanged(); this.queue.reveal(shell.player.index);
+      void call("display.state").then(d => { shell.display = d; this.paintPaneTabs(); if (this.showingLyrics()) void this.loadLyrics(); void this.loadPhotos(); });
+    }
     this.layout();
   }
 
@@ -100,7 +237,9 @@ export class NowPlaying {
     this.info.classList.toggle("hidden", video);
     this.shade.classList.toggle("hidden", video);
     this.queuePane.classList.toggle("hidden", this.full);
-    this.mosaic.classList.toggle("hidden", video || viz);
+    const photos = this.photos.length > 0 && !video && !viz;
+    this.mosaic.classList.toggle("hidden", video || viz || photos);
+    this.backdrop.classList.toggle("hidden", !photos);
     this.vizBtn.classList.toggle("hidden", video);
     this.canvas.classList.toggle("hidden", !viz);
     this.videoView.setActive(video);
@@ -151,6 +290,8 @@ export class NowPlaying {
       void dominantColor(wanted ? artUrl(wanted, 24) : null).then(c => { if (this.lastArt === wanted) this.viz.coverColor = c; });
     }
     if (itemChanged) {
+      if (this.open && this.showingLyrics()) void this.loadLyrics();
+      if (this.open) void this.loadPhotos();
       if (cur?.isVideo && !this.open) this.show(true); else this.layout();
       if (this.open) { this.queue.redraw(); this.queue.reveal(s.index); }
     }

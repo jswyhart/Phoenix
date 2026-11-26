@@ -25,9 +25,13 @@ export const shell = {
   toggle: () => {},
   /** AcoustID is set up (a key and fpcalc): songs can be identified by their sound. */
   canIdentify: false,
+  /** settings → display's choices the screens follow (quickplay clicks, artist photos, lyrics). */
+  display: { quickplayPlays: false, backdrops: false, lyricsAuto: false, showLyrics: false, backdropUsage: "" },
   nowOpen: () => false,
   /** The video drawing surface (self-test and measurement). */
   video: null as unknown as import("./video").VideoView,
+  /** The now playing layer (self-test). */
+  nowPlaying: null as unknown as import("./nowplaying").NowPlaying,
 };
 
 /** Runs a reload at most once per burst of changes. */

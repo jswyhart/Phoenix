@@ -13,6 +13,8 @@ import { remote, WebServicePage } from "./web";
 import type { CarePage } from "./care";
 import { albumMenu } from "./songs";
 import { cleanUp, fromFileName, tagEditor, titleCase } from "./tools";
+import type { MixviewPage } from "./mixview";
+import { menuHooks } from "./songs";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
 type Shot = (name: string) => Promise<void>;
@@ -221,6 +223,67 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runStreaming(check, shot, settle, until);
   await runCare(check, shot, settle, songs);
   await runTools(check, shot, settle, songs);
+  await runNow(check, shot, settle, until, songs);
+}
+
+// ---------- Mixview, lyrics, quickplay clicks, display settings ----------
+
+async function runNow(check: Check, shot: Shot, settle: Settle, until: Until, songs: Song[]) {
+  const key = await call<string>("track.albumKey", { id: songs[0].id });
+  menuHooks.mixview(key, "Quiet Trio");
+  const mix = shell.get<MixviewPage>("mixview");
+  await until(() => mix.centre()?.title === "First Record", 3000);
+  for (let i = 0; i < 40; i++) mix.step(0.05);
+  await settle(300);
+  const c = mix.centre(), around = mix.around();
+  check("Mixview puts the album in the middle with its artist and related artists around it", c?.title === "First Record" && around.some(n => n.title === "Quiet Trio" && !n.albumKey),
+    `${c?.title}: ${around.map(n => n.title).join(", ")}`);
+  const tiles = [...document.querySelectorAll<HTMLElement>(".mixtile")];
+  check("Mixview's tiles spread out around the middle", tiles.length === around.length + 1 && new Set(tiles.map(t => t.style.transform)).size === tiles.length, `${tiles.length} tiles`);
+  await shot("37-mixview");
+  const other = around.find(n => !n.albumKey);
+  if (other) {
+    tiles.find(t => t.querySelector(".mixtitle")?.textContent === other.title)?.click();
+    await until(() => mix.centre()?.title === other.title, 3000);
+    check("clicking an artist moves it to the middle with its albums around it", mix.centre()?.title === other.title && mix.around().some(n => n.title === "First Record"), mix.centre()?.title ?? "");
+  }
+
+  // lyrics: timed lines follow the song
+  await call("lyrics.import", { id: songs[0].id, text: "[ar:Quiet Trio]\n[00:00.00]First line\n[00:01.50]Second line\n[00:03.00]Third line" });
+  await call("player.volume", { value: 0 });
+  await call("play.tracks", { ids: [songs[0].id] });
+  shell.showNow(true);
+  const now = (shell as any).nowPlaying as import("./nowplaying").NowPlaying;
+  await now.showLyrics(true);
+  await until(() => now.lyricsShown.lines === 3, 4000);
+  await until(() => now.lyricsShown.now >= 1, 4000);
+  check("now playing shows the song's lyrics, and timed lines follow the music", now.lyricsShown.lines === 3 && now.lyricsShown.synced && now.lyricsShown.now >= 1 && text(".lyricline.sung") !== "",
+    `${now.lyricsShown.lines} lines, on ${now.lyricsShown.now}: ${text(".lyricline.sung")}`);
+  await shot("38-lyrics");
+  await call("lyrics.remove", { id: songs[0].id });
+  await now.showLyrics(false);
+  shell.showNow(false);
+  await call("player.stop");
+
+  // quickplay: a click opens the album, unless settings say it plays
+  shell.display = await call("display.set", { quickplayPlays: false });
+  shell.navigate("quickplay");
+  await settle(400);
+  const tile = [...document.querySelectorAll<HTMLElement>(".tile.small")].find(t => t.querySelector(".t1")?.textContent === "First Record");
+  tile?.click();
+  await settle(500);
+  const music = shell.get<MusicPage>("music");
+  check("a click on an album in quickplay opens it in the collection", shell.page === "music" && music.state().songs.length === 4 && document.querySelector(".tilegrid .tile.sel .t1")?.textContent === "First Record",
+    `${shell.page}, ${music.state().songs.length} songs`);
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Display");
+  await settle(400);
+  check("settings: display has quickplay and artist photos", text("#root").includes("Clicking an album in quickplay plays it straight away") && text("#root").includes("Show photos of the artist behind now playing"));
+  settings.showCategory("software", "Translation");
+  await settle(300);
+  check("settings: translation and lyrics has the LRCLIB switch", text("#root").includes("Look lyrics up on LRCLIB by itself"));
+  settings.showCategory("software");
 }
 
 // ---------- the tag editor, your own tags, Smart DJ and auto playlists ----------

@@ -109,7 +109,8 @@ public static partial class Api
             {
                 title = cur.Title, subtitle = cur.Subtitle, album = cur.Album, art = cur.ArtPath, isVideo = cur.IsVideo,
                 trackId = cur.Track?.Id, rating = cur.Track?.Rating ?? 0, isBook = cur.Book != null, bookId = cur.Book?.Id,
-                isStation = cur.Station != null, stationUrl = cur.Station?.Url, isEpisode = cur.Episode != null
+                isStation = cur.Station != null, stationUrl = cur.Station?.Url, isEpisode = cur.Episode != null,
+                artist = cur.Track is { } tr ? (tr.Artist != "" ? tr.Artist : tr.AlbumArtist) : ""
             },
             index = P.CurrentIndex,
             playing = P.IsPlaying,
