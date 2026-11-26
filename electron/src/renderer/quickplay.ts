@@ -24,9 +24,11 @@ export function quickplayPage(): Page {
   const likedButtons = h("div", { style: { display: "flex" } },
     h("div", { style: { margin: "26px 0 0 22px" } }, textBtn("play all", () => void call("quick.play", { type: "likedAll" }))),
     h("div", { style: { margin: "26px 0 0 14px" } }, textBtn("shuffle", () => void call("quick.play", { type: "likedShuffle" }))));
+  const statsLink = h("div", { style: { margin: "26px 0 0 22px" } }, textBtn("listening stats", () => shell.navigate("stats")));
+  statsLink.title = "Hours, plays and your top artists, albums and songs";
   const section = (title: string, hintEl: HTMLElement | null, g: TileGrid<QuickTile>, extra?: HTMLElement) =>
     h("div.pane", { style: { marginRight: "16px" } }, h("div", { style: { display: "flex" } }, h("div.zunehead", title), extra), hintEl, g.el);
-  const likedSection = section("liked", likedHint, liked, likedButtons);
+  const likedSection = section("liked", likedHint, liked, h("div", { style: { display: "flex" } }, likedButtons, statsLink));
   likedSection.style.gridColumn = "1 / span 3";
   const sections = h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "380px minmax(0, 1fr)", height: "100%", padding: "14px 0 0 22px" } },
     section("pins", pinsHint, pins), section("new", null, fresh), section("history", historyHint, history), likedSection);

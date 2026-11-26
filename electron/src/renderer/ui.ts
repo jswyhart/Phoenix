@@ -40,6 +40,11 @@ const ICONS: Record<string, string> = {
   bookmark: "M8,1.5 L10,6 L15,6.3 L11.2,9.5 L12.4,14.5 L8,11.8 L3.6,14.5 L4.8,9.5 L1,6.3 L6,6 Z",
   playlist: "M3,1.5 L13,1.5 L13,14.5 L3,14.5 Z M5.5,5 L10.5,5 M5.5,8 L10.5,8 M5.5,11 L10.5,11",
   note: "M6,12 A2,2 0 1 1 6,11.99 M8,12 L8,2.5 L13,1.5 L13,4 L8,5",
+  plus: "M8,3 L8,13 M3,8 L13,8",
+  more: "M3,8 L3.01,8 M8,8 L8.01,8 M13,8 L13.01,8",
+  up: "M8,13 L8,3 M4,7 L8,3 L12,7",
+  down: "M8,3 L8,13 M4,9 L8,13 L12,9",
+  radio: "M2,6 L14,6 L14,14 L2,14 Z M4,6 L12,2 M10,10 A1.6,1.6 0 1 0 10,9.99 M4,9 L7,9 M4,11 L7,11",
   phone: "M5.2,1.5 L10.8,1.5 Q12,1.5 12,2.7 L12,13.3 Q12,14.5 10.8,14.5 L5.2,14.5 Q4,14.5 4,13.3 L4,2.7 Q4,1.5 5.2,1.5 Z M7.2,12.4 L8.8,12.4",
 };
 
@@ -458,3 +463,66 @@ export class Slider {
 }
 
 export const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+// ---------- sorting and filtering bar ----------
+
+export interface ViewState { sort: string; desc: boolean; show: string; text: string }
+interface ViewChoices { sorts: { key: string; label: string }[]; shows: { key: string; label: string }[] }
+
+/**
+ * The bar a collection page carries, as on Windows: a box to type a filter into, what to show (liked, never played…),
+ * what to sort by, and which way. The page asks for its lists with <code>view</code>; the helper remembers the choices.
+ */
+export class ViewBar {
+  readonly el = h("div.viewbar");
+  private text = h("input.filter", { type: "text", placeholder: "filter", spellcheck: false, title: "Filter: type part of a name" });
+  private show = h("select.box.small", { title: "Show" });
+  private sort = h("select.box.small", { title: "Sort by" });
+  private dir = iconBtn("up", "First first (press to turn around)", () => { this.state.desc = !this.state.desc; this.paint(); this.onChange(); }, "small");
+  state: ViewState = { sort: "", desc: false, show: "", text: "" };
+  loaded = false;
+  onChange: () => void = () => {};
+  readonly ready: Promise<void>;
+
+  constructor(readonly page: string, callFn: (m: string, p?: unknown) => Promise<any>) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    this.text.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { this.state.text = this.text.value.trim(); this.onChange(); }, 220); });
+    this.text.addEventListener("keydown", e => { if (e.key === "Escape" && this.text.value) { e.stopPropagation(); this.text.value = ""; this.state.text = ""; this.onChange(); } });
+    this.show.onchange = () => { this.state.show = this.show.value; this.onChange(); };
+    this.sort.onchange = () => { this.state.sort = this.sort.value; this.onChange(); };
+    this.el.append(this.text, this.show, this.sort, this.dir);
+    this.ready = (async () => {
+      const [choices, saved] = await Promise.all([callFn("view.options", { page }) as Promise<ViewChoices | null>, callFn("view.get", { page }) as Promise<ViewState>]);
+      if (choices) {
+        this.show.replaceChildren(...choices.shows.map(c => h("option", { value: c.key }, c.label)));
+        this.sort.replaceChildren(...choices.sorts.map(c => h("option", { value: c.key }, "by " + c.label)));
+        this.show.classList.toggle("hidden", choices.shows.length === 0);
+        this.sort.classList.toggle("hidden", choices.sorts.length === 0);
+        this.dir.classList.toggle("hidden", choices.sorts.length === 0);
+        if (saved) this.state = { ...saved, text: "" };
+        if (!choices.shows.some(c => c.key === this.state.show)) this.state.show = "";
+        if (!choices.sorts.some(c => c.key === this.state.sort)) this.state.sort = "";
+      }
+      this.loaded = true;
+      this.paint();
+    })();
+  }
+
+  /** What to send with a page's request: nothing until the saved choices are known (the helper then uses them itself). */
+  get value(): ViewState | undefined { return this.loaded ? { ...this.state } : undefined; }
+  get active() { return this.state.sort !== "" || this.state.desc || this.state.show !== "" || this.state.text !== ""; }
+
+  set(v: Partial<ViewState>) { this.state = { ...this.state, ...v }; this.paint(); this.onChange(); }
+
+  private paint() {
+    this.show.value = this.state.show;
+    this.sort.value = this.state.sort;
+    if (this.text.value.trim() !== this.state.text) this.text.value = this.state.text;
+    setIcon(this.dir, this.state.desc ? "down" : "up");
+    this.dir.classList.toggle("on", this.state.desc);
+    this.dir.title = this.state.desc ? "Last first (press to turn around)" : "First first (press to turn around)";
+  }
+}
+
+/** A button drawn like the page's tabs, for an action that sits on the same line ("shuffle all"). */
+export const tabButton = (label: string, onclick: () => void, tip = "") => h("div.nav.tab.tabaction", { onclick, title: tip }, label);

@@ -31,6 +31,15 @@ public static partial class Api
         }));
         Rpc.On("smoke.videos", _ => Lib.Videos.Select(v => new { id = v.Id, art = v.ArtPath, title = v.Title }));
         Rpc.On("smoke.htmlText", p => HtmlText(p.Str("html")));
+        // listens for the stats page: each song given is logged as heard in full, a minute apart, ending now
+        Rpc.On("smoke.plays", p =>
+        {
+            var tracks = Tracks(p);
+            var at = Fmt.Now - tracks.Count * 60;
+            foreach (var t in tracks) { Lib.Db.LogPlay(new PlayRow(at, t.Id, t.Title, t.Artist, t.Album, Math.Max(t.DurationMs, 1000), true)); at += 60; }
+            return tracks.Count;
+        });
+        Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>
         {

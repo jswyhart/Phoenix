@@ -11,6 +11,7 @@ import { shell } from "./shell";
 import { artUrl, sleep } from "./ui";
 import type { VideosPage } from "./videos";
 import { Viz } from "./viz";
+import { runExtras } from "./smokeMore";
 
 let log = "";
 let fails = 0;
@@ -433,6 +434,9 @@ async function run() {
     shell.navigate("books");
     await shot("06-books-after");
   }
+
+  // ---- what was brought over from the Windows app ----
+  await runExtras(check, shot, settle, until, songs);
 }
 
 export async function runSmoke() {

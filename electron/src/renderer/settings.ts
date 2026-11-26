@@ -4,6 +4,7 @@ import { call, host, on, SettingsState } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { computer, PhoneState } from "./phone";
 import { h, pill, tabs, VList } from "./ui";
+import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -38,9 +39,14 @@ export function fitPath(path: string, width: number, font = '14px "Selawik"'): s
   return "...";
 }
 
-export interface SettingsPage extends Page { showCategory(pivot: string, category?: string): void; shown_(): string; refreshFolders(): Promise<void> }
+export interface SettingsPage extends Page {
+  showCategory(pivot: string, category?: string): void; shown_(): string; refreshFolders(): Promise<void>;
+  updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>;
+}
 
-const GROUPS: Record<string, string[]> = { software: ["Collection", "Metadata", "Display"], phone: ["Sync options"], servers: ["Jellyfin", "Plex"] };
+const GROUPS: Record<string, string[]> = {
+  software: ["Collection", "Metadata", "Listening", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex"],
+};
 
 export function settingsPage(): SettingsPage {
   let S: SettingsState = shell.settings;
@@ -208,6 +214,8 @@ export function settingsPage(): SettingsPage {
   const refreshSync = async () => paintSync(await call<PhoneState>("phone.state"));
 
   // ---- the panels ----
+  const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, viz] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -224,7 +232,10 @@ export function settingsPage(): SettingsPage {
         await refreshStatus();
       }), pill("REMOVE TOKEN", async () => { discogsStatus.textContent = await call<string>("discogs.saveToken", { token: "" }); discogs.placeholder = "personal access token"; await refreshStatus(); })), discogsStatus),
     Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
-      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark"))),
+      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, viz.el),
+    Listening: listening.el,
+    Storage: storage.el,
+    Updates: updates.el,
     "Sync options": h("div", h("div.h2", "sync options"),
       note(`The companion app on your Android phone copies music, likes and playlists from this ${computer} while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below.`),
       h("label.check", { style: { margin: "8px 0 4px 0" } }, syncEnabled, `Let my phone sync with this ${computer}`),
@@ -275,6 +286,7 @@ export function settingsPage(): SettingsPage {
     scroll.scrollTop = 0;
     if (chosen === "Collection") requestAnimationFrame(() => boxes.forEach(b => b.redraw()));
     if (chosen === "Sync options") void refreshSync();
+    for (const part of extra[chosen] ?? []) void part.shown();
   }
 
   async function refreshFolders() {
@@ -286,5 +298,5 @@ export function settingsPage(): SettingsPage {
   showCategory("software");
   paintFolders();
   void refreshStatus();
-  return { el, shown: () => { void refreshFolders(); void refreshStatus(); }, showCategory, shown_: () => chosen, refreshFolders };
+  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening };
 }

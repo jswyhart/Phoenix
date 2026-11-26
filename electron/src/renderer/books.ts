@@ -2,7 +2,7 @@
 // The comic and EPUB readers open as a layer over the window.
 import { call, host, isMac, on } from "./api";
 import { debounce, Page, shell } from "./shell";
-import { artUrl, ask, dialogButtons, h, menuAt, message, openDialog, pill, showMenu, tabs, textBtn, TileGrid, VList } from "./ui";
+import { artUrl, ask, dialogButtons, h, menuAt, message, openDialog, pill, showMenu, tabs, textBtn, TileGrid, ViewBar, VList } from "./ui";
 
 interface BookTile { id: number; title: string; caption: string; art: string }
 interface View { empty: boolean; counts: string; authors: string[]; author: string | null; books: BookTile[] }
@@ -333,7 +333,9 @@ export function booksPage(): Page {
   let tab = "all", author: string | null = null, authors: string[] = [], dirty = false, seq = 0;
   const authorCap = h("div.cap", "AUTHORS"), bookCap = h("div.cap", "BOOKS"), count = h("div.cap.count");
   const tabBar = tabs([["all", "all"], ["audio", "audiobooks"], ["ebook", "ebooks"], ["progress", "in progress"]], t => { tab = t; author = null; void load(); });
-  tabBar.el.append(count);
+  const bar = new ViewBar("books", call);
+  bar.onChange = () => void load();
+  tabBar.el.append(count, bar.el);
   const authorList = new VList<string>({
     rowHeight: 30,
     render: name => h("div.name", h("div.grow.ell", name)),
@@ -349,7 +351,7 @@ export function booksPage(): Page {
 
   async function load() {
     const mine = ++seq;
-    const v = await call<View>("books.view", { tab, author });
+    const v = await call<View>("books.view", { tab, author, view: bar.value });
     if (mine !== seq) return;
     tabBar.select(tab);
     empty.classList.toggle("hidden", !v.empty);

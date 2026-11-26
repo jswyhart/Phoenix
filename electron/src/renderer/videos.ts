@@ -1,7 +1,7 @@
 // collection → videos: movies, tv shows (series → seasons → episodes), collections, other videos, all.
 import { call, host, isMac, on, time } from "./api";
 import { debounce, Page } from "./shell";
-import { art, ask, dialogButtons, h, MenuEntry, menuAt, openDialog, showMenu, tabs, TileGrid, VList } from "./ui";
+import { art, ask, dialogButtons, h, menuAt, MenuEntry, openDialog, showMenu, tabs, TileGrid, ViewBar, VList } from "./ui";
 
 interface Video { id: number; title: string; caption: string; art: string; rowTitle: string; code: string; dur: number; local: boolean }
 interface Group { name: string; art: string; count: number; key: string }
@@ -34,14 +34,16 @@ export async function editVideos(ids: number[]) {
   (single ? title : series).focus();
 }
 
-export interface VideosPage extends Page { showTab(tab: string): void; ready(): Promise<void>; items(): Video[] }
+export interface VideosPage extends Page { showTab(tab: string): void; ready(): Promise<void>; items(): Video[]; bar: ViewBar; tabRow: HTMLElement }
 
 export function videosPage(): VideosPage {
   let tab = "", group: string | null = null, season: number | null | undefined, view: View | null = null, items: Video[] = [];
   let seq = 0, dirty = false, pending: Promise<void> = Promise.resolve();
   const leftCap = h("div.cap", "SERIES"), rightCap = h("div.cap", "VIDEOS"), count = h("div.cap.count");
   const tabBar = tabs([["movies", "movies"], ["shows", "tv shows"], ["collections", "collections"], ["folders", "other videos"], ["all", "all"]], t => showTab(t));
-  tabBar.el.append(count);
+  const bar = new ViewBar("videos", call);
+  bar.onChange = () => load(false);
+  tabBar.el.append(count, bar.el);
 
   const groups = new VList<Group>({
     rowHeight: 32,
@@ -86,7 +88,7 @@ export function videosPage(): VideosPage {
   function load(keep: boolean) {
     const mine = ++seq;
     pending = (async () => {
-      const v = await call<View>("videos.view", season === undefined ? { tab, group } : { tab, group, season });
+      const v = await call<View>("videos.view", season === undefined ? { tab, group, view: bar.value } : { tab, group, season, view: bar.value });
       if (mine !== seq) return;
       view = v;
       tab = v.tab;
@@ -159,5 +161,5 @@ export function videosPage(): VideosPage {
 
   on("lib", debounce(() => { if (el.isConnected) load(true); else dirty = true; }));
   load(false);
-  return { el, shown: () => { if (dirty) { dirty = false; load(true); } }, showTab, ready: () => pending, items: () => items };
+  return { el, shown: () => { if (dirty) { dirty = false; load(true); } }, showTab, ready: () => pending, items: () => items, bar, tabRow: tabBar.el };
 }

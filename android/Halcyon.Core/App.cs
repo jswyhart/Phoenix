@@ -34,6 +34,8 @@ public static class App
     /// <summary>Tells the image cache that a cover file was rewritten.</summary>
     public static Action<string> ArtInvalidate = _ => { };
     public static string DeviceName = "Android";
+    /// <summary>A self-test is running: settings are not written to disk.</summary>
+    public static bool Testing;
 
     /// <summary>Status line text ("scanning…", "jellyfin: 400 of 2176 videos"); raised on any thread.</summary>
     public static event Action<string>? Status;

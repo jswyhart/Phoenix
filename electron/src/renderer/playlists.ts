@@ -2,7 +2,7 @@
 import { call, on, Song, TileData } from "./api";
 import { debounce, Page } from "./shell";
 import { albumMenu, menuHooks, SongHeader, songMenu, songRow } from "./songs";
-import { ask, confirm, h, MenuEntry, menuAt, showMenu, textBtn, TileGrid, VList } from "./ui";
+import { ask, confirm, h, menuAt, MenuEntry, showMenu, textBtn, TileGrid, ViewBar, VList } from "./ui";
 
 interface ListRow { name: string; id: number | null; auto: string | null; pinned: boolean }
 
@@ -43,7 +43,9 @@ export function playlistsPage(): Page {
     onActivate: s => void call("play.tracks", { ids: songs.map(x => x.id), start: s.id }),
     onContext: (chosen, e) => menuAt(songMenuFor(chosen), e),
   });
-  const actions = h("div", { style: { margin: "-4px 28px 6px 0", display: "flex", gap: "8px" } },
+  const bar = new ViewBar("playlists", call);
+  bar.onChange = () => void show(false);
+  const actions = h("div", { style: { margin: "-6px 28px 6px 0", display: "flex", gap: "8px", alignItems: "center" } }, bar.el,
     textBtn("play", () => void call("play.tracks", { ids: songs.map(s => s.id) })),
     textBtn("shuffle", () => void call("play.tracks", { ids: songs.map(s => s.id), shuffle: true })));
   const left = h("div.pane", h("div.split", h("div.cap", "PLAYLISTS"), h("div", { style: { margin: "-4px 4px 6px 0" } }, textBtn("new playlist", create))), lists.el);
@@ -63,10 +65,10 @@ export function playlistsPage(): Page {
   async function show(keep: boolean) {
     if (!row) return;
     const mine = ++seq;
-    const v = await call<{ songs: Song[]; total: string }>("playlists.songs", { id: row.id, auto: row.auto, sortKey: header.key, sortDesc: header.desc });
+    const v = await call<{ songs: Song[]; total: string; all: number }>("playlists.songs", { id: row.id, auto: row.auto, sortKey: header.key, sortDesc: header.desc, view: bar.value });
     if (mine !== seq) return;
     songs = v.songs;
-    songCap.textContent = `SONGS  ${songs.length}   ·   ${v.total}`;
+    songCap.textContent = `SONGS  ${songs.length === v.all ? songs.length : `${songs.length} of ${v.all}`}` + (v.total ? `   ·   ${v.total}` : "");
     songList.setItems(songs, keep);
   }
 

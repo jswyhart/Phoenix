@@ -3,6 +3,23 @@ using System.Text.Json.Serialization;
 
 namespace Halcyon.Core;
 
+/// <summary>A collection tab of your own, holding the streaming services you put in it.</summary>
+public class CustomTab
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+    public string Name { get; set; } = "";
+    public string Page => "tab:" + Id;
+}
+
+/// <summary>An address of your own shown as a streaming service (a web page, or an HTML file on this computer).</summary>
+public class CustomService
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..10];
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public bool Video { get; set; }
+}
+
 public class Settings
 {
     public List<string> MusicFolders { get; set; } = new();
@@ -40,6 +57,12 @@ public class Settings
     public Dictionary<string, string> Views { get; set; } = new();
     /// <summary>Podcast lists you added yourself to browse from.</summary>
     public List<PodcastSource> PodcastSources { get; set; } = new();
+    /// <summary>Streaming services switched on (desktop).</summary>
+    public List<string> WebServicesOn { get; set; } = new();
+    public List<CustomService> CustomServices { get; set; } = new();
+    /// <summary>Where each streaming service is shown: "tab" (a collection tab of its own), a collection ("videos"), or a tab of your own ("tab:&lt;id&gt;").</summary>
+    public Dictionary<string, string> ServicePlaces { get; set; } = new();
+    public List<CustomTab> CustomTabs { get; set; } = new();
     /// <summary>"podcast:&lt;id&gt;" or "book:&lt;id&gt;" -> playback speed.</summary>
     public Dictionary<string, double> Speeds { get; set; } = new();
     public bool ScrobbleLastFm { get; set; }
@@ -48,6 +71,10 @@ public class Settings
     public string ListenBrainzUser { get; set; } = "";
     public bool CheckUpdates { get; set; } = true;   // ask GitHub once a day whether there is a newer Phoenix
     public long UpdateChecked { get; set; }
+    public bool AutoUpdate { get; set; }                  // download a newer Phoenix when one is found and put it in place when Phoenix closes
+    public bool KeepPrevious { get; set; } = true;        // keep the version being replaced, so an update can be undone
+    public string PreviousVersion { get; set; } = "";     // the version that was replaced by the last update
+    public string UpdateSkipped { get; set; } = "";       // a version you chose not to install (or went back from)
     /// <summary>Keys for scrobbling services, stored encrypted like the tokens below.</summary>
     public Dictionary<string, string> KeysEnc { get; set; } = new();
     [JsonIgnore] public Dictionary<string, string> Keys { get; set; } = new();

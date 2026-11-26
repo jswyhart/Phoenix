@@ -9,17 +9,17 @@ import { picturesPage } from "./pictures";
 import { installPlaylistMenu, playlistsPage, searchPage } from "./playlists";
 import { podcastsPage } from "./podcasts";
 import { quickplayPage } from "./quickplay";
+import { radioPage } from "./radio";
+import { statsPage } from "./stats";
 import { settingsPage } from "./settings";
 import { Page, shell } from "./shell";
 import { runSmoke } from "./smoke";
 import { videosPage } from "./videos";
-import { art, bumpArt, h, icon, iconBtn, setArt, setIcon, Slider } from "./ui";
-
-const COLLECTION = ["music", "videos", "pictures", "podcasts", "books", "playlists"];
+import { art, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Slider } from "./ui";
 
 const makers: Record<string, () => Page> = {
   quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
-  books: booksPage, playlists: playlistsPage, phone: phonePage, search: searchPage, settings: settingsPage,
+  books: booksPage, playlists: playlistsPage, radio: radioPage, phone: phonePage, search: searchPage, settings: settingsPage, stats: statsPage,
 };
 
 async function start() {
@@ -28,6 +28,7 @@ async function start() {
   shell.settings = init.settings;
   shell.player = init.player;
   shell.queue = init.queue;
+  shell.tabs = init.tabs;
   const root = document.getElementById("root")!;
 
   // ---------- header ----------
@@ -43,7 +44,15 @@ async function start() {
   const search = h("input", { type: "text", placeholder: "search", spellcheck: false });
   const logo = h("button.logo", { title: "Quickplay", onclick: () => navigate("quickplay"), tabIndex: -1 }, h("img", { src: "phoenix.svg", alt: "", draggable: false }));
   const sub = new Map<string, HTMLElement>();
-  const subNav = h("div.subnav", ...COLLECTION.map(p => { const el = h("div.nav.section", { onclick: () => navigate(p) }, p); sub.set(p, el); return el; }));
+  const subNav = h("div.subnav");
+  /** The collection's tabs that are switched on, in order. */
+  const collection = () => shell.tabs.tabs.filter(t => t.on).map(t => t.key);
+  function paintTabs() {
+    sub.clear();
+    subNav.replaceChildren(...collection().map(p => { const el = h("div.nav.section", { onclick: () => navigate(p) }, p); sub.set(p, el); return el; }));
+    sub.forEach((el, key) => el.classList.toggle("on", key === shell.page));
+  }
+  paintTabs();
   const header = h("div.header",
     h("div.top",
       h("div", backBtn, topNav("quickplay", "QUICKPLAY"), topNav("collection", "COLLECTION"), topNav("settings", "SETTINGS"), status),
@@ -67,12 +76,12 @@ async function start() {
     if (page === shell.page) return;
     if (push && shell.page !== "") back.push(shell.page);
     shell.page = page;
-    const isColl = COLLECTION.includes(page);
+    const isColl = collection().includes(page);
     if (isColl) collPage = page;
     const p = get(page);
     hostEl.replaceChildren(p.el);
     p.shown?.();
-    top.get("quickplay")!.classList.toggle("on", page === "quickplay");
+    top.get("quickplay")!.classList.toggle("on", page === "quickplay" || page === "stats");
     top.get("collection")!.classList.toggle("on", isColl || page === "search" || page === "phone");
     top.get("settings")!.classList.toggle("on", page === "settings");
     subNav.classList.toggle("hidden", !isColl);
@@ -87,6 +96,13 @@ async function start() {
   shell.applyTheme = theme => { document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light"; };
   shell.applyTheme(init.settings.theme);
   on("status", (s: string) => shell.setStatus(s ?? ""));
+  // a tab switched off in settings leaves the collection; if it was showing, the first tab that is on takes its place
+  on("tabs", (t: typeof shell.tabs) => {
+    shell.tabs = t;
+    paintTabs();
+    if (!collection().includes(collPage)) collPage = collection()[0] ?? "music";
+    if (shell.tabs.tabs.some(x => x.key === shell.page && !x.on)) navigate(collPage, false);
+  });
   on("art", () => bumpArt());
 
   // ---------- transport ----------
@@ -104,6 +120,25 @@ async function start() {
   seek.onInput = v => { posText.textContent = clock(v); };
   seek.onCommit = v => void call("player.seek", { ms: Math.round(v) });
   const shuffleBtn = iconBtn("shuffle", "Shuffle", () => void call("player.shuffle"));
+  // the "more" button: sleep timer, playback speed, listening stats (lit while the timer or a speed is on)
+  const moreBtn = iconBtn("more", "Sleep timer, playback speed", () => menuAt(moreMenu(), moreBtn));
+  function moreMenu(): MenuEntry[] {
+    const s = shell.player;
+    const left = s.sleep.replace("sleep: ", "").replace("sleep ", "");
+    const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+    return [
+      { label: s.sleepOn ? `Sleep timer  (${left})` : "Sleep timer", sub: [
+        { label: "Off", checked: !s.sleepOn, action: () => call("player.sleep", {}) },
+        ...[15, 30, 45, 60, 90, 120].map(n => ({ label: `${n} minutes`, action: () => call("player.sleep", { minutes: n }) })),
+        { label: "When this one ends", checked: s.sleepAtEnd, disabled: !s.current, action: () => call("player.sleep", { atEnd: true }) },
+      ] },
+      { label: s.canSpeed ? "Playback speed" : "Playback speed (podcasts, audiobooks, video)", disabled: !s.canSpeed, sub: speeds.map(r => ({
+        label: r === 1 ? "1× (normal)" : `${r}×`, checked: Math.abs(s.speed - r) < 0.01, action: () => call("player.speed", { value: r }),
+      })) },
+      "-",
+      { label: "Listening stats", action: () => navigate("stats") },
+    ];
+  }
   const playBtn = iconBtn("play", "Play / pause (Space)", () => void call("player.toggle"), "filled", 22);
   playBtn.style.width = "48px";
   const repeatBtn = iconBtn("repeat", "Repeat", () => void call("player.repeat"));
@@ -121,7 +156,7 @@ async function start() {
       h("div.info",
         h("div.titles", words, bookmarkBtn, heartBtn),
         h("div.seekrow", posText, seek.el, durText))),
-    h("div.right", shuffleBtn,
+    h("div.right", moreBtn, shuffleBtn,
       iconBtn("prev", "Previous", () => void call("player.prev"), "filled"), playBtn,
       iconBtn("next", "Next", () => void call("player.next"), "filled"),
       repeatBtn, muteBtn, volume.el));
@@ -145,6 +180,7 @@ async function start() {
     setIcon(repeatBtn, s.repeat === 2 ? "repeatOne" : "repeat");
     repeatBtn.classList.toggle("on", s.repeat > 0);
     setIcon(muteBtn, s.muted ? "mute" : "volume");
+    paintMore(s.sleep);
     // liked: a filled pink heart; disliked: a faded one; otherwise an outline
     const rated = cur?.trackId != null ? cur.rating : 0;
     heartBtn.disabled = cur?.trackId == null;
@@ -157,6 +193,14 @@ async function start() {
     now.playerChanged(s, changed);
   }
 
+  /** What the "more" button has switched on, in words, as its tooltip; the button is lit while anything is. */
+  function paintMore(sleep: string) {
+    const s = shell.player;
+    const mode = [sleep, s.canSpeed && Math.abs(s.speed - 1) > 0.01 ? `${s.speed}× speed` : ""].filter(x => x).join("  ·  ");
+    moreBtn.classList.toggle("on", mode !== "");
+    moreBtn.title = mode || "Sleep timer, playback speed";
+  }
+
   function paintClock(pos: number, dur: number) {
     if (!shell.player.current) { posText.textContent = durText.textContent = ""; seek.set(0, 1); return; }
     durText.textContent = time(dur);
@@ -166,7 +210,11 @@ async function start() {
   }
 
   on("player", paintPlayer);
-  on("tick", (t: { pos: number; dur: number }) => { shell.player.pos = t.pos; shell.player.dur = t.dur; paintClock(t.pos, t.dur); });
+  on("tick", (t: { pos: number; dur: number; sleep: string }) => {
+    shell.player.pos = t.pos; shell.player.dur = t.dur; shell.player.sleep = t.sleep;
+    paintClock(t.pos, t.dur);
+    paintMore(t.sleep);
+  });
   on("queue", q => { shell.queue = q; now.queueChanged(); });
 
   root.append(header, hostEl, transport, now.el);

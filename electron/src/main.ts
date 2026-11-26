@@ -78,7 +78,7 @@ class Backend {
     this.ready = new Promise((resolve, reject) => {
       const exe = backendPath();
       if (!fs.existsSync(exe)) { reject(new Error(`The Phoenix helper is missing:\n${exe}`)); return; }
-      const args = ["--data", dataDir];
+      const args = ["--data", dataDir, "--parent", String(process.pid)];
       if (smokeDir) args.push("--smoke");
       const proc = spawn(exe, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
       this.proc = proc;
@@ -326,6 +326,21 @@ else {
       if (typeof url === "string" && /^https?:\/\//i.test(url)) await shell.openExternal(url);
     });
     handle("phoenix:fullscreen", (on: unknown) => { win?.setFullScreen(!!on); });
+    const filterList = (f: unknown) => (Array.isArray(f) ? f.filter(x => x && typeof x.name === "string" && Array.isArray(x.extensions)).map(x => ({ name: String(x.name), extensions: x.extensions.map(String) })) : []);
+    handle("phoenix:saveFile", async (title: unknown, name: unknown, filters: unknown) => {
+      const r = await dialog.showSaveDialog(win!, { title: String(title ?? "Save"), defaultPath: path.join(app.getPath("documents"), path.basename(String(name ?? ""))), filters: filterList(filters) });
+      return r.canceled || !r.filePath ? null : r.filePath;
+    });
+    handle("phoenix:openFile", async (title: unknown, filters: unknown) => {
+      const r = await dialog.showOpenDialog(win!, { title: String(title ?? "Open"), properties: ["openFile"], filters: filterList(filters) });
+      return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0];
+    });
+    handle("phoenix:quit", async () => { if (!smokeDir) await quit(0); });
+    handle("phoenix:relaunch", async () => {
+      if (smokeDir) return;
+      app.relaunch();
+      await quit(0);
+    });
     handle("phoenix:videoSocket", () => backend.call("video.socket"));
 
     // self-test: screenshots and the verdict are written by this process, the page only asks

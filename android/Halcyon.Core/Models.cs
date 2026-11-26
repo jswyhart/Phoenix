@@ -29,6 +29,16 @@ public static class Fmt
     public static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public static string Plural(int n, string noun) => n == 0 ? "" : $"{n} {noun}{(n == 1 ? "" : "s")}";
     public static string Join(params string[] parts) => string.Join("  ·  ", parts.Where(s => s != ""));
+
+    /// <summary>A long stretch of time in words: "2 days 7 hours", "3 hours 5 minutes", "1 minute".</summary>
+    public static string Long(long ms)
+    {
+        var t = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        static string N(int n, string unit) => $"{n} {unit}{(n == 1 ? "" : "s")}";
+        if (t.TotalDays >= 1) return t.Hours > 0 ? $"{N((int)t.TotalDays, "day")} {N(t.Hours, "hour")}" : N((int)t.TotalDays, "day");
+        if (t.TotalHours >= 1) return t.Minutes > 0 ? $"{N((int)t.TotalHours, "hour")} {N(t.Minutes, "minute")}" : N((int)t.TotalHours, "hour");
+        return N((int)t.TotalMinutes, "minute");
+    }
 }
 
 public static class AppPaths

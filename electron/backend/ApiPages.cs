@@ -56,6 +56,8 @@ public static partial class Api
                 case "liked": if (long.TryParse(key, out var id) && Lib.ById.TryGetValue(id, out var t)) P.PlayTracks(Lib.Liked(), t); break;
                 case "likedAll": P.PlayTracks(Lib.Liked()); break;
                 case "likedShuffle": P.PlayShuffled(Lib.Liked()); break;
+                case "track": if (long.TryParse(key, out var tid) && Lib.ById.TryGetValue(tid, out var one)) P.PlayTracks(new[] { one }); break;
+                case "radio": if (S.TabOn("radio") && Lib.Stations.FirstOrDefault(st => st.Url == key) is { } station) P.PlayStation(station); break;
             }
         });
     }
@@ -88,6 +90,7 @@ public static partial class Api
         {
             var tabs = Catalog.VideoTabs();
             var tab = p.Str("tab");
+            var view = ViewOf(p, "videos");
             if (!tabs.Contains(tab)) tab = tabs[0];
             var group = p.StrOrNull("group");
             int? season = p.Has("season") ? p.Int("season") : null;
@@ -118,20 +121,20 @@ public static partial class Api
             {
                 case "shows":
                 case "folders":
-                    var rows = group == null ? new List<VideoItem>() : Catalog.GroupMembers(tab, group).Where(v => tab != "shows" || season == null || v.Season == season).ToList();
+                    var rows = group == null ? new List<VideoItem>() : ArrangeVideos(view, Catalog.GroupMembers(tab, group).Where(v => tab != "shows" || season == null || v.Season == season), sort: tab != "shows");
                     cap = (tab == "shows" ? "EPISODES" : "VIDEOS") + $"  {rows.Count}";
                     layout = "rows";
                     items = rows.Select(v => VideoRow(v, v.DisplayTitle, v.DurationText));
                     break;
                 case "movies":
                 case "collections":
-                    var movies = tab == "movies" ? Catalog.Movies() : group == null ? new List<VideoItem>() : Catalog.GroupMembers("collections", group);
+                    var movies = ArrangeVideos(view, tab == "movies" ? Catalog.Movies() : group == null ? new List<VideoItem>() : Catalog.GroupMembers("collections", group));
                     cap = $"MOVIES  {movies.Count}";
                     layout = "poster";
                     items = movies.Select(v => VideoRow(v, v.Title, Fmt.Join(v.Year > 0 ? v.Year.ToString() : "", v.DurationText)));
                     break;
                 default:
-                    var all = Catalog.AllVideos();
+                    var all = ArrangeVideos(view, Catalog.AllVideos());
                     cap = $"VIDEOS  {all.Count}";
                     layout = "wide";
                     items = all.Select(v => VideoRow(v, v.DisplayTitle, v.DurationText));
@@ -144,7 +147,7 @@ public static partial class Api
                 groupCap = (tab == "shows" ? "SERIES" : tab == "collections" ? "COLLECTIONS" : "FOLDERS") + $"  {groups?.Count ?? 0}",
                 group,
                 seasons = seasons?.Select(s => new { name = s.name, season = s.season }),
-                season, cap, layout, items
+                season, cap, layout, items, view = view.Shape
             };
         });
         Rpc.On("play.videos", p =>
@@ -185,7 +188,10 @@ public static partial class Api
             var i = p.Int("index");
             if (i < 0 || i >= _picFolders.Count) return Array.Empty<object>();
             var f = _picFolders[i];
-            var pics = await Task.Run(() => Catalog.PicturesIn(f));
+            var found = await Task.Run(() => Catalog.PicturesIn(f));
+            var v = ViewOf(p, "pictures");
+            static long Date(PictureItem x) { try { return File.Exists(x.File) ? File.GetLastWriteTimeUtc(x.File).Ticks : 0; } catch { return 0; } }
+            var pics = v.Order(found.Where(x => v.Matches(x.Name)), key => key == "date" ? list => list.OrderByDescending(Date) : null);
             return pics.Select(x => (object)new { name = x.Name, file = x.File, art = x.ArtPath }).ToArray();
         });
     }
@@ -202,11 +208,29 @@ public static partial class Api
 
     static void RegisterPodcasts()
     {
-        Rpc.On("podcasts.list", _ => Lib.Podcasts.Select(x => new { id = x.Id, title = x.Title, author = x.Author, description = x.Description, art = x.ArtUrl }));
-        Rpc.On("podcasts.episodes", p => EpisodesOf(p.Long("id"), true).Select(e => new
+        Rpc.On("podcasts.list", p =>
         {
-            id = e.Id, title = e.Title, date = e.DateText, dur = e.DurationMs, played = e.Played, description = e.Description
-        }));
+            var v = ViewOf(p, "podcasts");
+            var unplayed = Lib.Podcasts.ToDictionary(x => x.Id, x => EpisodesOf(x.Id).Count(e => !e.Played));
+            return v.Order(Lib.Podcasts, key => key switch
+            {
+                "new" => list => list.OrderByDescending(x => unplayed[x.Id]).ThenBy(x => x.Title, NoCase),
+                "author" => list => list.OrderBy(x => x.Author == "" ? "\uFFFF" : x.Author, NoCase).ThenBy(x => x.Title, NoCase),
+                _ => null
+            }).Select(x => new { id = x.Id, title = x.Title, author = x.Author, description = x.Description, art = x.ArtUrl, unplayed = unplayed[x.Id] });
+        });
+        Rpc.On("podcasts.episodes", p =>
+        {
+            var v = ViewOf(p, "podcasts");
+            var all = EpisodesOf(p.Long("id"), true);
+            var shown = all.Where(e => (v.Show switch { "unplayed" => !e.Played, "video" => e.IsVideo, "audio" => !e.IsVideo, _ => true }) && v.Matches(e.Title, e.Description)).ToList();
+            var video = all.Count(e => e.IsVideo);
+            return new
+            {
+                total = all.Count, video = video == 0 ? "" : video == all.Count ? "a video podcast" : $"{video} in video",
+                episodes = shown.Select(e => new { id = e.Id, title = e.Title, date = e.DateText, dur = e.DurationMs, played = e.Played, description = e.Description, isVideo = e.IsVideo })
+            };
+        });
         Rpc.On("podcasts.add", async p =>
         {
             App.SetStatus("fetching podcast…");
@@ -294,6 +318,7 @@ public static partial class Api
         {
             var tab = p.Str("tab", "all");
             var author = p.StrOrNull("author");
+            var v = ViewOf(p, "books");
             IEnumerable<Book> inTab = tab switch
             {
                 "audio" => Lib.Books.Where(b => b.IsAudio),
@@ -307,11 +332,19 @@ public static partial class Api
             books = tab == "progress"
                 ? books.OrderByDescending(b => b.LastOpened)
                 : books.OrderBy(b => b.AuthorOrUnknown, NoCase).ThenBy(b => b.Series, NoCase).ThenBy(b => b.Title, NoCase);
+            books = v.Order(books.Where(b => KeepBook(v, b)), key => key switch
+            {
+                "title" => l => l.OrderBy(b => b.Title, NoCase),
+                "added" => l => l.OrderByDescending(b => b.DateAdded),
+                "opened" => l => l.OrderByDescending(b => b.LastOpened),
+                "progress" => l => l.OrderByDescending(b => b.Finished ? 1 : b.Progress).ThenBy(b => b.Title, NoCase),
+                _ => null
+            });
             return new
             {
                 empty = Lib.Books.Count == 0,
                 counts = Fmt.Join(Fmt.Plural(Lib.Books.Count(b => b.IsAudio), "audiobook"), Fmt.Plural(Lib.Books.Count(b => !b.IsAudio), "ebook")),
-                authors, author,
+                authors, author, view = v.Shape,
                 books = books.Select(b => new
                 {
                     id = b.Id, title = b.Title, art = b.ArtPath,
@@ -456,10 +489,13 @@ public static partial class Api
         Rpc.On("playlists.songs", p =>
         {
             var songs = p.LongOrNull("id") is { } id ? (PlaylistById(id) is { } pl ? Lib.TracksOf(pl) : new List<Track>()) : Lib.AutoPlaylist(p.Str("auto"));
+            var v = ViewOf(p, "playlists");
+            var count = songs.Count;
+            songs = songs.Where(t => (v.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, _ => true }) && v.Matches(t.Title, t.Artist, t.Album)).ToList();
             var sort = new SongSort();
             if (p.Str("sortKey") != "") sort.Set(p.Str("sortKey"), p.Bool("sortDesc"));
             songs = sort.Apply(songs);
-            return new { songs = songs.Select(Song), total = Fmt.Time(songs.Sum(t => t.DurationMs)) };
+            return new { songs = songs.Select(Song), total = Fmt.Time(songs.Sum(t => t.DurationMs)), all = count, view = v.Shape };
         });
         Rpc.On("playlist.create", p =>
         {

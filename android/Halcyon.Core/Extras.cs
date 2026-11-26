@@ -567,11 +567,13 @@ namespace Halcyon.Services
         public long Ms;
         public int Plays, Artists, Albums, Songs;
         public List<Top> TopArtists = new(), TopAlbums = new(), TopSongs = new();
+        /// <summary>Listening time per bucket (months of a year, or days), oldest first.</summary>
+        public List<(string Label, long Ms)> Over = new();
         public string Note = "";
 
         static string ArtistOf(Track t) => t.Artist != "" ? t.Artist : t.AlbumArtist;
 
-        public static ListenStats FromLog(string title, long from, long to)
+        public static ListenStats FromLog(string title, long from, long to, bool byMonth = false)
         {
             var lib = App.Lib;
             var byId = lib.Tracks.ToDictionary(t => t.Id);
@@ -594,6 +596,20 @@ namespace Halcyon.Services
                     var first = g.First();
                     return new Top(first.Title, first.Artist, g.Sum(r => r.Ms), g.Count(r => r.Counted), g.Select(Art).FirstOrDefault(a => a != "") ?? "", byId.GetValueOrDefault(first.TrackId));
                 }).OrderByDescending(x => x.Plays).ThenByDescending(x => x.Ms).Take(10).ToList();
+            var start = DateTimeOffset.FromUnixTimeSeconds(from).LocalDateTime;
+            var end = DateTimeOffset.FromUnixTimeSeconds(Math.Min(to, Fmt.Now)).LocalDateTime;
+            if (byMonth)
+                for (var m = new DateTime(start.Year, start.Month, 1); m <= end; m = m.AddMonths(1))
+                {
+                    long a = new DateTimeOffset(m).ToUnixTimeSeconds(), b = new DateTimeOffset(m.AddMonths(1)).ToUnixTimeSeconds();
+                    s.Over.Add((m.ToString("MMM", CultureInfo.InvariantCulture), rows.Where(r => r.At >= a && r.At < b).Sum(r => r.Ms)));
+                }
+            else
+                for (var d = start.Date; d <= end; d = d.AddDays(1))
+                {
+                    long a = new DateTimeOffset(d).ToUnixTimeSeconds(), b = new DateTimeOffset(d.AddDays(1)).ToUnixTimeSeconds();
+                    s.Over.Add((d.Day.ToString(), rows.Where(r => r.At >= a && r.At < b).Sum(r => r.Ms)));
+                }
             var firstAt = lib.Db.FirstPlayAt();
             if (firstAt == 0) s.Note = "Nothing has been logged yet. Listens are logged from now on; “all time” uses the play counts you already have.";
             else if (firstAt > from) s.Note = $"Listens have been logged since {DateTimeOffset.FromUnixTimeSeconds(firstAt).LocalDateTime:MMMM d, yyyy}; earlier ones only show under “all time”.";

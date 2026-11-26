@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Halcyon.Core;
+using Halcyon.Services;
 
 namespace Phoenix.Backend;
 
@@ -139,6 +140,8 @@ static class Program
     public static VideoSocket Frames = null!;
     public static bool SmokeMode;
     public static string DataDir = "";
+    /// <summary>The window's process (the updater waits for it to close before swapping the app).</summary>
+    public static int ParentPid;
     static bool _shutDown;
 
     public static bool IsMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
@@ -157,6 +160,8 @@ static class Program
         if (data < 0 || data + 1 >= args.Length) { Console.Error.WriteLine("usage: Phoenix.Backend --data <folder> [--smoke]"); return 64; }
         DataDir = Path.GetFullPath(args[data + 1]);
         SmokeMode = args.Contains("--smoke");
+        var parent = Array.IndexOf(args, "--parent");
+        if (parent >= 0 && parent + 1 < args.Length) int.TryParse(args[parent + 1], out ParentPid);
         Directory.CreateDirectory(DataDir);
 
         MainLoop.Post(Start);
@@ -167,6 +172,8 @@ static class Program
     static void Start()
     {
         App.Ui = MainLoop.Invoke;
+        App.Testing = SmokeMode;
+        Listening.Offline = SmokeMode;
         App.Secrets = new Secrets(DataDir);
         App.DeviceName = IsMac ? "Mac" : "PC";
         AppPaths.DataDir = DataDir;
@@ -211,6 +218,7 @@ static class Program
         }
         catch { }
         try { Api.Sync.Stop(); } catch { }
+        try { Updates.OnShutdownRevert(); Updates.OnShutdown(); } catch { }
         try { Engine.Dispose(); } catch { }
         Environment.Exit(0);
     }

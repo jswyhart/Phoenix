@@ -1,7 +1,7 @@
 // collection → pictures: folders on the left, thumbnails on the right; one click opens a picture, arrows move on.
 import { call } from "./api";
 import { Page } from "./shell";
-import { artUrl, h, textBtn, TileGrid, VList } from "./ui";
+import { artUrl, h, textBtn, TileGrid, ViewBar, VList } from "./ui";
 
 interface Folder { name: string; count: number }
 interface Pic { name: string; file: string; art: string }
@@ -13,7 +13,9 @@ export interface PicturesPage extends Page {
 }
 
 export function picturesPage(): PicturesPage {
-  let pics: Pic[] = [], index = 0, loaded = false, slide: ReturnType<typeof setInterval> | undefined, showing = false;
+  let pics: Pic[] = [], index = 0, loaded = false, slide: ReturnType<typeof setInterval> | undefined, showing = false, folder = -1;
+  const bar = new ViewBar("pictures", call);
+  bar.onChange = () => void showFolder(folder);
   const folderCap = h("div.cap", "FOLDERS"), picCap = h("div.cap", "PICTURES");
   const folders = new VList<Folder>({
     rowHeight: 30,
@@ -26,7 +28,7 @@ export function picturesPage(): PicturesPage {
   const empty = h("div.center-note.hidden", h("div.note", "No pictures found. Add picture folders in settings."));
   const browse = h("div.cols", { style: { gridTemplateColumns: "260px 1fr" } },
     h("div.pane", folderCap, folders.el),
-    h("div.pane.gap", h("div.split", picCap, h("div", { style: { margin: "-4px 28px 6px 0" } }, textBtn("play slideshow", () => openViewer(0, true)))), grid.el),
+    h("div.pane.gap", h("div.split", picCap, h("div", { style: { margin: "-6px 28px 6px 0", display: "flex", alignItems: "center", gap: "18px" } }, bar.el, textBtn("play slideshow", () => openViewer(0, true)))), grid.el),
     empty);
 
   const image = h("img", { draggable: false, alt: "", style: { position: "absolute", inset: "40px 60px", width: "calc(100% - 120px)", height: "calc(100% - 80px)", objectFit: "contain" } });
@@ -53,7 +55,8 @@ export function picturesPage(): PicturesPage {
 
   async function showFolder(i: number) {
     if (i < 0) return;
-    pics = await call<Pic[]>("pictures.items", { index: i });
+    folder = i;
+    pics = await call<Pic[]>("pictures.items", { index: i, view: bar.value });
     picCap.textContent = `PICTURES  ${pics.length}`;
     grid.setItems(pics.map((p, n) => ({ key: String(n), title: p.name, caption: "", art: p.art, item: p })));
   }

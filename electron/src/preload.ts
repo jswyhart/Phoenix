@@ -17,6 +17,13 @@ contextBridge.exposeInMainWorld("phoenix", {
   openPath: (path: string): Promise<string> => ipcRenderer.invoke("phoenix:openPath", path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke("phoenix:openExternal", url),
   setFullscreen: (on: boolean): Promise<void> => ipcRenderer.invoke("phoenix:fullscreen", on),
+  /** Asks where to save a file (backups, OPML lists); null when cancelled. */
+  saveFile: (title: string, name: string, filters: unknown): Promise<string | null> => ipcRenderer.invoke("phoenix:saveFile", title, name, filters),
+  openFile: (title: string, filters: unknown): Promise<string | null> => ipcRenderer.invoke("phoenix:openFile", title, filters),
+  /** Closes Phoenix and starts it again (after choosing a backup to restore, or to finish an update). */
+  relaunch: (): Promise<void> => ipcRenderer.invoke("phoenix:relaunch"),
+  /** Closes Phoenix (an update or going back is put in place once it has closed). */
+  quit: (): Promise<void> => ipcRenderer.invoke("phoenix:quit"),
   videoSocket: (): Promise<string> => ipcRenderer.invoke("phoenix:videoSocket"),
   /** Self-test only (started with --smoke): where to write results; null otherwise. */
   smoke: smokeArg ? smokeArg.slice("--phoenix-smoke=".length) : null,

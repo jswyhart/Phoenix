@@ -1,5 +1,5 @@
 // What the screens share: the start-up facts, the latest player state, and the way to move between pages.
-import type { Init, PlayerState, QueueItem, SettingsState } from "./api";
+import type { Init, PlayerState, QueueItem, SettingsState, TabsState } from "./api";
 
 export interface Page {
   el: HTMLElement;
@@ -12,6 +12,7 @@ export const shell = {
   settings: null as unknown as SettingsState,
   player: null as unknown as PlayerState,
   queue: [] as QueueItem[],
+  tabs: { tabs: [], custom: [] } as TabsState,
   page: "",
   navigate: (_page: string, _push = true) => {},
   goBackOr: (_fallback: string) => {},

@@ -8,6 +8,10 @@ export interface Host {
   reveal(path: string): Promise<void>;
   openPath(path: string): Promise<string>;
   openExternal(url: string): Promise<void>;
+  saveFile(title: string, name: string, filters: { name: string; extensions: string[] }[]): Promise<string | null>;
+  openFile(title: string, filters: { name: string; extensions: string[] }[]): Promise<string | null>;
+  relaunch(): Promise<void>;
+  quit(): Promise<void>;
   setFullscreen(on: boolean): Promise<void>;
   videoSocket(): Promise<string>;
   smoke: string | null;
@@ -37,9 +41,14 @@ export function on(name: string, fn: (data: any) => void) {
 export interface Song { id: number; title: string; artist: string; album: string; no: number; dur: number; rating: number; tags: string; local: boolean }
 export interface TileData { key: string; title: string; caption: string; art: string }
 export interface PlayerState {
-  current: null | { title: string; subtitle: string; album: string; art: string; isVideo: boolean; trackId: number | null; rating: number; isBook: boolean; bookId: number | null };
+  current: null | {
+    title: string; subtitle: string; album: string; art: string; isVideo: boolean; trackId: number | null; rating: number; isBook: boolean; bookId: number | null;
+    isStation: boolean; stationUrl: string | null; isEpisode: boolean;
+  };
   index: number; playing: boolean; shuffle: boolean; repeat: number; volume: number; muted: boolean; pos: number; dur: number;
+  sleep: string; sleepOn: boolean; sleepAtEnd: boolean; canSpeed: boolean; speed: number;
 }
+export interface TabsState { tabs: { key: string; on: boolean }[]; custom: { id: string; name: string; page: string }[] }
 export interface QueueItem { title: string; subtitle: string; dur: number }
 export interface SettingsState {
   theme: "light" | "dark"; musicFolders: string[]; videoFolders: string[]; pictureFolders: string[]; bookFolders: string[];
@@ -49,6 +58,7 @@ export interface SettingsState {
 export interface Init {
   platform: string; smoke: boolean; bench: boolean; settings: SettingsState; counts: any; player: PlayerState; queue: QueueItem[];
   vizStyles: string[]; vizPalettes: string[]; vizSensitivities: string[]; sortKeys: { key: string; label: string }[]; autoPlaylists: string[];
+  tabs: TabsState; version: string;
 }
 
 /** "3:07" or "1:02:45"; empty for nothing. */

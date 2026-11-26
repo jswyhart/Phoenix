@@ -10,7 +10,7 @@ namespace Phoenix.Backend;
 /// with seeking handled by the engine. A second, silent decoder supplies samples to the visualizer. Video is not
 /// given a window: VLC hands each frame to <see cref="VideoOut"/>, which passes it on to the Electron window.
 /// </summary>
-public class VlcEngine : IMediaEngine, IDisposable
+public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
 {
     readonly LibVLC _vlc;
     readonly MediaPlayer _mp;
@@ -160,6 +160,7 @@ public class VlcEngine : IMediaEngine, IDisposable
             using var media = Open(url);
             _mp.Play(media);
             _mp.Volume = _volume;
+            if (Math.Abs(_speed - 1) > 0.001) _mp.SetRate(_speed);
         });
         RestartAnalysis();
     }
@@ -240,6 +241,14 @@ public class VlcEngine : IMediaEngine, IDisposable
     {
         get => _volume / 100f;
         set { _volume = (int)Math.Clamp(value * 100, 0, 100); _ops.Add(() => _mp.Volume = _volume); }
+    }
+
+    float _speed = 1;
+    /// <summary>Playback speed (podcasts and audiobooks); VLC keeps the pitch.</summary>
+    public float Speed
+    {
+        get => _speed;
+        set { _speed = Math.Clamp(value, 0.25f, 4f); var r = _speed; _ops.Add(() => _mp.SetRate(r)); _ops.Add(() => _an?.SetRate(r)); }
     }
 
     bool _muted;

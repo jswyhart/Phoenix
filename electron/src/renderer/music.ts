@@ -2,11 +2,14 @@
 import { call, on, Song, TileData } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { albumMenu, artistMenu, SongHeader, songMenu, songRow } from "./songs";
-import { h, menuAt, pill, showMenu, tabs, textBtn, TileGrid, VList } from "./ui";
+import { h, menuAt, pill, showMenu, tabButton, tabs, TileGrid, ViewBar, VList } from "./ui";
 
 interface MusicView { counts: string; empty: boolean; left: string[] | null; sel: string | null; albums: TileData[] | null; album: string | null; songs: Song[] }
 
-export interface MusicPage extends Page { setMode(mode: string): void; state(): { mode: string; left: string[]; albums: number; songs: Song[] }; ready(): Promise<void> }
+export interface MusicPage extends Page {
+  setMode(mode: string): void; state(): { mode: string; left: string[]; albums: number; songs: Song[]; counts: string }; ready(): Promise<void>;
+  bar: ViewBar; tabRow: HTMLElement;
+}
 
 export function musicPage(): MusicPage {
   let mode = "artists", sel: string | null = null, album: string | null = null;
@@ -37,9 +40,11 @@ export function musicPage(): MusicPage {
   });
 
   const tabBar = tabs([["artists", "artists"], ["genres", "genres"], ["albums", "albums"], ["songs", "songs"]], m => setMode(m));
-  const shuffleAll = textBtn("shuffle all", () => void call("play.tracks", { ids: songs.map(s => s.id), shuffle: true }));
-  shuffleAll.style.margin = "2px 0 0 18px";
-  tabBar.el.append(shuffleAll, count);
+  // drawn and lined up like the tabs beside it, as on Windows
+  const shuffleAll = tabButton("shuffle all", () => void call("play.tracks", { ids: songs.map(s => s.id), shuffle: true }), "Shuffle the songs on show");
+  const bar = new ViewBar("music", call);
+  bar.onChange = () => load(false);
+  tabBar.el.append(shuffleAll, count, bar.el);
 
   const leftPane = h("div.pane", leftCap, left.el);
   const midPane = h("div.pane.gap", midCap, albums.el);
@@ -65,7 +70,7 @@ export function musicPage(): MusicPage {
   function load(keep: boolean) {
     const mine = ++seq;
     pending = (async () => {
-      const v = await call<MusicView>("music.view", { mode, sel, album, sortKey: header.key, sortDesc: header.desc });
+      const v = await call<MusicView>("music.view", { mode, sel, album, sortKey: header.key, sortDesc: header.desc, view: bar.value });
       if (mine !== seq) return;
       const showLeft = mode === "artists" || mode === "genres", showMid = mode !== "songs";
       tabBar.select(mode);
@@ -105,7 +110,8 @@ export function musicPage(): MusicPage {
     el,
     shown: () => { if (dirty) { dirty = false; load(true); } },
     setMode,
-    state: () => ({ mode, left: leftItems.slice(1), albums: albums.tiles.length, songs }),
+    state: () => ({ mode, left: leftItems.slice(1), albums: albums.tiles.length, songs, counts: count.textContent ?? "" }),
     ready: () => pending,
+    bar, tabRow: tabBar.el,
   };
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Halcyon.Core;
+using Halcyon.Services;
 
 namespace Phoenix.Backend;
 
@@ -32,13 +33,18 @@ public static partial class Api
         {
             // Every ten seconds, note where a playing podcast or audiobook is, so a crash loses little.
             if (++_ticks % 40 == 0 && P.IsPlaying) P.SaveEpisodePosition();
-            if (P.Current != null) Rpc.Emit("tick", new { pos = P.PositionMs, dur = P.DurationMs });
+            if (P.Current != null) Rpc.Emit("tick", new { pos = P.PositionMs, dur = P.DurationMs, sleep = P.SleepText });
         });
 
         // ---- start-up ----
         Rpc.On("init", p =>
         {
-            if (!_started && !Program.SmokeMode) App.RefreshCollectionAsync().ContinueWith(t => { if (t.Exception != null) Program.LogError("scan", t.Exception); });
+            if (!_started && !Program.SmokeMode)
+            {
+                App.RefreshCollectionAsync().ContinueWith(t => { if (t.Exception != null) Program.LogError("scan", t.Exception); });
+                _ = Updates.DailyAsync();
+                if (S.ScrobbleLastFm || S.ScrobbleListenBrainz) _ = Listening.FlushAsync();
+            }
             _started = true;
             return new
             {
@@ -53,7 +59,9 @@ public static partial class Api
                 vizPalettes = VisualizerOptions.Palettes,
                 vizSensitivities = VisualizerOptions.Sensitivities,
                 sortKeys = SongSort.Keys.Select(k => new { key = k.Key, label = k.Label }),
-                autoPlaylists = Catalog.AutoPlaylists
+                autoPlaylists = Catalog.AutoPlaylists,
+                tabs = TabsState(),
+                version = Updates.CurrentText
             };
         });
         Rpc.On("scan", async _ => { await App.RefreshCollectionAsync(); return Counts(); });
@@ -66,6 +74,7 @@ public static partial class Api
         RegisterSettings();
         RegisterPages();
         RegisterPhone();
+        RegisterExtras();
         RegisterSmoke();
     }
 
@@ -99,7 +108,8 @@ public static partial class Api
             current = cur == null ? null : new
             {
                 title = cur.Title, subtitle = cur.Subtitle, album = cur.Album, art = cur.ArtPath, isVideo = cur.IsVideo,
-                trackId = cur.Track?.Id, rating = cur.Track?.Rating ?? 0, isBook = cur.Book != null, bookId = cur.Book?.Id
+                trackId = cur.Track?.Id, rating = cur.Track?.Rating ?? 0, isBook = cur.Book != null, bookId = cur.Book?.Id,
+                isStation = cur.Station != null, stationUrl = cur.Station?.Url, isEpisode = cur.Episode != null
             },
             index = P.CurrentIndex,
             playing = P.IsPlaying,
@@ -108,7 +118,12 @@ public static partial class Api
             volume = P.Volume,
             muted = Program.Engine.Muted,
             pos = P.PositionMs,
-            dur = P.DurationMs
+            dur = P.DurationMs,
+            sleep = P.SleepText,
+            sleepOn = P.SleepOn,
+            sleepAtEnd = P.SleepAtEnd,
+            canSpeed = P.CanSpeed,
+            speed = P.Speed
         };
     }
 
@@ -159,16 +174,17 @@ public static partial class Api
         Rpc.On("music.view", p =>
         {
             var mode = p.Str("mode", "artists");
+            var v = ViewOf(p, "music");
             var sel = p.StrOrNull("sel");
             var albumKey = p.StrOrNull("album");
             List<string>? left = mode == "artists" ? Catalog.Artists() : mode == "genres" ? Catalog.Genres() : null;
             if (sel != null && left != null && !left.Contains(sel, NoCase)) sel = null;
 
-            List<Album> albums =
+            List<Album> albums = ArrangeAlbums(v,
                 sel != null && mode == "artists" ? Catalog.AlbumsOf(sel)
                 : sel != null && mode == "genres" ? Catalog.AlbumsInGenre(sel)
                 : mode == "albums" ? Lib.Albums.OrderBy(a => a.Title, NoCase).ToList()
-                : Lib.Albums.ToList();
+                : Lib.Albums.ToList());
             var album = albums.FirstOrDefault(a => a.Key == albumKey);
 
             List<Track> songs;
@@ -176,18 +192,22 @@ public static partial class Api
             {
                 var sort = new SongSort();
                 if (p.Str("sortKey") != "") sort.Set(p.Str("sortKey"), p.Bool("sortDesc"));
-                songs = sort.Apply(Catalog.Songs());
+                var all = Catalog.Songs();
+                songs = sort.Apply(v.Show != "" || v.Text != "" ? all.Where(t => KeepTrack(v, t)) : all);
             }
             else if (album != null) songs = album.Tracks.ToList();
             else
             {
                 var tracks = albums.SelectMany(a => a.Tracks);
                 if (sel != null && mode == "genres") tracks = tracks.Where(t => string.Equals(t.Genre, sel, StringComparison.OrdinalIgnoreCase));
+                if (v.Show is "liked") tracks = tracks.Where(t => t.Rating > 0);
                 songs = tracks.ToList();
             }
             return new
             {
-                counts = Fmt.Join(Fmt.Plural(Catalog.Artists().Count, "artist"), Fmt.Plural(Lib.Albums.Count, "album"), Fmt.Plural(Lib.Tracks.Count, "song")),
+                counts = Fmt.Join(Fmt.Plural(Catalog.Artists().Count, "artist"), Fmt.Plural(Lib.Albums.Count, "album"), Fmt.Plural(Lib.Tracks.Count, "song"),
+                    Lib.Tracks.Count > 0 ? Fmt.Long(Lib.Tracks.Sum(t => t.DurationMs)) : ""),
+                view = v.Shape,
                 empty = Lib.Tracks.Count == 0,
                 left,
                 sel,
