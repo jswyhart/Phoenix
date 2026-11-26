@@ -10,6 +10,7 @@ import { metadataPanel } from "./settingsMeta";
 import { loadDisplay, lyricsSection, photosSection, quickplaySection } from "./settingsDisplay";
 import { playbackPanel } from "./settingsPlayback";
 import { podcastsPanel } from "./settingsPodcasts";
+import { themeSection } from "./themes";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -112,15 +113,6 @@ export function settingsPage(): SettingsPage {
   }
 
 
-  // ---- display ----
-  const light = h("input", { type: "radio", name: "theme", checked: S.theme !== "dark" });
-  const dark = h("input", { type: "radio", name: "theme", checked: S.theme === "dark" });
-  const setTheme = async (theme: string) => {
-    S = shell.settings = await call<SettingsState>("settings.set", { theme });
-    shell.applyTheme(theme);
-  };
-  light.onchange = () => void setTheme("light");
-  dark.onchange = () => void setTheme("dark");
 
   // ---- jellyfin ----
   const jfUrl = input("http://192.168.1.10:8096"), jfUser = input("user name"), jfPass = input("password", true);
@@ -215,9 +207,9 @@ export function settingsPage(): SettingsPage {
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
   const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
-  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), playback = playbackPanel(), podcasts = podcastsPanel();
+  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), playback = playbackPanel(), podcasts = podcastsPanel(), theme = themeSection();
   const display = { shown: async () => { await loadDisplay(); quick.shown(); photos.shown(); lyrics.shown(); } };
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display], Playback: [playback], Podcasts: [podcasts] };
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display], Playback: [playback], Podcasts: [podcasts] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -226,8 +218,7 @@ export function settingsPage(): SettingsPage {
         (() => { const b = pill("FIND DUPLICATES AND MISSING FILES", () => shell.navigate("care")); b.title = "The same song stored twice, and songs whose files have gone"; return b; })()),
       scanStatus),
     Metadata: meta.el,
-    Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
-      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
+    Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
     Translation: h("div", h("div.h2", "translation and lyrics"), lyrics.el),
     Playback: playback.el,
     Podcasts: podcasts.el,

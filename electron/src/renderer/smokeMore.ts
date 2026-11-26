@@ -10,6 +10,7 @@ import type { StatsPage } from "./stats";
 import { sleep } from "./ui";
 import type { VideosPage } from "./videos";
 import { remote, WebServicePage } from "./web";
+import { applyTheme, designTheme, problems, ThemeShape } from "./themes";
 import type { CarePage } from "./care";
 import { albumMenu } from "./songs";
 import { cleanUp, fromFileName, tagEditor, titleCase } from "./tools";
@@ -228,6 +229,50 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runPlayback(check, shot, settle, until, songs);
   await runPodcastDownloads(check, shot, settle, until);
   await runMini(check, until, songs);
+  await runThemes(check, shot, settle, until);
+}
+
+// ---------- themes ----------
+
+async function runThemes(check: Check, shot: Shot, settle: Settle, until: Until) {
+  const v = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  let list = await call<{ themes: { id: string; name: string }[] }>("themes.list");
+  check("light and dark are built in", list.themes.slice(0, 2).map(t => t.id).join() === "light,dark", list.themes.map(t => t.id).join());
+  const made = await call<ThemeShape>("themes.save", { id: "", asNew: true, name: "Ocean", base: "dark", own: { Accent: "#3399FF", Bg: "#001122", Hover: "#40FFFFFF" }, textFont: "", headFont: "" });
+  applyTheme(made);
+  await settle(200);
+  check("a theme of your own is saved and drawn", made.id === "Ocean" && v("--accent") === "#3399FF" && v("--bg") === "#001122" && v("--hover") === "rgba(255, 255, 255, 0.251)" && document.documentElement.dataset.theme === "dark",
+    `${v("--accent")} ${v("--bg")} ${v("--hover")}`);
+  check("colours the theme leaves out come from its base", made.colours.Fg === "#F2F2F2" && !("Fg" in made.own), made.colours.Fg);
+  shell.navigate("music");
+  await shot("42-theme-ocean");
+  // the file edited by hand shows at once
+  await call("smoke.writeTheme", { id: "Ocean", text: JSON.stringify({ name: "Ocean", base: "dark", colours: { Accent: "#22CC88", Bg: "#001122" } }) });
+  await until(() => v("--accent") === "#22CC88", 4000);
+  check("editing the theme's file by hand shows straight away", v("--accent") === "#22CC88", v("--accent"));
+  const file = host.smoke + (host.platform === "win" ? "\\" : "/") + "ocean-export.json";
+  await call("themes.export", { id: "Ocean", file });
+  const imported = await call<ThemeShape>("themes.import", { file });
+  check("a theme can be exported and imported again", imported.id === "Ocean 2" && imported.colours.Accent === "#22CC88" && Object.keys(imported.own).length === 20, `${imported.id}, ${Object.keys(imported.own).length} colours`);
+  check("hard-to-read colours are pointed out", problems({ ...made.colours, Fg: "#202020", Bg: "#101010" }).some(p => p.startsWith("text on the page")));
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Display");
+  await settle(400);
+  const box = [...document.querySelectorAll<HTMLSelectElement>("select.box")].find(s => [...s.options].some(o => o.value === "Ocean 2"));
+  check("settings: display lists your themes", !!box && box.value === "Ocean 2" && box.options.length === 4, box ? [...box.options].map(o => o.value).join(",") : "none");
+  const designing = designTheme("Ocean 2");
+  await settle(400);
+  check("the designer shows every colour to change", document.querySelectorAll(".themekeys input[type=color]").length === 20);
+  await shot("43-theme-designer");
+  document.querySelector<HTMLElement>(".dialog-shield:last-of-type .pill:last-child")?.click();
+  await designing;
+  await call("themes.delete", { id: "Ocean 2" });
+  applyTheme(await call<ThemeShape>("themes.delete", { id: "Ocean" }));
+  list = await call("themes.list");
+  check("deleting a theme goes back to its base", list.themes.length === 2 && document.documentElement.dataset.theme === "dark", list.themes.map(t => t.id).join());
+  applyTheme(await call<ThemeShape>("themes.use", { id: "light" }));
+  settings.showCategory("software");
 }
 
 // ---------- the mini player and the system's media controls ----------

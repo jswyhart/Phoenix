@@ -8,6 +8,9 @@
   --bg: #ffffff; --bg-alt: #f3f3f3; --fg: #1a1a1a; --fg-dim: #666666; --fg-faint: #a9a9a9; --line: #e2e2e2;
   --hover: rgba(0, 0, 0, 0.055); --selected: rgba(0, 0, 0, 0.11);
   --accent: #e0447c; --grad: linear-gradient(90deg, #f0603a, #d5358f);
+  --now-bg: #0a0a0a; --now-bg-alt: #1c1c1c; --now-fg: #ffffff; --now-fg-dim: #b8b8b8; --now-fg-faint: #7a7a7a; --now-line: #333333;
+  --now-hover: rgba(255, 255, 255, 0.12); --now-selected: rgba(255, 255, 255, 0.19); --now-highlight: #ff6fa5;
+  --text-font: "Selawik"; --head-font: "Selawik";
   color-scheme: light;
 }
 [data-theme="dark"] {
@@ -18,7 +21,7 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
-body { background: var(--bg); color: var(--fg); font: 400 13px/1.35 "Selawik", "Segoe UI", system-ui, sans-serif; user-select: none; -webkit-user-select: none; cursor: default; }
+body { background: var(--bg); color: var(--fg); font: 400 13px/1.35 var(--text-font), "Selawik", "Segoe UI", system-ui, sans-serif; user-select: none; -webkit-user-select: none; cursor: default; }
 #root { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; position: relative; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; padding: 0; margin: 0; cursor: pointer; }
@@ -42,7 +45,7 @@ button:disabled { cursor: default; }
 .nav:hover { color: var(--fg-dim); }
 .nav.on { color: var(--fg); }
 .nav.topnav { font-size: 12px; font-weight: 600; margin-right: 22px; }
-.nav.section { font-size: 34px; font-weight: 300; margin-right: 22px; line-height: 1.25; }
+.nav.section { font-size: 34px; font-weight: 300; margin-right: 22px; line-height: 1.25; font-family: var(--head-font), "Selawik", sans-serif; }
 .nav.tab { font-size: 17px; margin-right: 18px; }
 .nav.pivot { font-size: 15px; font-weight: 600; margin-right: 18px; }
 .subnav { display: flex; margin-top: 10px; }
@@ -58,7 +61,7 @@ button:disabled { cursor: default; }
 
 /* ----- text ----- */
 .cap { font-size: 11px; font-weight: 600; color: var(--fg-faint); margin: 0 0 8px 8px; white-space: nowrap; }
-.h2 { font-size: 24px; font-weight: 300; margin: 0 0 10px 0; }
+.h2 { font-size: 24px; font-weight: 300; margin: 0 0 10px 0; font-family: var(--head-font), "Selawik", sans-serif; }
 .label { font-size: 12px; color: var(--fg-dim); margin: 8px 0 3px 0; }
 .note { color: var(--fg-dim); margin: 0 0 8px 0; white-space: pre-wrap; }
 .statusline { color: var(--accent); margin-top: 8px; white-space: pre-wrap; }
@@ -199,8 +202,8 @@ select.box option { background: var(--bg); color: var(--fg); }
 .dialog .field input.short { width: 90px; }
 
 /* ----- now playing (always dark) ----- */
-.now { position: absolute; left: 0; right: 0; top: 0; bottom: 81px; background: #0a0a0a; color: #f2f2f2; z-index: 20; overflow: hidden;
-  --bg: #141414; --bg-alt: #1e1e1e; --fg: #f2f2f2; --fg-dim: #a6a6a6; --fg-faint: #6a6a6a; --line: #2e2e2e; --hover: rgba(255, 255, 255, 0.086); --selected: rgba(255, 255, 255, 0.15); }
+.now { position: absolute; left: 0; right: 0; top: 0; bottom: 81px; background: var(--now-bg); color: var(--now-fg); z-index: 20; overflow: hidden;
+  --bg: var(--now-bg); --bg-alt: var(--now-bg-alt); --fg: var(--now-fg); --fg-dim: var(--now-fg-dim); --fg-faint: var(--now-fg-faint); --line: var(--now-line); --hover: var(--now-hover); --selected: var(--now-selected); }
 .now.full { bottom: 0; }
 .now .mosaic { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(5, 1fr); opacity: 0.3; }
 .now .mosaic img { width: 100%; height: 100%; object-fit: cover; display: block; min-height: 0; }
@@ -209,20 +212,20 @@ select.box option { background: var(--bg); color: var(--fg); }
 .now.full canvas.viz { top: 0; height: 100%; }
 .now .info { position: absolute; inset: 64px 28px 36px 48px; display: grid; grid-template-columns: 1fr 360px; }
 .now .info .words { align-self: end; margin-right: 40px; min-width: 0; }
-.now .info .cover { width: 240px; height: 240px; background: #1c1c1c; margin-bottom: 22px; overflow: hidden; }
+.now .info .cover { width: 240px; height: 240px; background: var(--now-bg-alt); margin-bottom: 22px; overflow: hidden; }
 .now .info .cover img { width: 100%; height: 100%; object-fit: cover; }
-.now .info .title { font-size: 50px; font-weight: 300; color: #fff; line-height: 1.2; }
-.now .info .artist { font-size: 26px; font-weight: 300; color: #d0d0d0; }
-.now .info .album { font-size: 16px; color: #909090; margin-top: 4px; }
+.now .info .title { font-size: 50px; font-weight: 300; color: var(--now-fg); line-height: 1.2; font-family: var(--head-font), "Selawik", sans-serif; }
+.now .info .artist { font-size: 26px; font-weight: 300; color: var(--now-fg-dim); }
+.now .info .album { font-size: 16px; color: var(--now-fg-faint); margin-top: 4px; }
 .now .queue { display: flex; flex-direction: column; min-height: 0; }
-.now .queue .h2 { color: #fff; }
+.now .queue .h2 { color: var(--now-fg); }
 .now .queue .vlist { flex: 1 1 0; }
-.queuerow .grow > div:first-child.current { color: #ff6fa5; font-weight: 600; }
+.queuerow .grow > div:first-child.current { color: var(--now-highlight); font-weight: 600; }
 .queuerow .sub { color: var(--fg-faint); font-size: 12px; }
 .now .video { position: absolute; inset: 0; background: #000; }
 .now .video canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .now .bar { position: absolute; left: 18px; top: 4px; display: flex; z-index: 2; }
-.now .bar .iconbtn { color: #fff; margin-right: 4px; }
+.now .bar .iconbtn { color: var(--now-fg); margin-right: 4px; }
 body.idle, body.idle * { cursor: none !important; }
 
 /* streaming services */
@@ -254,17 +257,17 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* now playing: lyrics and artist photos */
 .now .panetabs { display: flex; gap: 18px; flex: none; }
-.now .queue .panetab { color: #777; cursor: pointer; }
-.now .queue .panetab:hover { color: #bbb; }
-.now .queue .panetab.on { color: #fff; }
+.now .queue .panetab { color: var(--now-fg-faint); cursor: pointer; }
+.now .queue .panetab:hover { color: var(--now-fg-dim); }
+.now .queue .panetab.on { color: var(--now-fg); }
 .now .lyrics { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; }
-.now .lyriclines { flex: 1 1 0; overflow-y: auto; min-height: 0; font-size: 17px; line-height: 1.55; color: #e8e8e8; padding-right: 8px; user-select: text; }
+.now .lyriclines { flex: 1 1 0; overflow-y: auto; min-height: 0; font-size: 17px; line-height: 1.55; color: var(--now-fg); padding-right: 8px; user-select: text; }
 .now .lyriclines.synced .lyricline { opacity: 0.45; transition: opacity 0.25s; }
-.now .lyriclines.synced .lyricline.sung { opacity: 1; color: #fff; }
-.now .lyricnote { color: #8a8a8a; font-size: 12px; margin: 8px 0 4px 0; }
+.now .lyriclines.synced .lyricline.sung { opacity: 1; color: var(--now-fg); }
+.now .lyricnote { color: var(--now-fg-faint); font-size: 12px; margin: 8px 0 4px 0; }
 .now .lyricbtns { display: flex; gap: 14px; flex: none; }
-.now .lyricbtns .textbtn { color: #aaa; }
-.now .lyricbtns .textbtn:hover { color: #fff; }
+.now .lyricbtns .textbtn { color: var(--now-fg-dim); }
+.now .lyricbtns .textbtn:hover { color: var(--now-fg); }
 .now .backdrop { position: absolute; inset: 0; }
 .now .backdrop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 2s; }
 .now .backdrop img.on { opacity: 0.55; }
@@ -301,3 +304,10 @@ body.minibody { -webkit-app-region: drag; background: var(--bg-alt); }
 .minibtns { display: flex; margin-left: -8px; }
 .minibtns .iconbtn { height: 30px; }
 .miniprogress { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--grad); width: 0; }
+
+/* the theme designer */
+.themekeys { display: grid; grid-template-columns: 130px 1fr 46px 70px 34px; align-items: center; row-gap: 4px; column-gap: 8px; }
+.themekeys .group { grid-column: 1 / -1; font-size: 11px; font-weight: 600; color: var(--fg-faint); margin-top: 10px; }
+.themekeys input[type="color"] { width: 46px; height: 24px; padding: 0; border: 1px solid var(--line); background: none; }
+.themekeys input.alpha { width: 70px; }
+.themeproblems { color: var(--accent); font-size: 12px; white-space: pre-wrap; }

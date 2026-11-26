@@ -417,7 +417,7 @@ else {
       fs.writeFileSync(path.join(smokeDir, "smoke.log"), String(log));
       void quit(Number(fails) === 0 ? 0 : 1);
     });
-    if (smokeDir) setTimeout(() => fail("the self-test did not finish within four minutes"), 240_000);
+    if (smokeDir) setTimeout(() => fail("the self-test did not finish within eight minutes"), 480_000);
 
     createWindow();
   });

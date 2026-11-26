@@ -1,10 +1,11 @@
 // The mini player, as on Windows: a small window that stays on top, with the cover, the song, play / previous / next,
 // the heart and a thin progress line. "Back to full view" closes it and brings the main window back.
 import { call, host, on, PlayerState } from "./api";
+import { loadTheme } from "./themes";
 import { artUrl, h, icon, iconBtn, setIcon } from "./ui";
 
 export async function startMini() {
-  document.documentElement.dataset.theme = (await call<{ theme: string }>("settings.get")).theme === "dark" ? "dark" : "light";
+  await loadTheme();
   document.body.classList.add("minibody");
   const img = h("img", { draggable: false, alt: "" });
   const title = h("div.ell", { style: { fontSize: "14px" } }, "nothing playing");

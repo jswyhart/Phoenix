@@ -17,6 +17,7 @@ import { menuHooks } from "./songs";
 import { installDialogs } from "./dialogs";
 import { installTools } from "./tools";
 import { loadDisplay } from "./settingsDisplay";
+import { applyTheme, loadTheme, ThemeShape } from "./themes";
 import { musicPage } from "./music";
 import { NowPlaying } from "./nowplaying";
 import { installPhoneMenu, phonePage } from "./phone";
@@ -147,8 +148,9 @@ async function start() {
   shell.get = get;
   shell.goBackOr = fallback => { const p = back.pop(); navigate(p ?? fallback, p === undefined); };
   shell.setStatus = text => { status.textContent = text; status.title = text; };
-  shell.applyTheme = theme => { document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light"; };
-  shell.applyTheme(init.settings.theme);
+  // light or dark (the self-test); a theme of your own is chosen in settings → display
+  shell.applyTheme = theme => void call<ThemeShape>("themes.use", { id: theme === "dark" ? "dark" : "light" }).then(applyTheme);
+  await loadTheme();
   on("status", (s: string) => shell.setStatus(s ?? ""));
   // a tab switched off in settings leaves the collection; if it was showing, the first tab that is on takes its place
   const tabsChanged = () => {

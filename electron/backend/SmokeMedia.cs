@@ -107,6 +107,8 @@ public static partial class Api
             });
             return root + "feed.xml";
         });
+        // a theme file edited by hand, as someone would in a text editor
+        Rpc.On("smoke.writeTheme", p => { File.WriteAllText(Path.Combine(AppPaths.DataDir, "themes", p.Str("id") + ".json"), p.Str("text")); return true; });
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>
