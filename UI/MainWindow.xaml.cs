@@ -81,7 +81,8 @@ public partial class MainWindow : Window
         ShowTabs();
         ShowWebTabs();
         WebServices.Changed += () => Dispatcher.BeginInvoke(ShowWebTabs);
-        ShowQueueTab(App.Settings.ShowLyrics);
+        ShowQueueTab(App.Settings.ShowLyrics, App.Settings.ShowGenerated);
+        ApplyNowPanel();
         Navigate("quickplay");
         RefreshTransport();
     }
@@ -132,15 +133,32 @@ public partial class MainWindow : Window
 
     void QueueTab_Click(object sender, RoutedEventArgs e) => ShowQueueTab(false);
     void LyricsTab_Click(object sender, RoutedEventArgs e) => ShowQueueTab(true);
+    void GeneratedTab_Click(object sender, RoutedEventArgs e) => ShowQueueTab(true, generated: true);
 
-    public void ShowQueueTab(bool lyrics)
+    /// <summary>Now playing's side pane: the queue, the song's lyrics, or the lyrics the speech model wrote.</summary>
+    public void ShowQueueTab(bool lyrics, bool generated = false)
     {
+        var canGenerate = SpeechModel != null;
+        generated &= lyrics && canGenerate;
         App.Settings.ShowLyrics = lyrics;
+        App.Settings.ShowGenerated = generated;
+        GeneratedTab.Visibility = canGenerate ? Visibility.Visible : Visibility.Collapsed;
         QueueList.Visibility = lyrics ? Visibility.Collapsed : Visibility.Visible;
         LyricsPane.Visibility = lyrics ? Visibility.Visible : Visibility.Collapsed;
         QueueTabText.Opacity = lyrics ? 0.4 : 1;
-        LyricsTabText.Opacity = lyrics ? 1 : 0.4;
+        LyricsTabText.Opacity = lyrics && !generated ? 1 : 0.4;
+        GeneratedTabText.Opacity = generated ? 1 : 0.4;
+        _lyricsFor = null;
         LoadLyrics();
+    }
+
+    bool ShowingGenerated => App.Settings.ShowLyrics && App.Settings.ShowGenerated;
+
+    /// <summary>A panel behind the queue and lyrics (settings → display), so they read clearly over the visualizer.</summary>
+    public void ApplyNowPanel()
+    {
+        if (App.Settings.NowPanel) QueueBack.SetResourceReference(Border.BackgroundProperty, "NowPanelBg");
+        else QueueBack.Background = null;
     }
 
     public Lyrics? ShownLyrics => _lyrics;
@@ -153,33 +171,42 @@ public partial class MainWindow : Window
         if (ReferenceEquals(cur, _lyricsFor) && cur != null) return;
         _lyricsFor = cur;
         _lyricLine = -1;
-        _lyrics = Lyrics.For(cur?.Track);
+        var gen = ShowingGenerated;
+        var track = cur?.Track;
+        var listeningHere = _listening != null && _listeningTo == track && track != null;
+        _lyrics = listeningHere && gen ? _heard : gen ? Lyrics.Generated(track) : Lyrics.For(track);
         LyricsList.ItemsSource = _lyrics?.Lines;
         LyricsEmpty.Visibility = _lyrics == null ? Visibility.Visible : Visibility.Collapsed;
-        LyricsEmpty.Text = cur == null ? "" : cur.Track == null ? "Lyrics are shown for songs."
+        LyricsEmpty.Text = cur == null ? "" : track == null ? "Lyrics are shown for songs."
+            : gen ? "The speech model hasn't written lyrics for this song yet.\n\nChoose “listen” below and it writes down what is sung, line by line, as it hears it."
             : "No lyrics for this song yet.\n\nUse “find online”, “import file” or “paste” below, put a .lrc or .txt file with the same name beside the song, or add lyrics to its tags.";
-        LyricsNote.Text = _lyrics == null ? "" : _lyrics.Synced ? _lyrics.Source + "   ·   double-click a line to jump to it" : _lyrics.Source;
-        var track = cur?.Track;
+        LyricsNote.Text = listeningHere && gen ? "the speech model is listening…" : _lyrics == null ? "" : _lyrics.Synced ? _lyrics.Source + "   ·   double-click a line to jump to it" : _lyrics.Source;
+        // each tab has its own buttons
+        LyricsFindBtn.Visibility = LyricsImportBtn.Visibility = LyricsPasteBtn.Visibility = gen ? Visibility.Collapsed : Visibility.Visible;
+        LyricsListenBtn.Visibility = gen ? Visibility.Visible : Visibility.Collapsed;
         LyricsFindBtn.IsEnabled = LyricsImportBtn.IsEnabled = LyricsPasteBtn.IsEnabled = track != null;
         LyricsListenBtn.IsEnabled = track != null && SpeechModel != null;
-        LyricsListenBtn.Content = _listening != null && _listeningTo == track ? "stop listening" : "listen";
-        LyricsRemoveBtn.Visibility = track != null && Lyrics.HasStored(track) ? Visibility.Visible : Visibility.Collapsed;
+        LyricsListenBtn.Content = listeningHere ? "stop listening" : track != null && Lyrics.HasGenerated(track) ? "listen again" : "listen";
+        LyricsRemoveBtn.Visibility = track != null && !listeningHere && (gen ? Lyrics.HasGenerated(track) : Lyrics.HasStored(track)) ? Visibility.Visible : Visibility.Collapsed;
+        LyricsRemoveBtn.ToolTip = gen ? "Remove what the speech model wrote for this song" : "Remove the lyrics you imported for this song";
         if (_lyrics is { Lines.Count: > 0 }) LyricsList.ScrollIntoView(_lyrics.Lines[0]);
         // look it up by itself, if that was asked for in settings (once per song per session)
-        if (_lyrics == null && track != null && _lyricsAsked.Add(track.Id))
+        if (track != null && _lyricsAsked.Add(track.Id) && Lyrics.For(track) == null)
         {
             if (App.Settings.LyricsAuto) _ = FindThenListenAsync(track);
-            else if (App.Settings.LyricsListen && SpeechModel != null) _ = ListenAsync(track, quiet: true);
+            else if (App.Settings.LyricsListen && SpeechModel != null && !Lyrics.HasGenerated(track)) _ = ListenAsync(track, quiet: true);
         }
     }
 
-    public void RefreshLyrics() => ReloadLyrics();
+    public void RefreshLyrics() => ShowQueueTab(App.Settings.ShowLyrics, App.Settings.ShowGenerated);
 
     async Task FindThenListenAsync(Track track)
     {
         await FindLyricsAsync(track, quiet: true);
-        if (App.Settings.LyricsListen && SpeechModel != null && Lyrics.For(track) == null && P.Current?.Track == track) await ListenAsync(track, quiet: true);
+        if (App.Settings.LyricsListen && SpeechModel != null && Lyrics.For(track) == null && !Lyrics.HasGenerated(track) && P.Current?.Track == track) await ListenAsync(track, quiet: true);
     }
+
+    Lyrics? _heard;   // what the speech model has written so far, while it listens
 
     /// <summary>The speech model chosen in settings, when it has been downloaded.</summary>
     static Halcyon.Services.SpeechLyrics.Model? SpeechModel =>
@@ -197,16 +224,17 @@ public partial class MainWindow : Window
         _listening = cancel;
         _listeningTo = track;
         var lines = new List<string>();
+        _heard = null;
         void Show()
         {
-            if (P.Current?.Track != track || Lyrics.Parse(string.Join("\n", lines), "the speech model is listening…") is not { } partial) return;
-            _lyrics = partial;
+            _heard = Lyrics.Parse(string.Join("\n", lines), "the speech model is listening…");
+            if (P.Current?.Track != track || !ShowingGenerated || _heard == null) return;
+            _lyrics = _heard;
             _lyricLine = -1;
-            LyricsList.ItemsSource = partial.Lines;
+            LyricsList.ItemsSource = _heard.Lines;
             LyricsEmpty.Visibility = Visibility.Collapsed;
         }
-        LyricsListenBtn.Content = "stop listening";
-        LyricsNote.Text = "the speech model is listening…";
+        if (ShowingGenerated) ReloadLyrics();
         try
         {
             var source = track.IsLocal ? track.Location : Player.From(track).Url;
@@ -214,17 +242,21 @@ public partial class MainWindow : Window
             {
                 lines.Add($"[{ms / 60000:00}:{ms / 1000 % 60:00}.{ms % 1000 / 10:00}]{text}");
                 Show();
-            }), cancel.Token);
-            if (lrc == null) { if (P.Current?.Track == track) LyricsNote.Text = "the speech model heard no words in this song"; return; }
-            Lyrics.Save(track, lrc);
+            }), cancel.Token, track.Title, track.Artist);
+            Finish();
+            if (lrc == null) { if (P.Current?.Track == track && ShowingGenerated) LyricsNote.Text = "the speech model heard no words in this song"; return; }
+            Lyrics.SaveGenerated(track, lrc);
             if (P.Current?.Track == track) ReloadLyrics();
         }
-        catch (OperationCanceledException) { if (P.Current?.Track == track) ReloadLyrics(); }
-        catch (Exception ex) { if (!quiet || P.Current?.Track == track) LyricsNote.Text = "the speech model couldn't listen: " + ex.Message; }
-        finally
+        catch (OperationCanceledException) { Finish(); if (P.Current?.Track == track) ReloadLyrics(); }
+        catch (Exception ex) { Finish(); if (P.Current?.Track == track && (ShowingGenerated || !quiet)) { ReloadLyrics(); LyricsNote.Text = "the speech model couldn't listen: " + ex.Message; } }
+
+        void Finish()
         {
-            if (_listening == cancel) { _listening = null; _listeningTo = null; }
-            if (P.Current?.Track == track) LyricsListenBtn.Content = "listen";
+            if (_listening != cancel) return;
+            _listening = null;
+            _listeningTo = null;
+            _heard = null;
         }
     }
 
@@ -285,7 +317,7 @@ public partial class MainWindow : Window
     void LyricsRemove_Click(object sender, RoutedEventArgs e)
     {
         if (P.Current?.Track is not { } track) return;
-        Lyrics.Remove(track);
+        if (ShowingGenerated) Lyrics.RemoveGenerated(track); else Lyrics.Remove(track);
         ReloadLyrics();
     }
 

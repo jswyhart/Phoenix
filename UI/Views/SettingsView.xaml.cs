@@ -105,6 +105,7 @@ public partial class SettingsView : UserControl
     {
         QuickplayPlaysBox.IsChecked = App.Settings.QuickplayPlays;
         RunInTrayBox.IsChecked = App.Settings.RunInTray;
+        NowPanelBox.IsChecked = App.Settings.NowPanel;
         _settingUp = true;
         VizStyle.ItemsSource = Visualizer.Styles;
         VizColour.ItemsSource = Visualizer.Palettes;

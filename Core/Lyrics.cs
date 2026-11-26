@@ -43,14 +43,46 @@ public class Lyrics
 
     public static void Remove(Track t) { try { File.Delete(StorePath(t)); } catch { } }
 
+    // ---------- lyrics the speech model wrote: a tab of their own, apart from the song's lyrics ----------
+
+    public const string GeneratedMark = "[re:Phoenix speech model";
+    public static string GeneratedPath(Track t) => Path.ChangeExtension(StorePath(t), ".generated.lrc");
+    public static bool HasGenerated(Track t) => File.Exists(GeneratedPath(t));
+
+    public static void SaveGenerated(Track t, string text)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(GeneratedPath(t))!);
+        File.WriteAllText(GeneratedPath(t), text);
+    }
+
+    public static void RemoveGenerated(Track t) { try { File.Delete(GeneratedPath(t)); } catch { } }
+
+    /// <summary>The lyrics the speech model wrote for a song, if it has.</summary>
+    public static Lyrics? Generated(Track? t)
+    {
+        if (t == null) return null;
+        try
+        {
+            if (!HasGenerated(t)) { For(t); if (!HasGenerated(t)) return null; }   // (For moves older ones over)
+            var text = File.ReadAllText(GeneratedPath(t));
+            var model = text.StartsWith(GeneratedMark) ? text[GeneratedMark.Length..].Split(']')[0].Trim() : "";
+            return Parse(text, $"written by the speech model{(model != "" ? $" ({model})" : "")}; it may mishear");
+        }
+        catch { return null; }
+    }
+
     public static Lyrics? For(Track? t)
     {
         if (t == null) return null;
         try
         {
             // lyrics you imported come first, and work for songs on a server too
-            if (HasStored(t) && File.ReadAllText(StorePath(t)) is var kept
-                && Parse(kept, kept.StartsWith("[re:Phoenix speech model") ? "written by the speech model (it may mishear)" : "imported") is { } stored) return stored;
+            if (HasStored(t) && File.ReadAllText(StorePath(t)) is var kept)
+            {
+                // the speech model's lyrics were kept here once: they belong with the generated ones now
+                if (kept.StartsWith(GeneratedMark)) { if (!HasGenerated(t)) SaveGenerated(t, kept); Remove(t); }
+                else if (Parse(kept, "imported") is { } stored) return stored;
+            }
             if (!t.IsLocal) return null;
             var file = t.Location;
             foreach (var ext in new[] { ".lrc", ".txt" })

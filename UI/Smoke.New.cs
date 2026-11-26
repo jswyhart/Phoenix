@@ -890,12 +890,66 @@ public static partial class Smoke
                 var had = Lyrics.HasStored(song);
                 if (!had && lrc != null)
                 {
+                    // kept with the song's lyrics by the last version: moved to the generated ones
                     Lyrics.Save(song, lrc);
-                    Check("lyrics the speech model wrote say so", Lyrics.For(song)?.Source.Contains("speech model") == true, Lyrics.For(song)?.Source);
-                    Lyrics.Remove(song);
+                    var own = Lyrics.For(song);
+                    var gen = Lyrics.Generated(song);
+                    Check("lyrics the speech model wrote are kept apart from the song's lyrics, and say so",
+                        own?.Source.Contains("speech model") != true && !Lyrics.HasStored(song) && gen?.Source.Contains("speech model (tiny)") == true, gen?.Source);
+
+                    // the generated tab: there only while a model is chosen, with its own buttons
+                    var win = App.Win;
+                    var wasModel = App.Settings.LyricsModel;
+                    App.Settings.LyricsModel = "";
+                    win.ShowNow(true);
+                    win.RefreshLyrics();
+                    var tab = (FrameworkElement)win.FindName("GeneratedTab");
+                    var hiddenWithout = !tab.IsVisible;
+                    App.Settings.LyricsModel = "tiny";
+                    App.Player.Play(new[] { Player.From(song) }, 0);
+                    await Task.Delay(500);
+                    win.ShowQueueTab(true, generated: true);
+                    await Task.Delay(300);
+                    Visibility Vis(string name) => ((FrameworkElement)win.FindName(name)).Visibility;
+                    Check("the generated tab shows only while a speech model is chosen, beside lyrics",
+                        hiddenWithout && tab.IsVisible && App.Settings.ShowGenerated, $"{hiddenWithout} {tab.IsVisible}");
+                    Check("the generated tab shows what the model wrote, with listen and remove (not find, import, paste)",
+                        win.ShownLyrics?.Source.Contains("speech model") == true && Vis("LyricsListenBtn") == Visibility.Visible && Vis("LyricsFindBtn") == Visibility.Collapsed
+                        && Vis("LyricsRemoveBtn") == Visibility.Visible, win.ShownLyrics?.Source);
+                    await Shot("speech-generated-tab");
+                    win.ShowQueueTab(true);
+                    await Task.Delay(200);
+                    Check("and the lyrics tab keeps the song's own lyrics", win.ShownLyrics?.Source.Contains("speech model") != true && Vis("LyricsFindBtn") == Visibility.Visible);
+                    win.ShowQueueTab(false);
+                    App.Player.Stop();
+                    win.ShowNow(false);
+                    App.Settings.LyricsModel = wasModel;
+                    Lyrics.RemoveGenerated(song);
                 }
+                // the recommended model suits the graphics: large v3 on a separate card with 6 GB or more
+                var cards = SpeechLyrics.Gpus();
+                var rec = SpeechLyrics.Recommended();
+                var big = cards.FirstOrDefault(g => g.Kind == "separate");
+                Check("the model recommended suits the graphics card and its memory",
+                    big == null ? rec.Id is "turbo" or "small" : rec.Id == (big.MemoryMb >= 5800 ? "large" : big.MemoryMb >= 3000 ? "turbo-full" : "turbo"),
+                    $"{rec.Name}; " + string.Join(", ", cards.Select(g => $"{g.Name} {g.MemoryMb} MB")));
+                Check("every model is under 6 GB", SpeechLyrics.Models.All(m => m.Megabytes < 6 * 1024) && SpeechLyrics.Models.Length == 6);
                 try { File.Delete(wav); } catch { }
             }
+        }
+
+        // a panel behind now playing's queue and lyrics, over the visualizer
+        {
+            var win = App.Win;
+            var back = (System.Windows.Controls.Border)win.FindName("QueueBack");
+            var offFirst = !App.Settings.NowPanel && back.Background == null;
+            App.Settings.NowPanel = true;
+            win.ApplyNowPanel();
+            var brush = back.Background as System.Windows.Media.SolidColorBrush;
+            Check("settings can put a panel behind the song list and lyrics over the visualizer (off at first)",
+                offFirst && brush != null && brush.Color.A is > 0xB0 and < 0xFF, brush?.Color.ToString());
+            App.Settings.NowPanel = false;
+            win.ApplyNowPanel();
         }
 
         // running on in the notification area: off by default; on, closing the window only hides it

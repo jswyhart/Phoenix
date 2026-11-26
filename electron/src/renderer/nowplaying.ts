@@ -37,7 +37,8 @@ export class NowPlaying {
   private lyrics: { synced: boolean; source: string; lines: { ms: number; text: string }[] } | null = null;
   private lyricsFor: number | null = null;
   private lineNow = -1;
-  private paneTabs: { queue: HTMLElement; lyrics: HTMLElement };
+  private paneTabs: { queue: HTMLElement; lyrics: HTMLElement; generated: HTMLElement };
+  private speechReady = false;   // a speech model is downloaded and chosen: the generated tab shows
   // artist photos behind the song, when switched on in settings → display
   private backdrop = h("div.backdrop.hidden", h("img"), h("img"));
   private photos: string[] = [];
@@ -48,6 +49,13 @@ export class NowPlaying {
   constructor(private transport: HTMLElement) {
     this.viz = new Viz(this.canvas);
     on("speech.line", (e: { id: number; ms: number; text: string }) => this.heardLine(e));
+    on("speech", (e: { state: { ready: boolean } }) => {
+      if (this.speechReady === e.state.ready) return;
+      this.speechReady = e.state.ready;
+      this.paintPaneTabs();
+      if (this.showingLyrics()) void this.loadLyrics(true);
+    });
+    window.addEventListener("phoenix-display", () => this.paintPaneTabs());
     this.queue = new VList<QueueItem>({
       rowHeight: 44,
       render: (q, i) => h("div.queuerow",
@@ -59,24 +67,27 @@ export class NowPlaying {
         if (i >= 0) menuAt([{ label: "Play", action: () => call("player.playAt", { index: i }) }, { label: "Remove from now playing", action: () => call("player.removeAt", { index: i }) }], e);
       },
     });
-    const tab = (label: string, lyrics: boolean) => h("div.h2.panetab", { onclick: () => void this.showLyrics(lyrics) }, label);
-    this.paneTabs = { queue: tab("now playing", false), lyrics: tab("lyrics", true) };
+    const tab = (label: string, lyrics: boolean, generated = false) => h("div.h2.panetab", { onclick: () => void this.showLyrics(lyrics, generated) }, label);
+    this.paneTabs = { queue: tab("now playing", false), lyrics: tab("lyrics", true), generated: tab("generated", true, true) };
+    this.paneTabs.generated.title = "Lyrics the speech model on this computer wrote by listening to the song";
     this.lyricsPane.append(this.lyricsLines, this.lyricsNote,
       h("div.lyricbtns",
-        textBtn("find on LRCLIB", () => void this.lyricsAction("lyrics.find", "looking on LRCLIB…")),
+        this.findBtn,
         this.listenBtn,
-        textBtn("from a file…", async () => {
+        this.fileBtn = textBtn("from a file…", async () => {
           const file = await host.openFile("Lyrics for this song", [{ name: "Lyrics", extensions: ["lrc", "txt"] }]);
           if (file) await this.lyricsAction("lyrics.import", "", { file });
         }),
-        textBtn("paste", async () => {
+        this.pasteBtn = textBtn("paste", async () => {
           let text = "";
           try { text = await navigator.clipboard.readText(); } catch { /* nothing to paste */ }
           if (text.trim() === "") { await message("Copy the lyrics first, then choose paste."); return; }
           await this.lyricsAction("lyrics.import", "", { text });
         }),
-        textBtn("remove", () => void this.lyricsAction("lyrics.remove", ""))));
-    this.queuePane = h("div.queue", h("div.panetabs", this.paneTabs.queue, this.paneTabs.lyrics), this.queue.el, this.lyricsPane);
+        textBtn("remove", () => void (this.showingGenerated()
+          ? call("lyrics.removeGenerated", { id: shell.player.current?.trackId }).then(() => this.loadLyrics(true))
+          : this.lyricsAction("lyrics.remove", "")))));
+    this.queuePane = h("div.queue", h("div.panetabs", this.paneTabs.queue, this.paneTabs.lyrics, this.paneTabs.generated), this.queue.el, this.lyricsPane);
     this.info = h("div.info", h("div.words", h("div.cover", this.cover), this.title, this.artist, this.album), this.queuePane);
     this.vizBtn = iconBtn("visualizer", "Visualizer style and colours (V and C cycle them)", () => menuAt(this.vizMenu(), this.vizBtn));
     this.el = h("div.now.hidden", this.mosaic, this.backdrop, this.shade, this.canvas, this.info, this.video,
@@ -94,25 +105,44 @@ export class NowPlaying {
     document.addEventListener("mousemove", () => { if (this.full) this.wake(); });
     on("tick", (t: { pos: number }) => this.follow(t.pos));
     this.paintPaneTabs();
+    void this.refreshSpeech();
   }
 
   // ---------- lyrics ----------
 
   private showingLyrics() { return shell.display.showLyrics; }
+  private showingGenerated() { return shell.display.showLyrics && shell.display.showGenerated && this.speechReady; }
+  private findBtn = textBtn("find on LRCLIB", () => void this.lyricsAction("lyrics.find", "looking on LRCLIB…"));
+  private fileBtn!: HTMLElement;
+  private pasteBtn!: HTMLElement;
 
-  async showLyrics(on: boolean) {
-    const d = await call<typeof shell.display>("display.set", { showLyrics: on });
+  /** The side pane: the queue, the song's lyrics, or the lyrics the speech model wrote ("generated"). */
+  async showLyrics(on: boolean, generated = false) {
+    const d = await call<typeof shell.display>("display.set", { showLyrics: on, showGenerated: on && generated });
     shell.display = d;
     this.paintPaneTabs();
     if (on) await this.loadLyrics(true);
   }
 
+  /** Whether the generated tab is there (a model downloaded and chosen), and the panel behind the pane. */
+  async refreshSpeech() {
+    const sp = await call<{ ready: boolean }>("speech.state");
+    this.speechReady = sp.ready;
+    this.paintPaneTabs();
+  }
+
   private paintPaneTabs() {
-    const lyrics = this.showingLyrics();
+    const lyrics = this.showingLyrics(), gen = this.showingGenerated();
     this.paneTabs.queue.classList.toggle("on", !lyrics);
-    this.paneTabs.lyrics.classList.toggle("on", lyrics);
+    this.paneTabs.lyrics.classList.toggle("on", lyrics && !gen);
+    this.paneTabs.generated.classList.toggle("on", gen);
+    this.paneTabs.generated.classList.toggle("hidden", !this.speechReady);
     this.queue.el.classList.toggle("hidden", lyrics);
     this.lyricsPane.classList.toggle("hidden", !lyrics);
+    this.queuePane.classList.toggle("panel", shell.display.nowPanel);
+    // each tab has its own buttons
+    for (const b of [this.findBtn, this.fileBtn, this.pasteBtn]) b.classList.toggle("hidden", gen);
+    this.listenBtn.classList.toggle("hidden", !gen);
   }
 
   /** The lyrics of the song playing (looked up online by itself only if that is switched on in settings). */
@@ -122,12 +152,20 @@ export class NowPlaying {
     this.lyricsFor = id;
     if (id == null) { this.paintLyrics(null, shell.player.current ? "Lyrics are for songs in your collection." : "Nothing is playing."); return; }
     this.paintLyrics(null, "");
+    if (this.showingGenerated()) {
+      if (this.listening === id) { this.paintHeard(); return; }
+      const g = await call<typeof this.lyrics>("lyrics.generated", { id });
+      if (this.lyricsFor !== id || !this.showingGenerated()) return;
+      this.paintLyrics(g, g ? "" : "The speech model hasn't written lyrics for this song yet. Choose “listen” below and it writes down what is sung, line by line, as it hears it.");
+      this.listenBtn.textContent = g ? "listen again" : "listen";
+      return;
+    }
     const l = await call<typeof this.lyrics>("lyrics.get", { id, auto: true });
     if (this.lyricsFor !== id) return;
-    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, let the speech model listen, or take them from a file or the clipboard.");
+    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, or take them from a file or the clipboard.");
     if (!l && this.listening == null) {
-      const sp = await call<{ listen: boolean; model: string; models: { id: string; have: boolean }[] }>("speech.state");
-      if (this.lyricsFor === id && sp.listen && sp.models.some(m => m.id === sp.model && m.have)) void this.listen(true);
+      const sp = await call<{ listen: boolean; ready: boolean }>("speech.state");
+      if (this.lyricsFor === id && sp.listen && sp.ready && !(await call("lyrics.generated", { id }))) void this.listen(true);
     }
   }
 
@@ -143,22 +181,29 @@ export class NowPlaying {
     this.listening = id;
     this.heard = [];
     this.listenBtn.textContent = "stop listening";
-    this.lyricsNote.textContent = "the speech model is listening…";
+    if (this.showingGenerated()) this.paintHeard();
     try {
       const l = await call<typeof this.lyrics>("lyrics.listen", { id });
-      if (this.lyricsFor === id) this.paintLyrics(l, l ? "" : "No lyrics for this song.");
+      if (this.listening === id) this.listening = null;
+      if (this.lyricsFor === id && this.showingGenerated()) this.paintLyrics(l, l ? "" : "No lyrics for this song.");
     } catch (e: any) {
-      if (this.lyricsFor === id && (!quiet || !this.lyrics)) this.lyricsNote.textContent = String(e.message ?? e);
+      if (this.listening === id) this.listening = null;
+      if (this.lyricsFor === id && this.showingGenerated() && (!quiet || !this.lyrics)) { this.paintLyrics(null, ""); this.lyricsNote.textContent = String(e.message ?? e); }
     } finally {
       if (this.listening === id) this.listening = null;
-      this.listenBtn.textContent = "listen";
+      this.listenBtn.textContent = "listen again";
     }
   }
 
+  private paintHeard() {
+    this.paintLyrics(this.heard.length ? { synced: true, source: "the speech model is listening…", lines: [...this.heard] } : null, "the speech model is listening…");
+    this.listenBtn.textContent = "stop listening";
+  }
+
   private heardLine(e: { id: number; ms: number; text: string }) {
-    if (e.id !== this.listening || e.id !== this.lyricsFor) return;
+    if (e.id !== this.listening) return;
     this.heard.push({ ms: e.ms, text: e.text });
-    this.paintLyrics({ synced: true, source: "the speech model is listening…", lines: [...this.heard] } as any, "the speech model is listening…");
+    if (e.id === this.lyricsFor && this.showingGenerated()) this.paintHeard();
   }
 
   private async lyricsAction(method: string, busy: string, extra: Record<string, string> = {}) {

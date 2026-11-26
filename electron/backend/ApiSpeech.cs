@@ -14,8 +14,10 @@ public static partial class Api
     static object SpeechState() => new
     {
         models = SpeechLyrics.Models.Select(m => new { id = m.Id, name = m.Name, mb = m.Megabytes, note = m.Note, have = SpeechLyrics.Have(m) }),
+        recommended = SpeechLyrics.Recommended().Id,
+        ready = ReadyModel != null,
         model = S.LyricsModel,
-        gpus = (_gpus ??= SpeechLyrics.Gpus()).Select(g => new { index = g.Index, name = g.Name, kind = g.Kind }),
+        gpus = (_gpus ??= SpeechLyrics.Gpus()).Select(g => new { index = g.Index, name = g.Name, kind = g.Kind, memoryMb = g.MemoryMb }),
         gpu = S.LyricsGpu,
         listen = S.LyricsListen,
         ranOn = SpeechLyrics.RanOn,
@@ -35,10 +37,12 @@ public static partial class Api
         Rpc.On("speech.state", _ => SpeechState());
         Rpc.On("speech.set", p =>
         {
-            if (p.Has("model") && SpeechLyrics.Find(p.Str("model")) is { } m && SpeechLyrics.Have(m)) S.LyricsModel = m.Id;
+            if (p.Has("model") && p.Str("model") == "") S.LyricsModel = "";
+            else if (p.Has("model") && SpeechLyrics.Find(p.Str("model")) is { } m && SpeechLyrics.Have(m)) S.LyricsModel = m.Id;
             if (p.Has("gpu")) { S.LyricsGpu = SpeechLyrics.GpuChoice = (int)p.Long("gpu"); SpeechLyrics.Unload(); }
             if (p.Has("listen")) S.LyricsListen = p.Bool("listen");
             Save();
+            Rpc.Emit("speech", new { state = SpeechState(), error = (string?)null });
             return SpeechState();
         });
         Rpc.On("speech.download", downloadParams =>
@@ -69,7 +73,15 @@ public static partial class Api
                 SpeechLyrics.Delete(m);
                 if (S.LyricsModel == m.Id) { S.LyricsModel = ""; Save(); }
             }
+            Rpc.Emit("speech", new { state = SpeechState(), error = (string?)null });
             return SpeechState();
+        });
+
+        Rpc.On("lyrics.generated", p => TrackOf(p.Long("id")) is { } t ? LyricsShape(Lyrics.Generated(t)) : (object?)null);
+        Rpc.On("lyrics.removeGenerated", p =>
+        {
+            if (TrackOf(p.Long("id")) is { } t) Lyrics.RemoveGenerated(t);
+            return (object?)null;
         });
 
         // the speech model listens to a song; each line is sent as it is written ("speech.line"), the lyrics at the end
@@ -85,12 +97,12 @@ public static partial class Api
             try
             {
                 var source = t.IsLocal ? t.Location : Player.From(t).Url;
-                var lrc = await SpeechLyrics.TranscribeAsync(source, m, (ms, text) => MainLoop.Post(() => Rpc.Emit("speech.line", new { id = t.Id, ms, text })), cancel.Token);
+                var lrc = await SpeechLyrics.TranscribeAsync(source, m, (ms, text) => MainLoop.Post(() => Rpc.Emit("speech.line", new { id = t.Id, ms, text })), cancel.Token, t.Title, t.Artist);
                 if (lrc == null) throw new InvalidOperationException("The speech model heard no words in this song.");
-                Lyrics.Save(t, lrc);
-                return LyricsShape(Lyrics.For(t));
+                Lyrics.SaveGenerated(t, lrc);
+                return LyricsShape(Lyrics.Generated(t));
             }
-            catch (OperationCanceledException) { return LyricsShape(Lyrics.For(t)); }
+            catch (OperationCanceledException) { return LyricsShape(Lyrics.Generated(t)); }
             finally { if (_listening == cancel) { _listening = null; _listeningTo = -1; } }
         });
 
@@ -103,7 +115,7 @@ public static partial class Api
             var cancel = _speechAll.Token;
             _ = Task.Run(async () =>
             {
-                var songs = Lib.Tracks.Where(t => t.IsLocal && Lyrics.For(t) == null).ToList();
+                var songs = Lib.Tracks.Where(t => t.IsLocal && Lyrics.For(t) == null && !Lyrics.HasGenerated(t)).ToList();
                 int done = 0, wrote = 0;
                 void Tell(string s) => MainLoop.Post(() => { _speechAllStatus = s; Rpc.Emit("speech", new { state = SpeechState(), error = (string?)null }); });
                 try
@@ -111,7 +123,7 @@ public static partial class Api
                     foreach (var t in songs)
                     {
                         Tell($"listening to {done + 1} of {songs.Count}: {t.Title}   ({wrote} written so far)");
-                        try { if (await SpeechLyrics.TranscribeAsync(t.Location, m, null, cancel) is { } lrc && Lyrics.For(t) == null) { Lyrics.Save(t, lrc); wrote++; } }
+                        try { if (await SpeechLyrics.TranscribeAsync(t.Location, m, null, cancel, t.Title, t.Artist) is { } lrc) { Lyrics.SaveGenerated(t, lrc); wrote++; } }
                         catch (OperationCanceledException) { throw; }
                         catch { }
                         done++;
@@ -122,6 +134,12 @@ public static partial class Api
                 catch (OperationCanceledException) { MainLoop.Post(() => _speechAll = null); Tell($"stopped; wrote lyrics for {wrote} songs"); }
             });
             return SpeechState();
+        });
+
+        Rpc.On("smoke.saveGenerated", p =>
+        {
+            if (TrackOf(p.Long("id")) is { } t) Lyrics.SaveGenerated(t, p.Str("text"));
+            return (object?)null;
         });
 
         // the self-test: listen to a file

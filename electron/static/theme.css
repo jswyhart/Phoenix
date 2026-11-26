@@ -264,8 +264,10 @@ input[type="range"] { accent-color: var(--accent); }
 .now .lyriclines { flex: 1 1 0; overflow-y: auto; min-height: 0; font-size: 17px; line-height: 1.55; color: var(--now-fg); padding-right: 8px; user-select: text; }
 .now .lyriclines.synced .lyricline { opacity: 0.45; transition: opacity 0.25s; }
 .now .lyriclines.synced .lyricline.sung { opacity: 1; color: var(--now-fg); }
-.now .lyricnote { color: var(--now-fg-faint); font-size: 12px; margin: 8px 0 4px 0; }
-.now .lyricbtns { display: flex; gap: 14px; flex: none; }
+.now .lyricnote { color: var(--now-fg-dim); font-size: 12.5px; line-height: 1.35; margin: 8px 0 4px 0; white-space: normal; overflow-wrap: anywhere; }
+.now .lyricbtns { display: flex; flex-wrap: wrap; gap: 4px 14px; flex: none; }
+/* a panel behind the queue and lyrics (settings → display), so they read clearly over the visualizer */
+.now .queue.panel { background: color-mix(in srgb, var(--now-bg) 85%, transparent); margin: -10px -14px; padding: 10px 14px; border-radius: 2px; }
 .now .lyricbtns .textbtn { color: var(--now-fg-dim); }
 .now .lyricbtns .textbtn:hover { color: var(--now-fg); }
 .now .backdrop { position: absolute; inset: 0; }

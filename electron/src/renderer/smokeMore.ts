@@ -520,14 +520,57 @@ async function runNow(check: Check, shot: Shot, settle: Settle, until: Until, so
   const gpus = gpuBox ? [...gpuBox.options].map(o => o.textContent ?? "") : [];
   check("settings lists where the speech model can run: automatic, each graphics card, the processor",
     host.platform === "mac" || (gpus.length >= 2 && gpus[0] === "automatic" && gpus[gpus.length - 1] === "the processor only"), gpus.join(" | "));
-  check("and the speech models to download", (document.querySelector<HTMLSelectElement>("select.speechmodel")?.options.length ?? 0) === 4);
+  const modelOptions = [...(document.querySelector<HTMLSelectElement>("select.speechmodel")?.options ?? [])].map(o => o.textContent ?? "");
+  check("and the speech models to download, under 6 GB, one recommended for this computer",
+    modelOptions.length === 6 && modelOptions.filter(o => o.includes("recommended here")).length === 1, modelOptions.find(o => o.includes("recommended")));
   {
     const started = performance.now();
     const heard = await call<{ lrc: string | null; lines: string[]; ranOn: string; skipped: boolean }>("smoke.listenFile", { model: "tiny" });
     check(heard.skipped ? "the speech model writes lyrics (no tiny model or speech sample to test with)" : "the speech model writes timed lyrics, line by line as it hears them",
       !heard.skipped && !!heard.lrc && heard.lrc.startsWith("[re:Phoenix speech model") && /brown fox/i.test(heard.lrc) && heard.lines.length >= 1,
       `${Math.round(performance.now() - started)} ms on ${heard.ranOn}: ${heard.lrc ?? ""}`);
+
+    // the generated tab: there only while a model is chosen, apart from the song's own lyrics, with its own buttons
+    if (heard.lrc) {
+      const generatedTab = () => [...document.querySelectorAll<HTMLElement>(".now .panetab")].find(t => t.textContent === "generated");
+      const before = await call<{ model: string }>("speech.state");
+      await call("speech.set", { model: "" });
+      await call("display.set", { showGenerated: false });
+      await call("smoke.saveGenerated", { id: songs[0].id, text: heard.lrc });
+      await call("play.tracks", { ids: [songs[0].id] });
+      shell.showNow(true);
+      await now.showLyrics(true);
+      await settle(400);
+      const hiddenWithout = !visible(generatedTab());
+      await call("speech.set", { model: "tiny" });
+      await until(() => visible(generatedTab()), 3000);
+      await now.showLyrics(true, true);
+      await until(() => now.lyricsShown.lines >= 1, 3000);
+      const btn = (label: string) => [...document.querySelectorAll<HTMLElement>(".now .lyricbtns .textbtn")].find(b => b.textContent?.startsWith(label));
+      check("the generated tab shows only while a speech model is chosen, beside lyrics", hiddenWithout && visible(generatedTab()));
+      check("it shows what the model wrote, with listen and remove (not find, file, paste)",
+        /speech model/.test(now.lyricsShown.note) && visible(btn("listen")) && !visible(btn("find on LRCLIB")) && !visible(btn("paste")) && visible(btn("remove")), now.lyricsShown.note);
+      await shot("39-generated-lyrics");
+      await now.showLyrics(true);
+      await settle(400);
+      check("and the lyrics tab keeps the song's own", !/speech model/.test(now.lyricsShown.note) && visible(btn("find on LRCLIB")), now.lyricsShown.note);
+      await call("lyrics.removeGenerated", { id: songs[0].id });
+      await now.showLyrics(false);
+      shell.showNow(false);
+      await call("player.stop");
+      await call("speech.set", { model: before.model });
+    }
   }
+  // the panel behind now playing's queue and lyrics, over the visualizer
+  settings.showCategory("software", "Display");
+  await settle(300);
+  const panelBox = document.querySelector<HTMLInputElement>("input.nowpanel");
+  const offFirst = !!panelBox && !panelBox.checked && !document.querySelector(".now .queue.panel");
+  if (panelBox) { panelBox.checked = true; panelBox.dispatchEvent(new Event("change")); }
+  await until(() => !!document.querySelector(".now .queue.panel"), 2000);
+  check("settings can put a panel behind the song list and lyrics over the visualizer (off at first)", offFirst && !!document.querySelector(".now .queue.panel"));
+  if (panelBox) { panelBox.checked = false; panelBox.dispatchEvent(new Event("change")); }
+  await settle(200);
   settings.showCategory("software");
 }
 

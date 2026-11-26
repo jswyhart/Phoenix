@@ -40,8 +40,8 @@ export function photosSection() {
 }
 
 export interface SpeechState {
-  models: { id: string; name: string; mb: number; note: string; have: boolean }[]; model: string;
-  gpus: { index: number; name: string; kind: string }[]; gpu: number; listen: boolean; ranOn: string;
+  models: { id: string; name: string; mb: number; note: string; have: boolean }[]; model: string; recommended: string; ready: boolean;
+  gpus: { index: number; name: string; kind: string; memoryMb: number }[]; gpu: number; listen: boolean; ranOn: string;
   downloading: boolean; writingAll: boolean; allStatus: string; listeningTo: number;
 }
 
@@ -56,18 +56,21 @@ export function lyricsSection() {
   const download = h("button.pill", { style: { marginLeft: "10px" }, onclick: async () => { if (picked()) paint(await call<SpeechState>("speech.download", { id: modelBox.value })); } }, "DOWNLOAD");
   const del = h("button.textbtn", { style: { marginLeft: "8px" }, title: "Remove the downloaded model to free its space", onclick: async () => {
     const m = picked();
-    if (m && (await confirm(`Delete the ${m.name} speech model (${m.mb} MB)? Lyrics it already wrote are kept.`, "delete"))) paint(await call<SpeechState>("speech.delete", { id: m.id }));
+    if (m && (await confirm(`Delete the ${m.name} speech model (${m.mb >= 1000 ? `${(m.mb / 1024).toFixed(1)} GB` : `${m.mb} MB`})? Lyrics it already wrote are kept.`, "delete"))) paint(await call<SpeechState>("speech.delete", { id: m.id }));
   } }, "delete");
-  const listen = check("Write lyrics with the speech model for songs that have none, as they play", on => void call<SpeechState>("speech.set", { listen: on }).then(paint));
+  const listen = check("Write lyrics with the speech model as songs play, for songs that have no lyrics", on => void call<SpeechState>("speech.set", { listen: on }).then(paint));
   const all = h("button.pill", { onclick: async () => paint(await call<SpeechState>("speech.writeAll")) }, "WRITE LYRICS FOR SONGS THAT HAVE NONE");
   modelBox.onchange = async () => { const m = picked(); if (m?.have) paint(await call<SpeechState>("speech.set", { model: m.id })); else paint(st!); };
   gpuBox.onchange = async () => paint(await call<SpeechState>("speech.set", { gpu: Number(gpuBox.value) }));
   function paint(s: SpeechState) {
     const keep = modelBox.value;
     st = s;
-    modelBox.replaceChildren(...s.models.map(m => h("option", { value: m.id }, `${m.name}   (${m.mb} MB${m.have ? ", downloaded" : ""}): ${m.note}`)));
-    modelBox.value = keep && s.models.some(m => m.id === keep) ? keep : s.model || "small";
-    gpuBox.replaceChildren(h("option", { value: "-2" }, "automatic"), ...s.gpus.map(g => h("option", { value: String(g.index) }, `${g.name}   (${g.kind})`)), h("option", { value: "-1" }, "the processor only"));
+    const size = (mb: number) => mb >= 1000 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
+    modelBox.replaceChildren(...s.models.map(m => h("option", { value: m.id }, `${m.name}   (${size(m.mb)}${m.have ? ", downloaded" : ""}${m.id === s.recommended ? ", recommended here" : ""}): ${m.note}`)));
+    modelBox.value = keep && s.models.some(m => m.id === keep) ? keep : s.model || s.recommended;
+    gpuBox.replaceChildren(h("option", { value: "-2" }, "automatic"),
+      ...s.gpus.map(g => h("option", { value: String(g.index) }, `${g.name}   (${g.kind}${g.kind === "separate" && g.memoryMb > 0 ? `, ${Math.round(g.memoryMb / 1024)} GB` : ""})`)),
+      h("option", { value: "-1" }, "the processor only"));
     gpuBox.value = String(s.gpu);
     if (gpuBox.selectedIndex < 0) gpuBox.value = "-2";
     const m = picked();
@@ -79,7 +82,7 @@ export function lyricsSection() {
     all.textContent = s.writingAll ? "STOP" : "WRITE LYRICS FOR SONGS THAT HAVE NONE";
     (all as HTMLButtonElement).disabled = !m?.have && !s.writingAll;
     status.textContent = s.downloading ? progress : s.writingAll || s.allStatus ? s.allStatus
-      : m?.have ? (s.ranOn ? `ready; it last ran on ${s.ranOn}` : "ready") : `download the model to use it (${m?.mb ?? 0} MB)`;
+      : m?.have ? (s.ranOn ? `ready; it last ran on ${s.ranOn}` : "ready") : `download the model to use it (${size(m?.mb ?? 0)})`;
   }
   on("speech.progress", (p: { id: string; done: number }) => { progress = `downloading: ${Math.round(p.done * 100)}%`; if (st?.downloading) status.textContent = progress; });
   on("speech", (e: { state: SpeechState; error: string | null }) => { paint(e.state); if (e.error) status.textContent = "couldn't download the model: " + e.error; });
@@ -93,6 +96,7 @@ export function lyricsSection() {
     row("model", modelBox, download, del),
     host.platform === "mac" ? h("div") : row("runs on", gpuBox),
     h("div", { style: { marginTop: "6px" } }, listen.el),
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, "What the model writes is shown on a tab of its own in now playing, “generated”, next to lyrics. The tab is there while a model is downloaded and chosen."),
     h("div", { style: { marginTop: "10px" } }, all),
     status);
   return { el, shown: async () => { auto.box.checked = shell.display.lyricsAuto; paint(await call<SpeechState>("speech.state")); } };

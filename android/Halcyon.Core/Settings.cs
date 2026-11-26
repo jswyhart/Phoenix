@@ -87,6 +87,8 @@ public class Settings
     public string LyricsModel { get; set; } = "";          // the speech model that writes lyrics (desktop); "" none
     public int LyricsGpu { get; set; } = -2;              // -2 automatic, -1 the processor only, or a Vulkan device index
     public bool LyricsListen { get; set; }                // write lyrics with the speech model for songs that have none, as they play
+    public bool ShowGenerated { get; set; }               // now playing's side pane shows the speech model's lyrics (desktop)
+    public bool NowPanel { get; set; }                    // a panel behind the queue and lyrics over the visualizer (desktop)
     public bool RunInTray { get; set; }                   // closing the window leaves Phoenix playing in the tray (desktop)
     public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)

@@ -293,6 +293,11 @@ public static class Themes
         var grad = new LinearGradientBrush(t.Get("AccentStart"), t.Get("AccentEnd"), new Point(0, 0), new Point(1, 0));
         grad.Freeze();
         res["AccentGrad"] = grad;
+        // the panel that can sit behind now playing's queue and lyrics (settings → display): its background, mostly opaque
+        var nowBg = t.Get("NowBg");
+        var panel = new SolidColorBrush(Color.FromArgb(0xD8, nowBg.R, nowBg.G, nowBg.B));
+        panel.Freeze();
+        res["NowPanelBg"] = panel;
         // behind your font, Segoe UI and the icon font, for the letters and symbols it doesn't have
         res["TextFont"] = new FontFamily(WithFallback(t.TextFontName));
         res["HeadFont"] = new FontFamily(WithFallback(t.HeadFontName));

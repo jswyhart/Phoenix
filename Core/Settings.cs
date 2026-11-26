@@ -48,6 +48,8 @@ public class Settings
     public string PodcastFolder { get; set; } = ""; // where downloads go; blank = "podcasts" in the app's data folder
     public bool PodcastRemovePlayed { get; set; } = true;   // delete a download once its episode has been played
     public Dictionary<string, int> PodcastKeepBySeries { get; set; } = new();   // feed address -> its own "keep downloaded" choice
+    public bool ShowGenerated { get; set; }         // ...the lyrics the speech model wrote (with ShowLyrics)
+    public bool NowPanel { get; set; }              // a panel behind the queue and lyrics, so they read clearly over the visualizer
     public bool ShowLyrics { get; set; }            // the now playing side pane shows lyrics instead of the queue
     public List<SmartPlaylist> SmartPlaylists { get; set; } = new();
     public List<Halcyon.Services.MetaSourceSetting> MetaSources { get; set; } = new();   // which metadata sources are on, and their weights

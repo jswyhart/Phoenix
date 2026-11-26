@@ -296,6 +296,13 @@ public partial class SettingsView
 
     // ---------- when the window is closed ----------
 
+    void NowPanel_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.NowPanel = NowPanelBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Win.ApplyNowPanel();
+    }
+
     void RunInTray_Click(object sender, RoutedEventArgs e)
     {
         App.Settings.RunInTray = RunInTrayBox.IsChecked == true;

@@ -101,6 +101,7 @@
                     <TextBlock x:Name="NowArtist" FontSize="26" FontFamily="{DynamicResource HeadFont}" Opacity="0.82" TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="NowAlbum" FontSize="16" Opacity="0.56" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                 </StackPanel>
+                <Border x:Name="QueueBack" Grid.Column="1" CornerRadius="2" Margin="-14,-10,-14,-10" Padding="14,10,14,10"/>
                 <DockPanel x:Name="QueuePane" Grid.Column="1">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
                         <Button x:Name="QueueTab" Style="{StaticResource BareBtn}" Click="QueueTab_Click" ToolTip="What is playing next">
@@ -109,17 +110,20 @@
                         <Button x:Name="LyricsTab" Style="{StaticResource BareBtn}" Click="LyricsTab_Click" Margin="20,0,0,0" ToolTip="Lyrics for this song">
                             <TextBlock x:Name="LyricsTabText" Text="lyrics" Style="{StaticResource H2}" Opacity="0.4"/>
                         </Button>
+                        <Button x:Name="GeneratedTab" Style="{StaticResource BareBtn}" Click="GeneratedTab_Click" Margin="20,0,0,0" Visibility="Collapsed" ToolTip="Lyrics the speech model on this computer wrote by listening to the song">
+                            <TextBlock x:Name="GeneratedTabText" Text="generated" Style="{StaticResource H2}" Opacity="0.4"/>
+                        </Button>
                     </StackPanel>
                     <TextBlock x:Name="DjText" DockPanel.Dock="Top" FontSize="12" Foreground="{DynamicResource NowHighlight}" Margin="8,0,0,6" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
                     <DockPanel x:Name="LyricsPane" Visibility="Collapsed">
-                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8,4,0,0">
+                        <WrapPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8,4,0,0">
                             <Button x:Name="LyricsFindBtn" Style="{StaticResource TextBtn}" Content="find online" Click="LyricsFind_Click" Margin="0,0,14,0" ToolTip="Look this song up on LRCLIB (sends its title, artist and album)"/>
-                            <Button x:Name="LyricsListenBtn" Style="{StaticResource TextBtn}" Content="listen" Click="LyricsListen_Click" Margin="0,0,14,0" ToolTip="Let the speech model on this computer write down what is sung (download one in settings → translation)"/>
+                            <Button x:Name="LyricsListenBtn" Style="{StaticResource TextBtn}" Content="listen" Click="LyricsListen_Click" Margin="0,0,14,0" ToolTip="Let the speech model on this computer write down what is sung"/>
                             <Button x:Name="LyricsImportBtn" Style="{StaticResource TextBtn}" Content="import file" Click="LyricsImport_Click" Margin="0,0,14,0" ToolTip="Use a .lrc or .txt file"/>
                             <Button x:Name="LyricsPasteBtn" Style="{StaticResource TextBtn}" Content="paste" Click="LyricsPaste_Click" Margin="0,0,14,0" ToolTip="Use the lyrics on the clipboard"/>
                             <Button x:Name="LyricsRemoveBtn" Style="{StaticResource TextBtn}" Content="remove" Click="LyricsRemove_Click" ToolTip="Remove the lyrics you imported for this song"/>
-                        </StackPanel>
-                        <TextBlock x:Name="LyricsNote" DockPanel.Dock="Bottom" FontSize="11" Foreground="{DynamicResource FgFaint}" Margin="8,6,0,0" TextTrimming="CharacterEllipsis"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="LyricsNote" DockPanel.Dock="Bottom" FontSize="12.5" Foreground="{DynamicResource FgDim}" Margin="8,8,8,0" TextWrapping="Wrap"/>
                         <Grid>
                             <ListBox x:Name="LyricsList" MouseDoubleClick="Lyrics_DoubleClick" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>

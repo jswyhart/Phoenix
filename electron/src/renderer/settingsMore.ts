@@ -145,9 +145,20 @@ export function visualizerSection() {
     el.replaceChildren(
       label("NOW PLAYING VISUALIZER"), select(init.vizStyles, S.visualizer, i => void set({ visualizer: i })),
       label("VISUALIZER COLOURS", true), select(init.vizPalettes, S.visualizerColor, i => void set({ visualizerColor: i })),
-      label("VISUALIZER SENSITIVITY", true), select(init.vizSensitivities, S.visualizerSensitivity, i => void set({ visualizerSensitivity: i })));
+      label("VISUALIZER SENSITIVITY", true), select(init.vizSensitivities, S.visualizerSensitivity, i => void set({ visualizerSensitivity: i })),
+      nowPanelBox());
   };
   return { el, shown };
+
+  /** A panel behind now playing's queue and lyrics, so they read clearly over the visualizer (as on Windows). */
+  function nowPanelBox() {
+    const box = h("input.nowpanel", { type: "checkbox", checked: shell.display.nowPanel });
+    box.onchange = async () => {
+      shell.display = await call("display.set", { nowPanel: box.checked });
+      window.dispatchEvent(new Event("phoenix-display"));
+    };
+    return h("label.check", { style: { margin: "14px 0 0 0" } }, box, "Put a panel behind the song list and lyrics, so they stay readable over the visualizer");
+  }
 }
 
 // ---------- storage: the data folder, backup and restore ----------

@@ -26,10 +26,28 @@ public static class SpeechLyrics
         new("tiny", "tiny", "ggml-tiny.bin", 75, "quick, but often mishears singing"),
         new("base", "base", "ggml-base.bin", 142, "quick; fine for clear vocals"),
         new("small", "small", "ggml-small.bin", 466, "good; a few seconds a song on a graphics card"),
-        new("turbo", "large v3 turbo", "ggml-large-v3-turbo-q5_0.bin", 547, "the best at sung words; wants a graphics card"),
+        new("turbo", "large v3 turbo, compact", "ggml-large-v3-turbo-q5_0.bin", 547, "good at sung words; fine on built-in graphics"),
+        new("turbo-full", "large v3 turbo", "ggml-large-v3-turbo.bin", 1549, "better; for a graphics card with 3 GB or more"),
+        new("large", "large v3", "ggml-large-v3.bin", 2952, "the most accurate; for a graphics card with 6 GB or more"),
     };
 
-    public const string Mark = "[re:Phoenix speech model";
+    public const string Mark = Lyrics.GeneratedMark;
+
+    /// <summary>
+    /// The model that suits this computer: the most accurate one the graphics can hold comfortably (a separate card with
+    /// 6 GB or more takes large v3), down to "small" for the processor.
+    /// </summary>
+    public static Model Recommended()
+    {
+        if (GpuChoice == -1) return Find("small")!;
+        if (OperatingSystem.IsMacOS()) return Find(RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "turbo-full" : "small")!;
+        var gpus = _gpusSeen ??= Gpus();
+        var g = GpuChoice >= 0 ? gpus.FirstOrDefault(x => x.Index == GpuChoice) : gpus.FirstOrDefault(x => x.Kind == "separate") ?? gpus.FirstOrDefault();
+        if (g == null) return Find("small")!;
+        if (g.Kind != "separate") return Find("turbo")!;
+        return Find(g.MemoryMb >= 5800 ? "large" : g.MemoryMb >= 3000 ? "turbo-full" : "turbo")!;
+    }
+    static List<Gpu>? _gpusSeen;
 
     public static Model? Find(string id) => Models.FirstOrDefault(m => m.Id == id);
 
@@ -87,7 +105,7 @@ public static class SpeechLyrics
 
     // ---------- the graphics card ----------
 
-    public record Gpu(int Index, string Name, string Kind);
+    public record Gpu(int Index, string Name, string Kind, long MemoryMb);
 
     /// <summary>Graphics cards Vulkan can use, in Vulkan's order (empty where there is no Vulkan, as on Macs).</summary>
     public static List<Gpu> Gpus()
@@ -104,6 +122,7 @@ public static class SpeechLyrics
             var destroy = Marshal.GetDelegateForFunctionPointer<VkDestroyInstance>(NativeLibrary.GetExport(lib, "vkDestroyInstance"));
             var enumerate = Marshal.GetDelegateForFunctionPointer<VkEnumeratePhysicalDevices>(NativeLibrary.GetExport(lib, "vkEnumeratePhysicalDevices"));
             var props = Marshal.GetDelegateForFunctionPointer<VkGetPhysicalDeviceProperties>(NativeLibrary.GetExport(lib, "vkGetPhysicalDeviceProperties"));
+            var memory = Marshal.GetDelegateForFunctionPointer<VkGetPhysicalDeviceProperties>(NativeLibrary.GetExport(lib, "vkGetPhysicalDeviceMemoryProperties"));
             var info = new VkInstanceCreateInfo { sType = 1 };
             if (create(ref info, IntPtr.Zero, out var instance) != 0) return list;
             try
@@ -120,7 +139,14 @@ public static class SpeechLyrics
                     var name = Encoding.UTF8.GetString(p, 20, 256).Split('\0')[0];
                     if (type == 4) continue;   // a software renderer (llvmpipe and the like): whisper.cpp leaves those out
                     var kind = type switch { 1 => "built in", 2 => "separate", 3 => "virtual", _ => "other" };
-                    list.Add(new Gpu(list.Count, name, kind));
+                    // VkPhysicalDeviceMemoryProperties: the largest heap on the card itself
+                    var mem = new byte[1024];
+                    memory(devices[i], mem);
+                    long biggest = 0;
+                    var heaps = BitConverter.ToUInt32(mem, 260);
+                    for (var hp = 0; hp < Math.Min(16, heaps); hp++)
+                        if ((BitConverter.ToUInt32(mem, 264 + hp * 16 + 8) & 1) != 0) biggest = Math.Max(biggest, (long)BitConverter.ToUInt64(mem, 264 + hp * 16));
+                    list.Add(new Gpu(list.Count, name, kind, biggest / 1_048_576));
                 }
             }
             finally { destroy(instance, IntPtr.Zero); }
@@ -188,7 +214,7 @@ public static class SpeechLyrics
     /// Listens to a song and writes its lyrics as timed .lrc text. <paramref name="line"/> hears each line as it is
     /// written (from another thread), so they can be shown while the song plays. One song at a time.
     /// </summary>
-    public static async Task<string?> TranscribeAsync(string source, Model m, Action<long, string>? line, CancellationToken cancel)
+    public static async Task<string?> TranscribeAsync(string source, Model m, Action<long, string>? line, CancellationToken cancel, string title = "", string artist = "")
     {
         if (!Have(m)) throw new InvalidOperationException("Download a speech model in settings → lyrics first.");
         var decode = Decode ?? throw new NotSupportedException("Not available here.");
@@ -199,11 +225,21 @@ public static class SpeechLyrics
             var samples = await Task.Run(() => decode(source, cancel), cancel);
             if (samples.Length < 16000) return null;
             var factory = Factory(m);
-            using var processor = factory.CreateBuilder()
+            // Songs trip whisper up in ways speech doesn't: it can get stuck repeating a line, so each 30-second window
+            // starts afresh (with the song's name as a hint), long sentences are split into lyric-sized lines, and on a
+            // graphics card it weighs several readings of each passage (beam search), which hears sung words better.
+            var hint = title != "" ? $"Lyrics of “{title}”{(artist != "" ? $" by {artist}" : "")}." : "Song lyrics.";
+            var builder = factory.CreateBuilder()
                 .WithLanguage("auto")
                 .WithThreads(Math.Clamp(Environment.ProcessorCount - 1, 1, 8))
-                .WithPrompt("Song lyrics.")
-                .Build();
+                .WithPrompt(hint)
+                .WithCarryInitialPrompt(true)
+                .WithNoContext()
+                .WithTokenTimestamps()
+                .SplitOnWord()
+                .WithMaxSegmentLength(64);
+            if (RanOn != "the processor") builder.WithBeamSearchSamplingStrategy(b => b.WithBeamSize(5));
+            using var processor = builder.Build();
             var lines = new List<(long ms, string text)>();
             await foreach (var seg in processor.ProcessAsync(samples, cancel))
             {
@@ -239,7 +275,8 @@ public static class SpeechLyrics
     {
         if (Bracketed.IsMatch(text)) return true;
         var t = text.ToLowerInvariant().TrimEnd('.', '!');
-        return t is "thank you" or "thanks for watching" or "thank you for watching" or "you" or "song lyrics" or "music"
+        return t is "thank you" or "thanks for watching" or "thank you for watching" or "you" or "song lyrics" or "music" or "lyrics"
+               || t.StartsWith("lyrics of “")
                || t.StartsWith("subtitles by") || t.StartsWith("transcribed by") || t.Contains("amara.org");
     }
 }

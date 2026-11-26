@@ -16,19 +16,23 @@ public partial class SettingsView
         _loadingSpeech = true;
         var s = App.Settings;
         SpeechModelBox.Items.Clear();
+        var best = SpeechLyrics.Recommended();
         foreach (var m in SpeechLyrics.Models)
-            SpeechModelBox.Items.Add(new ComboBoxItem { Content = $"{m.Name}   ({m.Megabytes} MB{(SpeechLyrics.Have(m) ? ", downloaded" : "")}): {m.Note}", Tag = m.Id });
-        var chosen = SpeechLyrics.Find(s.LyricsModel) ?? SpeechLyrics.Models.First(m => m.Id == "small");
+            SpeechModelBox.Items.Add(new ComboBoxItem { Content = $"{m.Name}   ({Size(m)}{(SpeechLyrics.Have(m) ? ", downloaded" : "")}{(m == best ? ", recommended here" : "")}): {m.Note}", Tag = m.Id });
+        var chosen = SpeechLyrics.Find(s.LyricsModel) ?? best;
         SpeechModelBox.SelectedItem = SpeechModelBox.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == chosen.Id);
         SpeechGpuBox.Items.Clear();
         SpeechGpuBox.Items.Add(new ComboBoxItem { Content = "automatic", Tag = -2 });
-        foreach (var g in SpeechLyrics.Gpus()) SpeechGpuBox.Items.Add(new ComboBoxItem { Content = $"{g.Name}   ({g.Kind})", Tag = g.Index });
+        foreach (var g in SpeechLyrics.Gpus())
+            SpeechGpuBox.Items.Add(new ComboBoxItem { Content = $"{g.Name}   ({g.Kind}{(g.Kind == "separate" && g.MemoryMb > 0 ? $", {g.MemoryMb / 1024.0:0} GB" : "")})", Tag = g.Index });
         SpeechGpuBox.Items.Add(new ComboBoxItem { Content = "the processor only", Tag = -1 });
         SpeechGpuBox.SelectedItem = SpeechGpuBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == s.LyricsGpu) ?? SpeechGpuBox.Items[0];
         LyricsListenBox.IsChecked = s.LyricsListen;
         _loadingSpeech = false;
         ShowSpeechState();
     }
+
+    static string Size(SpeechLyrics.Model m) => m.Megabytes >= 1000 ? $"{m.Megabytes / 1024.0:0.0} GB" : $"{m.Megabytes} MB";
 
     SpeechLyrics.Model PickedModel => SpeechLyrics.Find(SpeechModelBox.SelectedItem is ComboBoxItem { Tag: string id } ? id : "") ?? SpeechLyrics.Models[2];
 
@@ -42,7 +46,7 @@ public partial class SettingsView
         LyricsListenBox.IsEnabled = SpeechAllBtn.IsEnabled = have || _speechAll != null;
         SpeechAllBtn.Content = _speechAll != null ? "STOP" : "WRITE LYRICS FOR SONGS THAT HAVE NONE";
         if (_speechDownload == null && _speechAll == null)
-            SpeechStatus.Text = have ? (SpeechLyrics.RanOn != "" ? $"ready; it last ran on {SpeechLyrics.RanOn}" : "ready") : $"download the model to use it ({m.Megabytes} MB)";
+            SpeechStatus.Text = have ? (SpeechLyrics.RanOn != "" ? $"ready; it last ran on {SpeechLyrics.RanOn}" : "ready") : $"download the model to use it ({Size(m)})";
     }
 
     void SpeechModel_Changed(object sender, SelectionChangedEventArgs e)
@@ -59,6 +63,7 @@ public partial class SettingsView
         App.Settings.LyricsGpu = SpeechLyrics.GpuChoice = gpu;
         if (!App.SmokeMode) App.Settings.Save();
         SpeechLyrics.Unload();
+        LoadSpeech();   // the recommended model depends on where it runs
     }
 
     void LyricsListen_Click(object sender, RoutedEventArgs e)
@@ -75,11 +80,12 @@ public partial class SettingsView
         ShowSpeechState();
         try
         {
-            await SpeechLyrics.DownloadAsync(m, p => Dispatcher.BeginInvoke(() => SpeechStatus.Text = $"downloading {m.Name}: {p:P0} of {m.Megabytes} MB"), _speechDownload.Token);
+            await SpeechLyrics.DownloadAsync(m, p => Dispatcher.BeginInvoke(() => SpeechStatus.Text = $"downloading {m.Name}: {p:P0} of {Size(m)}"), _speechDownload.Token);
             App.Settings.LyricsModel = m.Id;
             if (!App.SmokeMode) App.Settings.Save();
             _speechDownload = null;
             LoadSpeech();
+            App.Win.RefreshLyrics();   // the generated tab appears
         }
         catch (OperationCanceledException) { _speechDownload = null; ShowSpeechState(); }
         catch (Exception ex) { _speechDownload = null; ShowSpeechState(); SpeechStatus.Text = "couldn't download the model: " + ex.Message; }
@@ -88,10 +94,11 @@ public partial class SettingsView
     void SpeechDelete_Click(object sender, RoutedEventArgs e)
     {
         var m = PickedModel;
-        if (MessageBox.Show(App.Win, $"Delete the {m.Name} speech model ({m.Megabytes} MB)? Lyrics it already wrote are kept.", "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        if (MessageBox.Show(App.Win, $"Delete the {m.Name} speech model ({Size(m)})? Lyrics it already wrote are kept.", "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         SpeechLyrics.Delete(m);
         if (App.Settings.LyricsModel == m.Id) { App.Settings.LyricsModel = ""; if (!App.SmokeMode) App.Settings.Save(); }
         LoadSpeech();
+        App.Win.RefreshLyrics();
     }
 
     /// <summary>Writes lyrics for every song in the collection that has none, one at a time; it can be stopped.</summary>
@@ -100,7 +107,7 @@ public partial class SettingsView
         if (_speechAll != null) { _speechAll.Cancel(); return; }
         var m = PickedModel;
         if (!SpeechLyrics.Have(m)) return;
-        var songs = await Task.Run(() => App.Lib.Tracks.Where(t => t.IsLocal && Lyrics.For(t) == null).ToList());
+        var songs = await Task.Run(() => App.Lib.Tracks.Where(t => t.IsLocal && Lyrics.For(t) == null && !Lyrics.HasGenerated(t)).ToList());
         if (songs.Count == 0) { SpeechStatus.Text = "every song has lyrics already"; return; }
         _speechAll = new CancellationTokenSource();
         var cancel = _speechAll.Token;
@@ -113,7 +120,7 @@ public partial class SettingsView
                 SpeechStatus.Text = $"listening to {done + 1} of {songs.Count}: {t.Title}   ({wrote} written so far)";
                 try
                 {
-                    if (await SpeechLyrics.TranscribeAsync(t.Location, m, null, cancel) is { } lrc && Lyrics.For(t) == null) { Lyrics.Save(t, lrc); wrote++; }
+                    if (await SpeechLyrics.TranscribeAsync(t.Location, m, null, cancel, t.Title, t.Artist) is { } lrc) { Lyrics.SaveGenerated(t, lrc); wrote++; }
                 }
                 catch (OperationCanceledException) { throw; }
                 catch { }   // a song that can't be read is skipped
