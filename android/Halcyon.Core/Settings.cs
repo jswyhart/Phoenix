@@ -75,6 +75,11 @@ public class Settings
     /// <summary>Album key -> the source it is tied to ("none" = never).</summary>
     public Dictionary<string, string> AlbumSources { get; set; } = new();
     public string FpcalcPath { get; set; } = "";          // Chromaprint's fpcalc, for identifying songs by sound
+    public bool TranslateOn { get; set; }                 // show translated names beside the originals
+    public string TranslateTo { get; set; } = "en";
+    public string TranslateProvider { get; set; } = "mymemory";   // local | mymemory | deepl | libre
+    public bool TranslateLatin { get; set; }              // also send names written in Latin letters
+    public string LibreTranslateUrl { get; set; } = "";
     public bool LyricsAuto { get; set; }                  // look lyrics up online when a song has none
     public bool ShowLyrics { get; set; }                  // now playing's side shows lyrics instead of the queue
     public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)

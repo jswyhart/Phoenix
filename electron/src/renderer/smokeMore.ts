@@ -14,6 +14,7 @@ import { applyTheme, currentTheme, designTheme, problems, ThemeShape } from "./t
 import type { CarePage } from "./care";
 import { albumMenu } from "./songs";
 import { cleanUp, fromFileName, tagEditor, titleCase } from "./tools";
+import { loadTranslation, tr } from "./translate";
 import type { MixviewPage } from "./mixview";
 import { menuHooks } from "./songs";
 
@@ -231,6 +232,30 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runMini(check, until, songs);
   await runThemes(check, shot, settle, until);
   await runCast(check);
+  await runTranslate(check, settle);
+}
+
+// ---------- translated names ----------
+
+async function runTranslate(check: Check, settle: Settle) {
+  const name = "夜に駆ける";   // a Japanese song title
+  await call("smoke.translation", { text: name, result: "Racing into the Night" });
+  await call("translate.set", { on: true, to: "en", provider: "mymemory" });
+  await loadTranslation();
+  const el = tr(document.createElement("div"), name);
+  const plain = tr(document.createElement("div"), "Song 1");
+  document.body.append(el);
+  await settle(400);
+  check("a name in another script is shown with its translation beside it", el.textContent === name + "   Racing into the Night" && el.querySelector(".trside") !== null && plain.textContent === "Song 1", el.textContent ?? "");
+  el.remove();
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Translation");
+  await settle(400);
+  check("settings: translation offers the languages and services", text("#root").includes("TRANSLATE INTO") && text("#root").includes("MyMemory") && !text("#root").includes("(offline; needs a language pack"));
+  await call("translate.set", { on: false });
+  await loadTranslation();
+  settings.showCategory("software");
 }
 
 // ---------- playing on another device (a pretend DLNA speaker on this machine) ----------

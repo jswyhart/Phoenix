@@ -21,6 +21,7 @@ export interface Host {
   smoke: string | null;
   smokeShot(name: string): Promise<void>;
   smokeDone(log: string, fails: number): Promise<void>;
+  smokeLog(line: string): Promise<void>;
 }
 
 declare global { interface Window { phoenix: Host } }
@@ -29,6 +30,7 @@ export const host: Host = window.phoenix;
 export const isMac = host.platform === "mac";
 
 export function call<T = any>(method: string, params?: unknown): Promise<T> {
+  if (host.smoke) void host.smokeLog("call " + method);
   return host.call(method, params) as Promise<T>;
 }
 

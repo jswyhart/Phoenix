@@ -230,6 +230,10 @@ export class VList<T> {
 
 // ---------- tiles ----------
 
+/** How a tile's words are put in (set by translate.ts, so names can carry their translation). */
+export let tileText = (el: HTMLElement, text: string): HTMLElement => { el.textContent = text; return el; };
+export function setTileText(fn: (el: HTMLElement, text: string) => HTMLElement) { tileText = fn; }
+
 export interface Tile<T = unknown> { key: string; title: string; caption: string; art: string; item: T }
 export type TileKind = "square" | "small" | "poster" | "wide" | "picture";
 const TILE_ART: Record<TileKind, number> = { square: 300, small: 240, poster: 320, wide: 300, picture: 300 };
@@ -258,7 +262,7 @@ export class TileGrid<T> {
     tiles.forEach((t, i) => {
       const el = h(`div.tile.${this.kind}` as "div", { data: { i: String(i) } }, h("div.art", art(t.art, TILE_ART[this.kind])));
       if (this.kind === "picture") el.title = t.title;
-      else el.append(h("div.t1.ell", t.title), h("div.t2.ell", t.caption || " "));
+      else el.append(tileText(h("div.t1.ell"), t.title), tileText(h("div.t2.ell"), t.caption || " "));
       if (t.key === this.selectedKey) el.classList.add("sel");
       frag.append(el);
     });

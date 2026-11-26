@@ -7,7 +7,7 @@ import { h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 import { customTabsSection, streamingPanel } from "./settingsWeb";
 import { metadataPanel } from "./settingsMeta";
-import { loadDisplay, lyricsSection, photosSection, quickplaySection } from "./settingsDisplay";
+import { loadDisplay, lyricsSection, photosSection, quickplaySection, translationSection } from "./settingsDisplay";
 import { playbackPanel } from "./settingsPlayback";
 import { podcastsPanel } from "./settingsPodcasts";
 import { themeSection } from "./themes";
@@ -193,6 +193,7 @@ export function settingsPage(): SettingsPage {
   newCode.title = "Replaces the pairing code; phones paired with the old code must enter the new one";
   syncEnabled.onchange = async () => paintSync(await call<PhoneState>("phone.enable", { on: syncEnabled.checked }));
   function paintSync(s: PhoneState) {
+    paintRemote(s);
     syncEnabled.checked = s.enabled;
     newCode.disabled = !s.enabled;
     if (!s.enabled) { syncStatus.textContent = "off"; return; }
@@ -203,13 +204,18 @@ export function settingsPage(): SettingsPage {
         : `\nIf the phone can't find this PC, allow TCP and UDP port ${s.port} through the firewall.`);
   }
   const refreshSync = async () => paintSync(await call<PhoneState>("phone.state"));
+  const remoteAddress = h("div.dim", { style: { userSelect: "text", whiteSpace: "pre-wrap" } });
+  const paintRemote = (s: PhoneState) => {
+    remoteAddress.textContent = !s.enabled || !s.running ? "Switch phone sync on to use the remote."
+      : s.addresses.map(a => `http://${a}:${s.port}/remote`).join("\n") || `this ${computer} is not on a network`;
+  };
 
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
   const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
-  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), playback = playbackPanel(), podcasts = podcastsPanel(), theme = themeSection();
+  const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), translate = translationSection(), playback = playbackPanel(), podcasts = podcastsPanel(), theme = themeSection();
   const display = { shown: async () => { await loadDisplay(); quick.shown(); photos.shown(); lyrics.shown(); } };
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display], Playback: [playback], Podcasts: [podcasts] };
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display, translate], Playback: [playback], Podcasts: [podcasts] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -219,7 +225,7 @@ export function settingsPage(): SettingsPage {
       scanStatus),
     Metadata: meta.el,
     Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
-    Translation: h("div", h("div.h2", "translation and lyrics"), lyrics.el),
+    Translation: h("div", h("div.h2", "translation and lyrics"), translate.el, lyrics.el),
     Playback: playback.el,
     Podcasts: podcasts.el,
     Streaming: streaming.el,
@@ -230,6 +236,10 @@ export function settingsPage(): SettingsPage {
       note(`The companion app on your Android phone copies music, likes and playlists from this ${computer} while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below.`),
       h("label.check", { style: { margin: "8px 0 4px 0" } }, syncEnabled, `Let my phone sync with this ${computer}`),
       syncStatus, h("div", { style: { margin: "8px 0 18px 0" } }, newCode),
+      h("div.label", { style: { margin: "6px 0 3px 0" } }, "REMOTE CONTROL"),
+      note(`While sync is on, the phone can also work this ${computer}: play, pause, skip, the volume and the queue. In the phone app choose “remote”; or open the address below in any browser on your network and enter the pairing code.`),
+      remoteAddress,
+      h("div.label", { style: { margin: "18px 0 3px 0" } }, "ITEMS I CHOOSE"),
       note("Right-click songs, albums, artists or playlists in your collection and choose “Add to phone sync list”. They are copied the next time the phone syncs."),
       h("div", pill("VIEW PHONE SYNC LIST", () => shell.navigate("phone")))),
     Jellyfin: h("div", h("div.h2", "jellyfin"),

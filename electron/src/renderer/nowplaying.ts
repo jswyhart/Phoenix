@@ -2,6 +2,7 @@
 // or the video itself. Double-click or F11 for full screen.
 import { call, host, on, PlayerState, QueueItem, time } from "./api";
 import { shell } from "./shell";
+import { tr } from "./translate";
 import { art, artUrl, h, iconBtn, MenuEntry, menuAt, message, setArt, textBtn, VList } from "./ui";
 import { VideoView } from "./video";
 import { decodeScope, dominantColor, Viz } from "./viz";
@@ -280,9 +281,9 @@ export class NowPlaying {
 
   playerChanged(s: PlayerState, itemChanged: boolean) {
     const cur = s.current;
-    this.title.textContent = cur?.title ?? "";
-    this.artist.textContent = cur?.subtitle ?? "";
-    this.album.textContent = cur?.album ?? "";
+    tr(this.title, cur?.title ?? "");
+    tr(this.artist, cur?.subtitle ?? "");
+    tr(this.album, cur?.album ?? "");
     if ((cur?.art ?? null) !== this.lastArt) {
       this.lastArt = cur?.art ?? null;
       setArt(this.cover, this.lastArt, 500);

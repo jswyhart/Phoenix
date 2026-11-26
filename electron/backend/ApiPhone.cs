@@ -85,6 +85,19 @@ public static partial class Api
         });
 
         if (Program.SmokeMode) Rpc.On("smoke.sync", async _ => await SmokeSyncAsync());
+        // the phone remote: its page, then what is playing and a button press, with the pairing code
+        if (Program.SmokeMode) Rpc.On("smoke.remote", async remoteParams =>
+        {
+            using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{Sync.Port}"), Timeout = TimeSpan.FromSeconds(10) };
+            var page = await http.GetAsync("/remote");
+            var pageText = await page.Content.ReadAsStringAsync();
+            var refused = (int)(await http.GetAsync("/remote/state")).StatusCode;
+            http.DefaultRequestHeaders.Add("X-Halcyon-Code", App.Settings.SyncCode);
+            var state = await http.GetStringAsync("/remote/state");
+            var press = await http.PostAsync("/remote/command", new StringContent("{\"cmd\":\"toggle\"}"));
+            var after = await http.GetStringAsync("/remote/state");
+            return new { pageStatus = (int)page.StatusCode, isPage = pageText.Contains("Phoenix remote"), refused, state, pressStatus = (int)press.StatusCode, after };
+        });
     }
 
     /// <summary>

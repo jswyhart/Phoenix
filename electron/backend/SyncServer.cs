@@ -204,6 +204,11 @@ public class SyncServer
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { name = Environment.MachineName, app = "Halcyon", version = 1 }), ct);
                 return;
             }
+            if (req.Path is "/remote" or "/remote/")   // the remote control page itself; everything it then asks for needs the code
+            {
+                await SendAsync(s, 200, RemoteControl.Page, ct, "text/html; charset=utf-8");
+                return;
+            }
             if (!req.Headers.TryGetValue("X-Halcyon-Code", out var code) || !CodeMatches(code))
             {
                 await Task.Delay(400, ct);   // slows down guessing the 6-digit code
@@ -224,6 +229,12 @@ public class SyncServer
                 await SendFileAsync(s, t.SourceId, ct);
             else if (req.Path.StartsWith("/sync/art/") && Find(tracks, req.Path) is { } a && IsLocalFile(a.ArtPath))
                 await SendFileAsync(s, a.ArtPath, ct);
+            else if (req.Path == "/remote/state")
+                await SendAsync(s, 200, RemoteControl.StateJson(), ct);
+            else if (req.Path == "/remote/command" && req.Method == "POST")
+                await SendAsync(s, 200, JsonSerializer.Serialize(new { ok = RemoteControl.Command(req.Body) }), ct);
+            else if (req.Path == "/remote/art" && RemoteControl.ArtFile() is { } cover)
+                await SendFileAsync(s, cover, ct);
             else if (req.Path == "/sync/stats" && req.Method == "POST")
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { applied = ApplyStats(req.Body) }), ct);
             else

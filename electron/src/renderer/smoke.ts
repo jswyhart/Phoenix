@@ -19,6 +19,7 @@ let fails = 0;
 function check(name: string, ok: boolean, detail = "") {
   if (!ok) fails++;
   log += `${ok ? "PASS" : "FAIL"}  ${name}  ${detail}\n`;
+  void host.smokeLog(`${ok ? "PASS" : "FAIL"}  ${name}`);
 }
 
 async function settle(ms = 350) {
@@ -27,6 +28,7 @@ async function settle(ms = 350) {
 }
 
 async function shot(name: string) {
+  void host.smokeLog("shot " + name);
   await settle();
   await host.smokeShot(name);
 }
@@ -370,6 +372,17 @@ async function run() {
     check("sync: a newer like from the phone is taken, an older one is not", r.appliedNewer === 1 && r.ratingAfter === 1 && r.playCountAfter >= 2 && r.appliedOlder === 0 && r.ratingAfterOlder === 1,
       `applied ${r.appliedNewer} then ${r.appliedOlder}; rating ${r.ratingBefore} → ${r.ratingAfter} → ${r.ratingAfterOlder}`);
     check("sync: discovery answers HALCYON_HERE with the name and port", r.discovery === `HALCYON_HERE|${r.machine}|${r.port}`, r.discovery);
+    {
+      // the phone as a remote: the page, then what is playing, and a button press that works the player
+      await call("player.volume", { value: 0 });
+      await call("play.tracks", { ids: [songs[0].id] });
+      await sleep(600);
+      const rc = await call<any>("smoke.remote");
+      const st = JSON.parse(rc.state), after = JSON.parse(rc.after);
+      check("remote: the page is served, and asks for the code before telling anything", rc.pageStatus === 200 && rc.isPage && rc.refused === 401, `${rc.pageStatus} ${rc.refused}`);
+      check("remote: it shows what is playing, and its play button works the player", st.title === songs[0].title && st.playing === true && rc.pressStatus === 200 && after.playing === false, `${st.title} ${st.playing} → ${after.playing}`);
+      await call("player.stop");
+    }
     shell.navigate("settings");
     settings.showCategory("phone");
     await settle(400);

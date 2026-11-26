@@ -416,13 +416,20 @@ else {
       fs.mkdirSync(smokeDir, { recursive: true });
       fs.writeFileSync(path.join(smokeDir, String(name).replace(/[^\w.-]/g, "_") + ".png"), image.toPNG());
     });
+    // each check as it is made, so a self-test that stops part way shows where
+    handle("phoenix:smokeLog", (line: unknown) => {
+      if (!smokeDir) return;
+      fs.mkdirSync(smokeDir, { recursive: true });
+      fs.appendFileSync(path.join(smokeDir, "progress.log"), `${new Date().toISOString()} ${String(line)}
+`);
+    });
     handle("phoenix:smokeDone", (log: unknown, fails: unknown) => {
       if (!smokeDir) return;
       fs.mkdirSync(smokeDir, { recursive: true });
       fs.writeFileSync(path.join(smokeDir, "smoke.log"), String(log));
       void quit(Number(fails) === 0 ? 0 : 1);
     });
-    if (smokeDir) setTimeout(() => fail("the self-test did not finish within eight minutes"), 480_000);
+    if (smokeDir) setTimeout(() => fail("the self-test did not finish within fifteen minutes"), 900_000);
 
     createWindow();
   });

@@ -1,6 +1,7 @@
 // Song rows, their column headings, and the shared right-click menus for songs, albums and artists.
 import { call, host, isMac, Song, time } from "./api";
 import { shell } from "./shell";
+import { tr } from "./translate";
 import { h, MenuEntry, menuAt, textBtn } from "./ui";
 
 const heartText = (r: number) => (r > 0 ? "♥" : r < 0 ? "✕" : "♡");
@@ -18,10 +19,10 @@ export function songRow(s: Song, index: number, full: boolean): HTMLElement {
     void call("rate", { ids: [s.id], rating: s.rating });
   };
   const no = h("div.no", String(index + 1));
-  const title = h("div.ell", s.title);
+  const title = tr(h("div.ell"), s.title);
   const dur = h("div.time", time(s.dur));
   return full
-    ? h("div.songrow.full", no, title, h("div.ell.dim", s.artist), h("div.ell.dim", s.album), h("div.ell.tags", s.tags), dur, heart)
+    ? h("div.songrow.full", no, title, tr(h("div.ell.dim"), s.artist), tr(h("div.ell.dim"), s.album), h("div.ell.tags", s.tags), dur, heart)
     : h("div.songrow.compact", no, title, dur, heart);
 }
 

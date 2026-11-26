@@ -29,6 +29,7 @@ public static partial class Api
         RegisterThemes();
         RegisterCast();
         RegisterSmokeCast();
+        RegisterTranslate();
         Updates.Register();
     }
 

@@ -50,6 +50,19 @@ namespace Halcyon.Core
                  "ON CONFLICT(TrackId) DO UPDATE SET Modified=excluded.Modified,Seconds=excluded.Seconds,Print=excluded.Print", trackId, modified, seconds, print);
         }
 
+        // ---- names translated once and remembered ----
+        public List<(string Source, string Result)> LoadTranslations(string lang)
+        {
+            Exec("CREATE TABLE IF NOT EXISTS translations(Lang TEXT NOT NULL, Source TEXT NOT NULL, Result TEXT, PRIMARY KEY(Lang,Source))");
+            return Query("SELECT Source,Result FROM translations WHERE Lang=$p0", r => (r.IsDBNull(0) ? "" : r.GetString(0), r.IsDBNull(1) ? "" : r.GetString(1)), lang);
+        }
+
+        public void SaveTranslation(string lang, string source, string result)
+        {
+            Exec("CREATE TABLE IF NOT EXISTS translations(Lang TEXT NOT NULL, Source TEXT NOT NULL, Result TEXT, PRIMARY KEY(Lang,Source))");
+            Exec("INSERT INTO translations(Lang,Source,Result) VALUES($p0,$p1,$p2) ON CONFLICT(Lang,Source) DO UPDATE SET Result=excluded.Result", lang, source, result);
+        }
+
         /// <summary>Moves a song's place in every playlist to another song (used when a duplicate is removed).</summary>
         public void RepointPlaylists(long from, long to) => Exec("UPDATE playlist_tracks SET TrackId=$p1 WHERE TrackId=$p0", from, to);
 

@@ -4,6 +4,7 @@ import { debounce, Page, shell } from "./shell";
 import { albumMenu, artistMenu, SongHeader, songMenu, songRow } from "./songs";
 import { h, menuAt, pill, showMenu, tabButton, tabs, TileGrid, ViewBar, VList } from "./ui";
 import { attachServiceTabs } from "./web";
+import { tr } from "./translate";
 
 interface MusicView { counts: string; empty: boolean; left: string[] | null; sel: string | null; albums: TileData[] | null; album: string | null; songs: Song[] }
 
@@ -26,7 +27,7 @@ export function musicPage(): MusicPage {
 
   const left = new VList<string>({
     rowHeight: 30,
-    render: name => h("div.name", h("div.grow.ell", name)),
+    render: name => h("div.name", tr(h("div.grow.ell"), name)),
     onSelect: () => { const i = left.selectedIndex(); sel = i <= 0 ? null : leftItems[i]; album = null; load(false); },
     onActivate: () => { if (songs.length) void call("play.tracks", { ids: songs.map(s => s.id) }); },
     onContext: async (_items, e) => { if (mode === "artists" && sel != null) { const x = e.clientX, y = e.clientY; showMenu(await artistMenu(sel), x, y); } },

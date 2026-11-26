@@ -36,4 +36,5 @@ contextBridge.exposeInMainWorld("phoenix", {
   smoke: smokeArg ? smokeArg.slice("--phoenix-smoke=".length) : null,
   smokeShot: (name: string): Promise<void> => ipcRenderer.invoke("phoenix:smokeShot", name),
   smokeDone: (log: string, fails: number): Promise<void> => ipcRenderer.invoke("phoenix:smokeDone", log, fails),
+  smokeLog: (line: string): Promise<void> => ipcRenderer.invoke("phoenix:smokeLog", line),
 });

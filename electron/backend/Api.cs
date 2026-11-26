@@ -129,6 +129,9 @@ public static partial class Api
         };
     }
 
+    /// <summary>Tells the window the player changed (from outside it: the phone remote).</summary>
+    public static void PlayerChanged() => Rpc.Emit("player", PlayerState());
+
     static object QueueState() => P.Queue.Select(i => new { title = i.Title, subtitle = i.Subtitle, dur = i.DurationMs }).ToList();
 
     // ---------- transport ----------

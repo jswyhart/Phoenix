@@ -18,6 +18,7 @@ import { installDialogs } from "./dialogs";
 import { installTools } from "./tools";
 import { chooseCastDevice } from "./cast";
 import { loadDisplay } from "./settingsDisplay";
+import { loadTranslation, tr } from "./translate";
 import { applyTheme, loadTheme, ThemeShape } from "./themes";
 import { musicPage } from "./music";
 import { NowPlaying } from "./nowplaying";
@@ -49,6 +50,7 @@ async function start() {
   shell.tabs = init.tabs;
   await loadWeb();
   await loadDisplay();
+  await loadTranslation();
   void call<{ canIdentify: boolean }>("meta.state").then(m => { shell.canIdentify = m.canIdentify; });
   const root = document.getElementById("root")!;
 
@@ -280,8 +282,8 @@ async function start() {
     prevBtn.disabled = nextBtn.disabled = false;
     if (usingRemote()) { paintRemote(); return; }
     const cur = s.current;
-    barTitle.textContent = cur?.title ?? "nothing playing";
-    barArtist.textContent = cur?.subtitle ?? "";
+    tr(barTitle, cur?.title ?? "nothing playing");
+    tr(barArtist, cur?.subtitle ?? "");
     if ((cur?.art ?? null) !== lastArt) { lastArt = cur?.art ?? null; setArt(barArt, lastArt, 120); }
     bookmarkBtn.classList.toggle("hidden", !cur?.isBook);
     setIcon(playBtn, s.playing ? "pause" : "play");

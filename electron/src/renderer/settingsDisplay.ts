@@ -41,3 +41,52 @@ export function lyricsSection() {
 
 /** Reads the display choices (once at start, and whenever settings is opened). */
 export async function loadDisplay() { shell.display = await call<Display>("display.state"); }
+
+interface Translate {
+  on: boolean; to: string; provider: string; latin: boolean; libreUrl: string; hasDeepLKey: boolean; hasLibreKey: boolean; trouble: string;
+  languages: { code: string; name: string }[]; providers: { id: string; name: string; keyHelp: string | null }[];
+}
+
+export function translationSection() {
+  let T: Translate | null = null;
+  const set = async (p: Record<string, unknown>) => paint(await call<Translate>("translate.set", p));
+  const on = check("Show translated names beside the originals", v => void set({ on: v }));
+  const latin = check("Also translate names written in Latin letters", v => void set({ latin: v }));
+  const lang = h("select.box", { style: { width: "260px" } });
+  lang.onchange = () => void set({ to: lang.value });
+  const provider = h("select.box", { style: { width: "420px" } });
+  provider.onchange = () => void set({ provider: provider.value });
+  const key = h("input", { type: "password", spellcheck: false, style: { width: "300px" } });
+  key.onchange = () => { if (T) void set(T.provider === "deepl" ? { deeplKey: key.value } : { libreKey: key.value }); key.value = ""; };
+  const server = h("input", { type: "text", spellcheck: false, placeholder: "https://translate.example.org", style: { width: "300px" } });
+  server.onchange = () => void set({ libreUrl: server.value });
+  const keyRow = h("div", { style: { display: "flex", alignItems: "center", marginTop: "8px" } }, h("span.faint", { style: { width: "60px", fontSize: "12px" } }, "key"), key);
+  const serverRow = h("div", { style: { display: "flex", alignItems: "center", marginTop: "8px" } }, h("span.faint", { style: { width: "60px", fontSize: "12px" } }, "server"), server);
+  const help = h("div.faint", { style: { fontSize: "11px", marginTop: "4px" } });
+  const status = h("div.statusline");
+
+  function paint(t: Translate) {
+    T = t;
+    on.box.checked = t.on;
+    latin.box.checked = t.latin;
+    if (!lang.options.length) lang.replaceChildren(...t.languages.map(l => h("option", { value: l.code }, l.name)));
+    if (!provider.options.length) provider.replaceChildren(...t.providers.map(x => h("option", { value: x.id }, x.name)));
+    lang.value = t.to;
+    provider.value = t.provider;
+    keyRow.classList.toggle("hidden", t.provider === "mymemory");
+    serverRow.classList.toggle("hidden", t.provider !== "libre");
+    server.value = t.libreUrl;
+    key.placeholder = (t.provider === "deepl" ? t.hasDeepLKey : t.hasLibreKey) ? "(saved)" : "key";
+    help.textContent = t.providers.find(x => x.id === t.provider)?.keyHelp ?? "";
+    status.textContent = t.trouble;
+  }
+
+  const el = h("div",
+    h("div.note", "Phoenix can show a translation beside song, artist and album names that are written in another language, in a quieter colour after the original. Each name is translated once and remembered. The names are sent to the service you choose."),
+    on.el, h("div.label", "TRANSLATE INTO"), lang, h("div.label", "SERVICE"), provider, keyRow, serverRow, help,
+    h("div.note", { style: { marginTop: "6px" } }, "The Windows app can also translate offline, on the computer itself; that is not in this version yet."),
+    latin.el,
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, "Off: only names in other scripts (Japanese, Korean, Russian, Arabic…) are sent. On: every name is sent, which uses a free service's daily limit quickly."),
+    status);
+  return { el, shown: async () => paint(await call<Translate>("translate.state")) };
+}
