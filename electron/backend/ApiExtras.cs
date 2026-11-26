@@ -30,6 +30,7 @@ public static partial class Api
         RegisterCast();
         RegisterSmokeCast();
         RegisterTranslate();
+        RegisterStorage();
         Updates.Register();
     }
 
@@ -434,12 +435,6 @@ public static partial class Api
             return new { created = m.Created, device = m.Device, songs = m.Songs, playlists = m.Playlists };
         });
         Rpc.On("backup.discard", _ => Backup.Discard());
-        Rpc.On("storage.state", _ =>
-        {
-            long size = 0;
-            try { size = new DirectoryInfo(DataDir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length); } catch { }
-            return new { folder = DataDir, used = size >= 1 << 30 ? $"{size / (double)(1 << 30):0.0} GB used" : $"{size / (double)(1 << 20):0} MB used" };
-        });
     }
 
     static string DataDir => Program.DataDir;

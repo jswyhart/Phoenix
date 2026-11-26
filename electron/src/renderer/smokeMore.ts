@@ -233,6 +233,23 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runThemes(check, shot, settle, until);
   await runCast(check);
   await runTranslate(check, settle);
+  await runMove(check);
+}
+
+// ---------- moving the data folder (the self-test copies, but never changes where Phoenix keeps its data) ----------
+
+async function runMove(check: Check) {
+  const sep = host.platform === "win" ? "\\" : "/";
+  const target = host.smoke + sep + "moved-data";
+  const r = await call<{ adopted: boolean; failed: number }>("storage.move", { folder: target });
+  const db = await call<boolean>("smoke.exists", { path: target + sep + "library.db" });
+  const settingsCopied = await call<boolean>("smoke.exists", { path: target + sep + "settings.json" });
+  check("moving the data folder copies the library and settings", !r.adopted && db && settingsCopied, `${r.failed} failed, library ${db}, settings ${settingsCopied}`);
+  const again = await call<{ adopted: boolean }>("storage.move", { folder: target });
+  check("a folder that already holds a library is used as it is", again.adopted);
+  let refused = "";
+  try { await call("storage.move", { folder: (await call<{ folder: string }>("storage.state")).folder + sep + "inside" }); } catch (e: any) { refused = String(e.message ?? e); }
+  check("a folder inside the data folder is refused", refused.includes("not inside"), refused);
 }
 
 // ---------- translated names ----------

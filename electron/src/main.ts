@@ -32,6 +32,11 @@ function resolveDataDir(): string {
   const fromEnv = process.env.PHOENIX_DATA || process.env.HALCYON_DATA;
   if (fromEnv) return path.resolve(fromEnv);
   const dir = defaultDataDir({ mac: "Phoenix", linux: "phoenix", win: "PhoenixDesktop" });
+  // the data may have been moved (settings → storage): a note in the standard place says where
+  try {
+    const moved = fs.readFileSync(path.join(dir, "data-folder.txt"), "utf8").split(/\r?\n/).map(l => l.trim()).find(l => l !== "" && !l.startsWith("cleanup:"));
+    if (moved && path.isAbsolute(moved) && fs.existsSync(path.join(moved, "library.db"))) return moved;
+  } catch { /* no note: the standard place */ }
   const old = defaultDataDir({ mac: "Halcyon", linux: "halcyon", win: "HalcyonDesktop" });
   if (!fs.existsSync(dir) && fs.existsSync(path.join(old, "library.db"))) {
     try {
@@ -52,6 +57,7 @@ if (smokeDir && !process.env.PHOENIX_DATA && !process.env.HALCYON_DATA) {
   console.error("Phoenix: set PHOENIX_DATA to a scratch folder before running --smoke.");
   process.exit(64);
 }
+const standardDataDir = defaultDataDir({ mac: "Phoenix", linux: "phoenix", win: "PhoenixDesktop" });
 const dataDir = resolveDataDir();
 fs.mkdirSync(dataDir, { recursive: true });
 // the browser engine's own files (cache, window state) live inside the data folder too
@@ -78,7 +84,7 @@ class Backend {
     this.ready = new Promise((resolve, reject) => {
       const exe = backendPath();
       if (!fs.existsSync(exe)) { reject(new Error(`The Phoenix helper is missing:\n${exe}`)); return; }
-      const args = ["--data", dataDir, "--parent", String(process.pid)];
+      const args = ["--data", dataDir, "--parent", String(process.pid), "--standard", standardDataDir];
       if (smokeDir) args.push("--smoke");
       const proc = spawn(exe, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
       this.proc = proc;

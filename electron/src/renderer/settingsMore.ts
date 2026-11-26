@@ -155,11 +155,32 @@ export function visualizerSection() {
 export function storagePanel() {
   const folder = h("input", { type: "text", readOnly: true });
   const used = h("div.dim", { style: { marginTop: "8px" } });
-  const backupStatus = status();
+  const backupStatus = status(), moveStatus = status();
+  let standard = "";
+  const standardBtn = pill("BACK TO THE STANDARD FOLDER", () => void move(standard));
+  async function move(folder: string) {
+    moveStatus.textContent = "copying…";
+    try {
+      const r = await call<{ adopted: boolean; failed: number }>("storage.move", { folder });
+      moveStatus.textContent = r.failed ? `${r.failed} file(s) couldn't be copied (a sign-in may need doing again)` : "";
+      if (await confirm((r.adopted ? "That folder already holds a Phoenix library: Phoenix will use it." : "Everything has been copied.") + "
+
+Phoenix closes and starts again from the new folder.", "start again")) await host.relaunch();
+    } catch (e: any) { moveStatus.textContent = String(e.message ?? e); }
+  }
+  on("storage.progress", (t: string) => { moveStatus.textContent = t; });
   const el = h("div", h("div.h2", "storage"),
     note("This folder holds Phoenix's library database, settings, album covers, picture and artwork caches and podcast downloads. Your music, videos, pictures and books stay where they are."),
     label("DATA FOLDER", true), folder, used,
-    buttons(pill("OPEN", async () => { const r = await call<{ folder: string }>("storage.state"); void host.openPath(r.folder); })),
+    buttons(
+      pill("MOVE TO ANOTHER FOLDER", async () => {
+        const picked = await host.pickFolders("Choose where Phoenix keeps its data");
+        if (picked[0]) await move(picked[0]);
+      }),
+      standardBtn,
+      pill("OPEN", async () => { const r = await call<{ folder: string }>("storage.state"); void host.openPath(r.folder); })),
+    note("Moving copies everything to the new folder, starts Phoenix again from there and then removes the old copies. If the folder you pick already holds a Phoenix library, that library is used instead and nothing is copied."),
+    moveStatus,
     label("BACKUP AND RESTORE"),
     note("A backup is one file holding your playlists, likes, play counts and the play log, bookmarks and reading progress, podcasts, radio stations, pins, tags and your settings. Your music, videos, pictures and books themselves are not in it. Sign-ins and keys in a backup only work again on the same computer and account."),
     buttons(
@@ -187,7 +208,9 @@ export function storagePanel() {
   return {
     el,
     shown: async () => {
-      const r = await call<{ folder: string; used: string }>("storage.state");
+      const r = await call<{ folder: string; used: string; standard: string; isStandard: boolean }>("storage.state");
+      standard = r.standard;
+      standardBtn.classList.toggle("hidden", r.isStandard || !r.standard);
       folder.value = r.folder;
       used.textContent = r.used;
     },

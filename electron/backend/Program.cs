@@ -160,6 +160,8 @@ static class Program
         if (data < 0 || data + 1 >= args.Length) { Console.Error.WriteLine("usage: Phoenix.Backend --data <folder> [--smoke]"); return 64; }
         DataDir = Path.GetFullPath(args[data + 1]);
         SmokeMode = args.Contains("--smoke");
+        var standard = Array.IndexOf(args, "--standard");
+        if (standard >= 0 && standard + 1 < args.Length) Api.StandardDir = args[standard + 1];
         var parent = Array.IndexOf(args, "--parent");
         if (parent >= 0 && parent + 1 < args.Length) int.TryParse(args[parent + 1], out ParentPid);
         Directory.CreateDirectory(DataDir);

@@ -111,6 +111,7 @@ public static partial class Api
         Rpc.On("smoke.writeTheme", p => { File.WriteAllText(Path.Combine(AppPaths.DataDir, "themes", p.Str("id") + ".json"), p.Str("text")); return true; });
         // a translation remembered in the library, as if the service had answered before
         Rpc.On("smoke.translation", p => { Lib.Db.SaveTranslation(S.TranslateTo, p.Str("text"), p.Str("result")); Halcyon.Services.Translator.Reset(); Halcyon.Services.Translator.Attach(Lib.Db); return true; });
+        Rpc.On("smoke.exists", p => File.Exists(p.Str("path")));
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>
