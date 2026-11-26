@@ -17,7 +17,7 @@ import { menuHooks } from "./songs";
 import { installDialogs } from "./dialogs";
 import { installTools } from "./tools";
 import { chooseCastDevice } from "./cast";
-import { loadDisplay } from "./settingsDisplay";
+import { loadDisplay, applyBackground } from "./settingsDisplay";
 import { loadTranslation, tr } from "./translate";
 import { applyTheme, loadTheme, ThemeShape } from "./themes";
 import { musicPage } from "./music";
@@ -51,6 +51,7 @@ async function start() {
   await loadWeb();
   await loadDisplay();
   if (shell.display.runInTray) void host.tray(true);
+  applyBackground();
   await loadTranslation();
   void call<{ canIdentify: boolean }>("meta.state").then(m => { shell.canIdentify = m.canIdentify; });
   const root = document.getElementById("root")!;
@@ -174,6 +175,7 @@ async function start() {
   const barArt = art(null, 120);
   const barArtBox = h("div.barart", { title: "Now playing", onclick: () => now.show(!now.open) }, icon("note", 18), barArt);
   const barTitle = h("div.title.ell", "nothing playing"), barArtist = h("div.artist.ell");
+  let barMid: HTMLElement;
   const words = h("div.words", { title: "Now playing", onclick: () => now.show(!now.open) }, barTitle, barArtist);
   const bookmarkBtn = iconBtn("bookmark", "Bookmark this spot in the audiobook", async () => {
     const label = await call<string | null>("book.bookmarkHere");
@@ -237,7 +239,7 @@ async function start() {
     h("div.left",
       h("button.dropbtn", { title: "Phone. Click to see what syncs with your phone.", onclick: () => navigate("phone"), tabIndex: -1 }, icon("phone", 22, 28)),
       h("button.dropbtn", { title: "Click to see playlists", onclick: () => navigate("playlists"), tabIndex: -1 }, icon("playlist", 22, 28))),
-    h("div.mid", barArtBox,
+    barMid = h("div.mid", barArtBox,
       h("div.info",
         h("div.titles", words, bookmarkBtn, heartBtn),
         h("div.seekrow", posText, seek.el, durText))),
@@ -253,6 +255,7 @@ async function start() {
   /** The bar while a streaming page is being listened to: what the page says it is playing, and only the controls it has. */
   function paintRemote() {
     const r = R().state!;
+    barMid.classList.remove("idle");
     barTitle.textContent = r.title || R().service.name;
     barArtist.textContent = [r.artist, R().service.name].filter(x => x).join("  ·  ");
     if (r.art !== lastArt) { lastArt = r.art; setArt(barArt, r.art || null, 120); }
@@ -284,6 +287,8 @@ async function start() {
     if (usingRemote()) { paintRemote(); return; }
     const cur = s.current;
     tr(barTitle, cur?.title ?? "nothing playing");
+    // nothing playing: the bar's middle stays empty (its place is kept, so the controls don't move)
+    barMid.classList.toggle("idle", !cur);
     tr(barArtist, cur?.subtitle ?? "");
     if ((cur?.art ?? null) !== lastArt) { lastArt = cur?.art ?? null; setArt(barArt, lastArt, 120); }
     bookmarkBtn.classList.toggle("hidden", !cur?.isBook);

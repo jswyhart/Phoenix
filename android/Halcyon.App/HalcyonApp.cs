@@ -27,6 +27,7 @@ public class HalcyonApp : Application
         App.SyncDir = System.IO.Path.Combine(Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryMusic!)!.AbsolutePath, "Halcyon");
         Engine = new ExoEngine(this);
         App.Init(FilesDir!.AbsolutePath, Engine, DefaultSettings);
+        Engine.ApplyEqualizer();
         Th.Apply(App.Settings.Theme, this);
         PlaybackService.Watch(this);
     }

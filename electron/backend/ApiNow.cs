@@ -18,7 +18,8 @@ public static partial class Api
 
     static object DisplayState() => new
     {
-        quickplayPlays = S.QuickplayPlays, backdrops = S.Backdrops, runInTray = S.RunInTray, showGenerated = S.ShowGenerated, nowPanel = S.NowPanel, lyricsAuto = S.LyricsAuto, showLyrics = S.ShowLyrics,
+        quickplayPlays = S.QuickplayPlays, backdrops = S.Backdrops, runInTray = S.RunInTray, showGenerated = S.ShowGenerated, nowPanel = S.NowPanel,
+        backgroundPicture = File.Exists(S.BackgroundPicture) ? S.BackgroundPicture : "", backgroundStrength = Math.Clamp(S.BackgroundStrength, 5, 90), lyricsAuto = S.LyricsAuto, showLyrics = S.ShowLyrics,
         backdropUsage = Backdrops.Usage() is var (artists, bytes) && artists > 0 ? $"photos of {artists} artist{(artists == 1 ? "" : "s")} kept  ·  {bytes / 1048576.0:0.#} MB" : "no photos kept"
     };
 
@@ -34,6 +35,9 @@ public static partial class Api
             if (p.Has("showLyrics")) S.ShowLyrics = p.Bool("showLyrics");
             if (p.Has("showGenerated")) S.ShowGenerated = p.Bool("showGenerated");
             if (p.Has("nowPanel")) S.NowPanel = p.Bool("nowPanel");
+            if (p.Has("backgroundStrength")) S.BackgroundStrength = Math.Clamp((int)p.Long("backgroundStrength"), 5, 90);
+            if (p.Has("backgroundFile")) S.BackgroundPicture = Halcyon.Services.Backgrounds.Use(p.Str("backgroundFile"), S.BackgroundPicture);
+            if (p.Has("backgroundClear")) { Halcyon.Services.Backgrounds.Clear(S.BackgroundPicture); S.BackgroundPicture = ""; }
             Save();
             return DisplayState();
         });

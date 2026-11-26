@@ -569,6 +569,31 @@ async function runNow(check: Check, shot: Shot, settle: Settle, until: Until, so
   if (panelBox) { panelBox.checked = true; panelBox.dispatchEvent(new Event("change")); }
   await until(() => !!document.querySelector(".now .queue.panel"), 2000);
   check("settings can put a panel behind the song list and lyrics over the visualizer (off at first)", offFirst && !!document.querySelector(".now .queue.panel"));
+  // nothing playing: the player bar's middle is empty
+  await call("player.stop");
+  await until(() => !!document.querySelector(".transport .mid.idle"), 2000);
+  const idle = !!document.querySelector(".transport .mid.idle");
+  await call("play.tracks", { ids: [songs[0].id] });
+  await until(() => !document.querySelector(".transport .mid.idle"), 2000);
+  check("the player bar's song, cover and progress hide while nothing is playing", idle && !document.querySelector(".transport .mid.idle"));
+  await call("player.stop");
+  // a background picture of your own: copied into the data folder, shown through the theme, removed again
+  {
+    const pic = host.smoke + (host.platform === "win" ? "\\" : "/") + "background.png";
+    await call("smoke.writePicture", { file: pic });
+    const chooseBtn = [...document.querySelectorAll<HTMLElement>("button.pill")].find(b => b.textContent === "CHOOSE PICTURE");
+    shell.display = await call("display.set", { backgroundFile: pic });
+    const { applyBackground } = await import("./settingsDisplay");
+    applyBackground();
+    const back = document.querySelector<HTMLElement>(".backpic");
+    check("a background picture of your own shows behind the window, from Phoenix's own copy",
+      !!chooseBtn && !!back && !back.classList.contains("hidden") && back.style.opacity === "0.3" && /backgrounds/.test(shell.display.backgroundPicture) && shell.display.backgroundPicture !== pic,
+      shell.display.backgroundPicture);
+    await shot("44-background-picture");
+    shell.display = await call("display.set", { backgroundClear: true });
+    applyBackground();
+    check("and goes again", !!back && back.classList.contains("hidden") && shell.display.backgroundPicture === "");
+  }
   if (panelBox) { panelBox.checked = false; panelBox.dispatchEvent(new Event("change")); }
   await settle(200);
   settings.showCategory("software");

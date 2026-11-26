@@ -20,7 +20,9 @@ public static class SettingsScreen
         {
             ("collection", "Collection", "folders for music, videos, pictures and books; rescan"),
             ("metadata", "Metadata", "Discogs, for album details and covers"),
+            ("playback", "Playback", "equalizer and volume levelling"),
             ("listening", "Listening", "stats, and sending listens to Last.fm or ListenBrainz"),
+            ("lyrics", "Lyrics", "looking lyrics up on LRCLIB"),
             ("display", "Display", "theme, size, visualizer, and which sections are shown"),
             ("storage", "Storage", "back up and restore"),
             ("updates", "Updates", "look for a newer Phoenix")
@@ -197,7 +199,15 @@ public static class SettingsScreen
             if (category == "display")
             {
             rows.Add(Row.Caption("APPEARANCE"));
-            rows.Add(new Row { Title = "theme", Trail = S.Theme, Click = () => { S.Theme = S.Theme == "dark" ? "light" : "dark"; S.Save(); a.ApplyThemeAndRestart(); } });
+            rows.Add(new Row
+            {
+                Title = "theme", Trail = S.Theme == "system" ? "follow the phone" : S.Theme,
+                Sub = S.Theme == "system" ? $"light or dark as the phone is set (now {(Th.Dark ? "dark" : "light")})" : "",
+                Click = () => Ui.Menu(a, "Theme",
+                    ("light", () => { S.Theme = "light"; S.Save(); a.ApplyThemeAndRestart(); }),
+                    ("dark", () => { S.Theme = "dark"; S.Save(); a.ApplyThemeAndRestart(); }),
+                    ("follow the phone (light or dark as it is set)", () => { S.Theme = "system"; S.Save(); a.ApplyThemeAndRestart(); }))
+            });
             rows.Add(new Row
             {
                 Title = "size", Trail = S.UiSize switch { 1 => "small", 2 => "normal", 3 => "large", 4 => "larger", _ => "fit this screen" },
@@ -211,6 +221,50 @@ public static class SettingsScreen
                 Click = () => VisualizerPicker.Show(a, page.Reload)
             });
             MoreScreens.SettingsRows(a, rows, page, "sections");
+            }
+
+            if (category == "playback")
+            {
+            var engine = HalcyonApp.Engine;
+            rows.Add(Row.Caption("EQUALIZER"));
+            rows.Add(new Row { Title = "equalizer", Trail = S.EqEnabled ? "on" : "off", Sub = engine.EqTrouble, Click = () => { S.EqEnabled = !S.EqEnabled; S.Save(); engine.ApplyEqualizer(); page.Reload(); } });
+            if (S.EqEnabled)
+            {
+                rows.Add(new Row
+                {
+                    Title = "preset", Trail = S.EqPreset,
+                    Click = () => Ui.Menu(a, "Equalizer", EqPresets.All.Select(x => x.Name).Append("custom")
+                        .Select(n => ((n == S.EqPreset ? "●  " : "○  ") + n, (Action)(() => { S.EqPreset = n; S.Save(); engine.ApplyEqualizer(); page.Reload(); }))).ToArray())
+                });
+                rows.Add(new Row { Title = "adjust the bands…", Sub = "31 Hz to 16 kHz; changing one makes the preset “custom”", Click = () => EqualizerDialog.Show(a, page.Reload) });
+            }
+            rows.Add(Row.Caption("VOLUME LEVELLING"));
+            rows.Add(new Row
+            {
+                Title = "play every song at about the same loudness", Trail = S.Levelling ? "on" : "off",
+                Sub = "uses the ReplayGain tags in your songs; songs without them play as they are",
+                Click = () => { S.Levelling = !S.Levelling; S.Save(); page.Reload(); }
+            });
+            if (S.Levelling)
+                rows.Add(new Row
+                {
+                    Title = "keep an album's loud and quiet songs as they are", Trail = S.LevelByAlbum ? "on" : "off",
+                    Sub = "levels whole albums rather than each song",
+                    Click = () => { S.LevelByAlbum = !S.LevelByAlbum; S.Save(); page.Reload(); }
+                });
+            rows.Add(Row.Note("These apply from the next song. The equalizer is the phone's own, so how many bands it has depends on the phone; the ten bands here are read off at its bands."));
+            }
+
+            if (category == "lyrics")
+            {
+            rows.Add(Row.Caption("LYRICS"));
+            rows.Add(new Row
+            {
+                Title = "look lyrics up on LRCLIB by itself", Trail = S.LyricsAuto ? "on" : "off",
+                Sub = "when a song has none: sends its title, artist and album to LRCLIB, a free, open lyrics database",
+                Click = () => { S.LyricsAuto = !S.LyricsAuto; S.Save(); page.Reload(); }
+            });
+            rows.Add(Row.Note("In now playing, tap “lyrics” on the picture to show the song's lyrics. They come from a .lrc or .txt file beside the song, its tags, LRCLIB, or the clipboard, and timed lyrics follow the song."));
             }
 
             if (category == "metadata")

@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         WebServices.Changed += () => Dispatcher.BeginInvoke(ShowWebTabs);
         ShowQueueTab(App.Settings.ShowLyrics, App.Settings.ShowGenerated);
         ApplyNowPanel();
+        ApplyBackground();
         Navigate("quickplay");
         RefreshTransport();
     }
@@ -153,6 +154,30 @@ public partial class MainWindow : Window
     }
 
     bool ShowingGenerated => App.Settings.ShowLyrics && App.Settings.ShowGenerated;
+
+    /// <summary>The picture of your own behind the window (settings → display), or none.</summary>
+    public void ApplyBackground()
+    {
+        var file = App.Settings.BackgroundPicture;
+        if (file == "" || !System.IO.File.Exists(file)) { BackPicture.Source = null; BackPicture.Visibility = Visibility.Collapsed; return; }
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;   // the file can be replaced while shown
+            bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            bmp.DecodePixelWidth = 2560;
+            bmp.UriSource = new Uri(file);
+            bmp.EndInit();
+            bmp.Freeze();
+            BackPicture.Source = bmp;
+            BackPicture.Opacity = Math.Clamp(App.Settings.BackgroundStrength, 5, 90) / 100.0;
+            BackPicture.Visibility = Visibility.Visible;
+        }
+        catch { BackPicture.Source = null; BackPicture.Visibility = Visibility.Collapsed; }
+    }
+
+    public bool BarNowShown => BarNow.Visibility == Visibility.Visible;
 
     /// <summary>A panel behind the queue and lyrics (settings → display), so they read clearly over the visualizer.</summary>
     public void ApplyNowPanel()
@@ -687,6 +712,7 @@ public partial class MainWindow : Window
             return;
         }
         _remoteShown = true;
+        BarNow.Visibility = Visibility.Visible;
         var st = web.State;
         var name = web.Service.Name;
         Tr.SetText(BarTitle, st.Title != "" ? st.Title : name);
@@ -1001,6 +1027,8 @@ public partial class MainWindow : Window
         _ = UpdateCoverColorAsync(cur?.ArtPath);
         ShowLocalInfo(cur);
         Tr.SetText(BarTitle, cur?.Title ?? "nothing playing");
+        // nothing playing: the bar's middle stays empty (its place is kept, so the controls don't move)
+        BarNow.Visibility = cur == null && !_remoteShown ? Visibility.Hidden : Visibility.Visible;
         Tr.SetText(BarArtist, cur?.Subtitle ?? "");
         Art.SetPath(BarArt, cur?.ArtPath);
         Tr.SetText(NowTitle, cur?.Title ?? "");

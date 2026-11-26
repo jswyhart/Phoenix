@@ -177,6 +177,17 @@
                         <ComboBox x:Name="DarkThemeBox" Grid.Row="1" Grid.Column="1" Width="260" Margin="0,8,0,0" SelectionChanged="SideTheme_Changed" ToolTip="The theme Phoenix shows while Windows is set to dark for apps"/>
                     </Grid>
                     <TextBlock x:Name="ThemeNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
+                    <TextBlock Style="{StaticResource Label}" Text="BACKGROUND PICTURE" Margin="0,22,0,3"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="CHOOSE PICTURE" Click="BackPick_Click" ToolTip="A picture of your own behind Phoenix's window"/>
+                        <Button x:Name="BackRemoveBtn" Style="{StaticResource TextBtn}" Content="remove" Click="BackRemove_Click" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="BackStrengthRow" Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="how much it shows" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="130"/>
+                        <Slider x:Name="BackStrength" Width="220" Minimum="5" Maximum="90" SmallChange="5" LargeChange="10" VerticalAlignment="Center" ValueChanged="BackStrength_Changed"/>
+                        <TextBlock x:Name="BackStrengthText" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock x:Name="BackNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>
                     <WrapPanel x:Name="TabChecks"/>

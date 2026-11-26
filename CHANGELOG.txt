@@ -1,0 +1,83 @@
+PHOENIX — CHANGES AND FIXES
+===========================
+
+Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for macOS and Linux,
+"Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
+
+
+1.0.2 (not released yet)
+------------------------
+
+New
+- Background picture: settings → display can put a picture of your own behind the window, showing
+  through the theme's background as much as you choose (5–90%). Phoenix keeps its own copy in the
+  data folder.
+- The player bar's song, cover and progress hide while nothing is playing.
+- Now playing: a "generated" tab beside lyrics shows the lyrics the speech model wrote, kept apart
+  from a song's own lyrics. It is there while a speech model is downloaded and chosen.
+- Now playing: settings → display can put a panel behind the song list and lyrics, so they stay
+  readable over the visualizer.
+- Lyrics written by a speech model on this computer (whisper.cpp): it listens to a song and writes
+  what is sung, with timing, line by line as it hears it. Nothing is sent anywhere. It runs on any
+  AMD, Intel or NVIDIA graphics, built in or separate (Vulkan), on Apple chips (Metal), or on the
+  processor; you can choose which. Six models from 75 MB to 2.9 GB, with the one that suits your
+  graphics card's memory marked as recommended. It can write lyrics as songs play, or for every
+  song in the collection.
+- Ripping (Windows): FLAC (lossless), and MP3 at 128/192/256/320 kbps, AAC at 128/192/256 kbps and
+  WMA at 128/192 kbps, besides WAV.
+- Burning (Windows): an MP3 CD (hours of music for MP3 CD players and car stereos; songs that
+  aren't MP3s are converted at the quality you choose) or a data disc (the files as they are, on
+  a CD, DVD or Blu-ray), besides an audio CD. Files are numbered in burn list order with a
+  playlist, and the burn list shows the size and when a DVD or Blu-ray is needed.
+- Themes: "follow the system" can use a theme of your own for the system's light side and another
+  for its dark side.
+- Android: lyrics in now playing. Tap "lyrics" on the picture: from a .lrc or .txt file beside the
+  song, its tags, LRCLIB (found by itself if settings → lyrics says so) or the clipboard. Timed
+  lyrics follow the song, and tapping a line jumps there.
+- Android: settings → playback has an equalizer (the desktop's presets, or ten bands of your own,
+  set on the phone's own equalizer) and volume levelling from ReplayGain tags, by song or by album.
+- Android: the theme can follow the phone's light or dark setting.
+
+Changed
+- The note under the lyrics wraps instead of being cut off, in larger, brighter type.
+- Listening for lyrics avoids whisper's habit of repeating a line, splits long sentences into
+  lyric-sized lines, uses the song's name as a hint, and weighs several readings on a GPU.
+- The installers and packages carry only their own platform's speech-model libraries.
+
+Fixed
+- Mac/Linux: asking for generated lyrics a song doesn't have no longer reports an error.
+
+
+1.0.1 — 2026-11-26
+------------------
+
+New
+- Keep running in the notification area (Windows) / tray or menu bar (Mac/Linux) when the window
+  is closed. Off by default.
+- A built-in "system" theme that follows the system's light or dark setting; the title bar follows
+  the theme.
+- Custom themes, and a designer to make them inside Phoenix.
+- Streaming services can go anywhere in the collection, and tabs of your own hold them (set up
+  under settings → servers → streaming).
+- Mac/Linux caught up with Windows: collection tabs, radio, podcasts and their downloads, sorting
+  and filtering, stats, scrobbling, sleep timer, speed, backup, updates, streaming services, tag
+  editor, Smart DJ, auto playlists, library care, metadata sources, lyrics, artist photos,
+  Mixview, crossfade, equalizer, volume levelling, mini player, media keys, themes, casting (DLNA
+  and Chromecast), phone remote, translated names, and moving the data folder.
+- Android: settings and pages arranged like the desktop's; radio, podcast sources, sleep timer,
+  speed, stats, scrobbling, sorting and filtering, backup and update check. Builds are signed with
+  a fixed key.
+
+Fixed
+- Mac/Linux: a broken message in settings → storage.
+- Windows: the audio client is released properly; internet pictures load on their own lane;
+  volume levelling no longer holds the audio lock.
+- Radio plays https streams (through the audio engine).
+
+
+1.0.0 — 2026-11-24
+------------------
+
+- First release: the Windows app, the Android app and the Mac/Linux app, with a shared core.
+- Smooth scrolling at the display's refresh rate, cover grids and the visualizer drawn with
+  Direct2D on Direct3D 11 (Windows).

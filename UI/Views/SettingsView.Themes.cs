@@ -14,6 +14,7 @@ public partial class SettingsView
     {
         _listingThemes = true;
         ThemeBox.Items.Clear();
+        LoadBackground();
         var all = Themes.All();
         foreach (var t in all)
             ThemeBox.Items.Add(new ComboBoxItem { Content = t.Id == "system" ? "follow the system" : t.BuiltIn ? t.Name : $"{t.Name}   ({t.Base})", Tag = t.Id });
@@ -102,5 +103,68 @@ public partial class SettingsView
     {
         try { Directory.CreateDirectory(Themes.Folder); System.Diagnostics.Process.Start("explorer.exe", $"\"{Themes.Folder}\""); }
         catch (Exception ex) { ThemeNote.Text = ex.Message; }
+    }
+
+    // ---------- a background picture of your own ----------
+
+    bool _loadingBack;
+
+    void LoadBackground()
+    {
+        _loadingBack = true;
+        var have = S.BackgroundPicture != "" && System.IO.File.Exists(S.BackgroundPicture);
+        BackRemoveBtn.Visibility = BackStrengthRow.Visibility = have ? Visibility.Visible : Visibility.Collapsed;
+        BackStrength.Value = Math.Clamp(S.BackgroundStrength, 5, 90);
+        BackStrengthText.Text = $"{S.BackgroundStrength}%";
+        BackNote.Text = have
+            ? "The picture shows through the theme's background everywhere but now playing. Phoenix keeps its own copy in the data folder."
+            : "Choose a picture to show behind Phoenix's window, through the theme's background.";
+        _loadingBack = false;
+    }
+
+    void BackPick_Click(object sender, RoutedEventArgs e)
+    {
+        var pick = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "A picture behind Phoenix's window",
+            Filter = "Pictures|" + string.Join(";", Halcyon.Services.Backgrounds.Extensions.Select(x => "*" + x)),
+        };
+        if (pick.ShowDialog(App.Win) != true) return;
+        try
+        {
+            S.BackgroundPicture = Halcyon.Services.Backgrounds.Use(pick.FileName, S.BackgroundPicture);
+            if (!App.SmokeMode) S.Save();
+            App.Win.ApplyBackground();
+        }
+        catch (Exception ex) { BackNote.Text = ex.Message; return; }
+        LoadBackground();
+    }
+
+    /// <summary>For the self-test: the same as choosing a picture.</summary>
+    public void UseBackground(string file)
+    {
+        S.BackgroundPicture = Halcyon.Services.Backgrounds.Use(file, S.BackgroundPicture);
+        App.Win.ApplyBackground();
+        LoadBackground();
+    }
+
+    void BackRemove_Click(object sender, RoutedEventArgs e) => RemoveBackground();
+
+    public void RemoveBackground()
+    {
+        Halcyon.Services.Backgrounds.Clear(S.BackgroundPicture);
+        S.BackgroundPicture = "";
+        if (!App.SmokeMode) S.Save();
+        App.Win.ApplyBackground();
+        LoadBackground();
+    }
+
+    void BackStrength_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_loadingBack || !IsInitialized) return;
+        S.BackgroundStrength = (int)Math.Round(BackStrength.Value / 5) * 5;
+        BackStrengthText.Text = $"{S.BackgroundStrength}%";
+        if (!App.SmokeMode) S.Save();
+        App.Win.ApplyBackground();
     }
 }

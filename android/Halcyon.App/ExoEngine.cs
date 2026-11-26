@@ -3,6 +3,7 @@ using Android.Views;
 using AndroidX.Media3.Common;
 using AndroidX.Media3.ExoPlayer;
 using Halcyon.Core;
+using AFx = Android.Media.Audiofx;
 
 namespace Halcyon.Droid;
 
@@ -42,9 +43,62 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerLi
     public int AudioSessionId => _player.AudioSessionId;
     public bool IsBuffering => _player.PlaybackState == 2;
 
+    // ---- the equalizer and volume levelling (settings → playback) ----
+
+    AFx.Equalizer? _eq;
+    AFx.LoudnessEnhancer? _boost;
+    float _volume = 1, _level = 1;
+    public string EqTrouble { get; private set; } = "";
+    /// <summary>The levelling applied to the song playing, in dB (0 when off or the song carries no ReplayGain).</summary>
+    public double LevelDb { get; private set; }
+
+    /// <summary>Sets the phone's equalizer to the ten bands chosen (read off at the phone's own band centres).</summary>
+    public void ApplyEqualizer()
+    {
+        var s = App.Settings;
+        try
+        {
+            if (!s.EqEnabled) { if (_eq != null) _eq.SetEnabled(false); return; }
+            _eq ??= new AFx.Equalizer(0, _player.AudioSessionId);
+            var gains = EqPresets.Current(s);
+            var range = _eq.GetBandLevelRange()!;   // millibels
+            for (short b = 0; b < _eq.NumberOfBands; b++)
+            {
+                var hz = _eq.GetCenterFreq(b) / 1000.0;
+                var mb = (short)Math.Clamp(EqPresets.At(gains, hz) * 100, range[0], range[1]);
+                _eq.SetBandLevel(b, mb);
+            }
+            _eq.SetEnabled(true);
+            EqTrouble = "";
+        }
+        catch (Exception ex) { EqTrouble = "the phone's equalizer isn't available: " + ex.Message; }
+    }
+
+    /// <summary>How loud this song should be played: its ReplayGain, quieter by turning the volume down, louder through the loudness enhancer.</summary>
+    void Level(string url)
+    {
+        var s = App.Settings;
+        LevelDb = 0;
+        if (s.Levelling && !url.Contains("://") && EqPresets.ReplayGain(url, s.LevelByAlbum) is { } db) LevelDb = db;
+        _level = LevelDb < 0 ? (float)Math.Pow(10, LevelDb / 20) : 1f;
+        try
+        {
+            if (LevelDb > 0)
+            {
+                _boost ??= new AFx.LoudnessEnhancer(_player.AudioSessionId);
+                _boost.SetTargetGain((int)(LevelDb * 100));
+                _boost.SetEnabled(true);
+            }
+            else if (_boost != null) _boost.SetEnabled(false);
+        }
+        catch { }
+        _player.Volume = Math.Clamp(_volume * _level, 0f, 1f);
+    }
+
     public void Load(string url, bool isVideo)
     {
         _opened = false;
+        Level(url);
         VideoWidth = VideoHeight = 0;
         var uri = url.Contains("://") ? Android.Net.Uri.Parse(url)! : Android.Net.Uri.FromFile(new Java.IO.File(url))!;
         var b = new MediaItem.Builder()!.SetUri(uri)!;
@@ -67,7 +121,11 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerLi
     public long PositionMs => Math.Max(0, _player.CurrentPosition);
     public long DurationMs => _player.Duration > 0 ? _player.Duration : 0;   // C.TIME_UNSET is negative
     public void SeekTo(long ms) => _player.SeekTo(ms);
-    public float Volume { get => _player.Volume; set => _player.Volume = Math.Clamp(value, 0f, 1f); }
+    public float Volume
+    {
+        get => _volume;
+        set { _volume = Math.Clamp(value, 0f, 1f); _player.Volume = Math.Clamp(_volume * _level, 0f, 1f); }
+    }
 
     public void SetSurface(SurfaceView? view)
     {

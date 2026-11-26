@@ -1,6 +1,7 @@
 // The parts of settings → display about quickplay and artist photos, and the lyrics part of settings → translation
 // and lyrics. As on Windows.
 import { call, host, on } from "./api";
+import { artUrl } from "./ui";
 import { shell } from "./shell";
 import { confirm, h } from "./ui";
 
@@ -152,4 +153,49 @@ export function translationSection() {
     h("div.note", { style: { margin: "2px 0 0 24px" } }, "Off: only names in other scripts (Japanese, Korean, Russian, Arabic…) are sent. On: every name is sent, which uses a free service's daily limit quickly."),
     status);
   return { el, shown: async () => paint(await call<Translate>("translate.state")) };
+}
+
+// ---------- a background picture of your own (as on Windows) ----------
+
+let backEl: HTMLElement | null = null;
+
+/** Shows the picture of your own behind the window, or none. */
+export function applyBackground() {
+  if (!backEl) { backEl = h("div.backpic.hidden"); document.body.prepend(backEl); }
+  const d = shell.display;
+  backEl.classList.toggle("hidden", !d.backgroundPicture);
+  if (d.backgroundPicture) {
+    backEl.style.backgroundImage = `url("${artUrl(d.backgroundPicture, 2400)}")`;
+    backEl.style.opacity = String(d.backgroundStrength / 100);
+  }
+}
+
+export function backgroundSection() {
+  const note = h("div.note", { style: { marginTop: "6px" } });
+  const strength = h("input.backstrength", { type: "range", min: "5", max: "90", step: "5", style: { width: "220px" } });
+  const strengthText = h("span.dim", { style: { marginLeft: "10px" } });
+  const remove = h("button.textbtn", { style: { marginLeft: "8px" }, onclick: async () => { await set({ backgroundClear: true } as any); paint(); } }, "remove");
+  const row = h("div", { style: { display: "flex", alignItems: "center", marginTop: "10px" } },
+    h("span", { style: { width: "130px", flex: "none", color: "var(--fg-dim)" } }, "how much it shows"), strength, strengthText);
+  const choose = h("button.pill", { onclick: async () => {
+    const file = await host.openFile("A picture behind Phoenix's window", [{ name: "Pictures", extensions: ["jpg", "jpeg", "png", "bmp", "gif", "webp"] }]);
+    if (!file) return;
+    try { await set({ backgroundFile: file } as any); } catch (e: any) { note.textContent = String(e.message ?? e); return; }
+    paint();
+  } }, "CHOOSE PICTURE");
+  strength.oninput = () => { strengthText.textContent = `${strength.value}%`; if (backEl) backEl.style.opacity = String(Number(strength.value) / 100); };
+  strength.onchange = async () => { await set({ backgroundStrength: Number(strength.value) }); paint(); };
+  function paint() {
+    const d = shell.display, have = !!d.backgroundPicture;
+    applyBackground();
+    remove.style.display = row.style.display = have ? "" : "none";
+    strength.value = String(d.backgroundStrength);
+    strengthText.textContent = `${d.backgroundStrength}%`;
+    note.textContent = have
+      ? "The picture shows through the theme's background everywhere but now playing. Phoenix keeps its own copy in the data folder."
+      : "Choose a picture to show behind Phoenix's window, through the theme's background.";
+  }
+  const el = h("div", h("div.label", { style: { margin: "22px 0 3px 0" } }, "BACKGROUND PICTURE"),
+    h("div", { style: { display: "flex", alignItems: "center", marginTop: "4px" } }, choose, remove), row, note);
+  return { el, shown: paint };
 }

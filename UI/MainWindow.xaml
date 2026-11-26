@@ -20,6 +20,9 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- a picture of your own behind everything (settings → display), showing through the theme's background -->
+        <Image x:Name="BackPicture" Grid.RowSpan="3" Stretch="UniformToFill" IsHitTestVisible="False" Visibility="Collapsed"/>
+
         <!-- ===== header: small top navigation, big collection sections ===== -->
         <Grid x:Name="HeaderArea" Grid.Row="0" Margin="28,0,0,6">
             <Grid.RowDefinitions>
@@ -231,8 +234,8 @@
                     <TextBlock x:Name="DropHint" Foreground="{DynamicResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0" MaxWidth="170" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <!-- centre: what is playing, with its progress underneath -->
-                <DockPanel Grid.Column="1" VerticalAlignment="Center">
+                <!-- centre: what is playing, with its progress underneath (hidden while nothing is) -->
+                <DockPanel x:Name="BarNow" Grid.Column="1" VerticalAlignment="Center">
                     <Button DockPanel.Dock="Left" Style="{StaticResource BareBtn}" Click="OpenNow_Click" ToolTip="Now playing" Margin="0,0,14,0">
                         <Grid Width="56" Height="56" Background="{DynamicResource Line}">
                             <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource Icons}" FontSize="18" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>

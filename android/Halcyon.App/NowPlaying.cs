@@ -19,6 +19,8 @@ public class NowPlayingView : LinearLayout
     readonly SeekBar _seek;
     readonly ImageView _play, _like, _dislike, _shuffle, _repeat;
     readonly View _info, _transport, _topBar;
+    readonly LyricsPane _lyrics;
+    readonly TextView _lyricsChip;
     bool _dragging, _landscape, _chromeHidden;
     string _artFor = "\0";
 
@@ -61,6 +63,14 @@ public class NowPlayingView : LinearLayout
         _mode.SetBackgroundColor(Color.Argb(0x66, 0, 0, 0));
         _mode.Click += (_, _) => VisualizerPicker.Show(a, Update);
         _stage.AddView(_mode, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent, GravityFlags.Top | GravityFlags.End));
+        // the song's lyrics, over the picture
+        _lyrics = new LyricsPane(a) { Visibility = ViewStates.Gone };
+        _stage.AddView(_lyrics, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+        _lyricsChip = Ui.Text(a, "lyrics", 12, Color.White);
+        _lyricsChip.SetPadding(Th.Dp(10), Th.Dp(6), Th.Dp(10), Th.Dp(6));
+        _lyricsChip.SetBackgroundColor(Color.Argb(0x66, 0, 0, 0));
+        _lyricsChip.Click += (_, _) => { App.Settings.ShowLyrics = !App.Settings.ShowLyrics; ShowLyricsPane(); };
+        _stage.AddView(_lyricsChip, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent, GravityFlags.Top | GravityFlags.Start));
         _stage.Click += (_, _) => { if (_landscape && P.Current?.IsVideo == true) { _chromeHidden = !_chromeHidden; ApplyChrome(); } };
         _stage.LayoutChange += (_, _) => FitVideo();
         AddView(_stage, new LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1));
@@ -217,9 +227,27 @@ public class NowPlayingView : LinearLayout
             }
             else if (mode == 0) { _viz.Stop(); _viz.Visibility = ViewStates.Gone; }
         }
+        ShowLyricsPane();
         ApplyChrome();
         Tick();
     }
+
+    /// <summary>Lyrics over the picture, when asked for (a song, not a video).</summary>
+    void ShowLyricsPane()
+    {
+        var cur = P.Current;
+        var song = cur != null && !cur.IsVideo;
+        _lyricsChip.Visibility = song ? ViewStates.Visible : ViewStates.Gone;
+        var show = song && App.Settings.ShowLyrics;
+        _lyricsChip.SetTextColor(show ? Th.Accent : Color.White);
+        _lyricsChip.Text = show ? "hide lyrics" : "lyrics";
+        _lyrics.Visibility = show ? ViewStates.Visible : ViewStates.Gone;
+        _mode.Visibility = show || !song ? ViewStates.Gone : ViewStates.Visible;
+        if (show) _lyrics.Load(cur!);
+    }
+
+    public bool LyricsShown => _lyrics.Visibility == ViewStates.Visible;
+    public LyricsPane LyricsView => _lyrics;
 
     /// <summary>Moves the seek bar and clock; called twice a second while the screen is on.</summary>
     public void Tick()
@@ -230,6 +258,7 @@ public class NowPlayingView : LinearLayout
         if (_dragging) return;
         _pos.Text = Fmt.Clock(pos);
         _seek.Progress = dur > 0 ? (int)Math.Clamp(pos * 1000 / dur, 0, 1000) : 0;
+        if (LyricsShown) _lyrics.Follow(pos);
     }
 }
 

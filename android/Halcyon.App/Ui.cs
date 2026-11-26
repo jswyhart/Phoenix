@@ -19,7 +19,8 @@ public static class Th
 
     public static void Apply(string name, Context c)
     {
-        Dark = name == "dark";
+        // "system" is light or dark as the phone is set (dark theme in Android's display settings), and follows it
+        Dark = name == "dark" || (name == "system" && SystemIsDark(c));
         // Everything is sized in "design dp": real dp times a factor that grows with the screen, so the layout fills a
         // large phone the way it fills a small one. Settings can override the automatic choice.
         var dm = c.Resources!.DisplayMetrics!;
@@ -36,6 +37,9 @@ public static class Th
         Line = Color.ParseColor(Dark ? "#2E2E2E" : "#E2E2E2");
         Selected = Color.ParseColor(Dark ? "#26FFFFFF" : "#1C000000");
     }
+
+    public static bool SystemIsDark(Context c) =>
+        (c.Resources!.Configuration!.UiMode & Android.Content.Res.UiMode.NightMask) == Android.Content.Res.UiMode.NightYes;
 
     public static int Dp(float dp) => (int)(dp * Density + 0.5f);
 

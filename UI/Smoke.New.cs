@@ -952,6 +952,36 @@ public static partial class Smoke
             win.ApplyNowPanel();
         }
 
+        // nothing playing: the player bar's middle is empty
+        {
+            var win = App.Win;
+            App.Player.Stop();
+            await Task.Delay(200);
+            var hiddenIdle = !win.BarNowShown;
+            App.Player.Play(new[] { Player.From(App.Lib.Tracks.First(t => t.IsLocal)) }, 0);
+            await Task.Delay(400);
+            var shownPlaying = win.BarNowShown;
+            App.Player.Stop();
+            Check("the player bar's song, cover and progress hide while nothing is playing", hiddenIdle && shownPlaying, $"{hiddenIdle} {shownPlaying}");
+        }
+
+        // a background picture of your own: copied into the data folder, shown through the theme, removed again
+        {
+            var win = App.Win;
+            var sv = win.Page<SettingsView>("settings");
+            var picture = Directory.GetFiles(Path.Combine(_dir, "pictures"), "*.png", SearchOption.AllDirectories).First();
+            sv.UseBackground(picture);
+            var kept = App.Settings.BackgroundPicture;
+            var img = (System.Windows.Controls.Image)win.FindName("BackPicture");
+            Check("a background picture of your own shows behind the window, from Phoenix's own copy",
+                img.IsVisible && img.Source != null && Math.Abs(img.Opacity - 0.30) < 0.01 && kept.StartsWith(Backgrounds.Folder) && File.Exists(kept), kept);
+            win.Navigate("music");
+            await Task.Delay(300);
+            await Shot("background-picture");
+            sv.RemoveBackground();
+            Check("and goes again, its copy with it", !img.IsVisible && App.Settings.BackgroundPicture == "" && !File.Exists(kept));
+        }
+
         // running on in the notification area: off by default; on, closing the window only hides it
         {
             var win = App.Win;

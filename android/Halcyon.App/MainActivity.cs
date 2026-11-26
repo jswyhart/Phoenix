@@ -235,6 +235,8 @@ public class MainActivity : Activity
     {
         base.OnConfigurationChanged(newConfig);
         _now.SetLandscape(newConfig.Orientation == Android.Content.Res.Orientation.Landscape);
+        // the phone switched between light and dark: a theme that follows it is redrawn
+        if (App.Settings.Theme == "system" && Th.SystemIsDark(this) != Th.Dark) { Th.Apply("system", this); Recreate(); }
     }
 
     // ---------- navigation ----------

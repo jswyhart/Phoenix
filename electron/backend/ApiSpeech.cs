@@ -136,6 +136,13 @@ public static partial class Api
             return SpeechState();
         });
 
+        // a small picture for the self-test (a background picture of your own)
+        Rpc.On("smoke.writePicture", p =>
+        {
+            var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANBAEB5vUvXQAAAABJRU5ErkJggg==");
+            File.WriteAllBytes(p.Str("file"), png);
+            return (object?)null;
+        });
         Rpc.On("smoke.saveGenerated", p =>
         {
             if (TrackOf(p.Long("id")) is { } t) Lyrics.SaveGenerated(t, p.Str("text"));
