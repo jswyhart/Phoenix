@@ -60,6 +60,8 @@ public class Settings
     public bool SpotifyEnabled { get; set; }              // older setting: carried into WebServicesOn when read
     public List<string> WebServicesOn { get; set; } = new();                       // streaming services shown as pages (ids from WebServices.Presets)
     public List<Halcyon.Services.CustomService> CustomServices { get; set; } = new();   // your own addresses
+    public string ThemeLight { get; set; } = "light";     // with the theme following the system: the theme used while it is light
+    public string ThemeDark { get; set; } = "dark";       // ...and while it is dark
     public bool RunInTray { get; set; }                   // closing the window leaves Phoenix playing in the notification area
     public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)
     public string FpcalcPath { get; set; } = "";                                         // Chromaprint's fpcalc.exe, for identifying songs by sound

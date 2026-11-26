@@ -161,6 +161,14 @@
                         <Button x:Name="ThemeDeleteBtn" Style="{StaticResource TextBtn}" Content="delete" Margin="0,0,16,0" Click="ThemeDelete_Click" ToolTip="Remove this theme (Phoenix goes back to its base, light or dark)"/>
                         <Button Style="{StaticResource TextBtn}" Content="open themes folder" Click="ThemeFolder_Click" ToolTip="Your themes are small text files you can also edit by hand: Phoenix shows a change as soon as you save it"/>
                     </StackPanel>
+                    <Grid x:Name="SystemThemes" Margin="0,10,0,0" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Text="when Windows is light" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="LightThemeBox" Grid.Column="1" Width="260" SelectionChanged="SideTheme_Changed" ToolTip="The theme Phoenix shows while Windows is set to light for apps"/>
+                        <TextBlock Grid.Row="1" Text="when Windows is dark" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Margin="0,8,0,0"/>
+                        <ComboBox x:Name="DarkThemeBox" Grid.Row="1" Grid.Column="1" Width="260" Margin="0,8,0,0" SelectionChanged="SideTheme_Changed" ToolTip="The theme Phoenix shows while Windows is set to dark for apps"/>
+                    </Grid>
                     <TextBlock x:Name="ThemeNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>

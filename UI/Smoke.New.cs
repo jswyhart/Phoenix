@@ -830,6 +830,20 @@ public static partial class Smoke
         Check("a system theme is built in, and is light or dark as Windows is set for apps",
             string.Join(",", Themes.All().Take(3).Select(t => t.Id)) == "light,dark,system" && Themes.Current.Id == "system" && Themes.Current.IsDark == Themes.SystemIsDark && Themes.Current.BuiltIn,
             $"Windows dark: {Themes.SystemIsDark}, drawn {Themes.Current.Base}");
+        {
+            // following the system with a theme of your own for its side
+            var own = new Theme { Name = "Side Test", Base = Themes.SystemIsDark ? "dark" : "light" };
+            own.Colours["Accent"] = "#22AA55";
+            var ownId = Themes.Save(own);
+            var (wasLight, wasDark) = (App.Settings.ThemeLight, App.Settings.ThemeDark);
+            if (Themes.SystemIsDark) App.Settings.ThemeDark = ownId; else App.Settings.ThemeLight = ownId;
+            Themes.Apply(Themes.Find("system"));
+            Check("following the system can use a theme of your own for its light or dark side",
+                Themes.Current.Id == "system" && Themes.Current.Get("Accent") == Color.FromRgb(0x22, 0xAA, 0x55) && ((System.Windows.Media.SolidColorBrush)Application.Current.Resources["Accent"]).Color == Color.FromRgb(0x22, 0xAA, 0x55),
+                Themes.Current.Get("Accent").ToString());
+            (App.Settings.ThemeLight, App.Settings.ThemeDark) = (wasLight, wasDark);
+            Themes.Delete(ownId);
+        }
         Themes.Apply(Themes.Light);
 
         {

@@ -29,6 +29,8 @@ public class Settings
     public int ReaderFontSize { get; set; } = 19;
     public bool ComicRightToLeft { get; set; }   // manga: the next comic page is to the left
     public string Theme { get; set; } = "light";
+    public string ThemeLight { get; set; } = "light";     // with the theme following the system: the theme used while it is light (desktop)
+    public string ThemeDark { get; set; } = "dark";       // ...and while it is dark
     public int UiSize { get; set; }            // 0 fit the screen automatically, 1 small, 2 normal, 3 large, 4 larger
     public double Volume { get; set; } = 1.0;
     public bool Shuffle { get; set; }

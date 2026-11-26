@@ -14,14 +14,28 @@ public partial class SettingsView
     {
         _listingThemes = true;
         ThemeBox.Items.Clear();
-        foreach (var t in Themes.All())
-            ThemeBox.Items.Add(new ComboBoxItem { Content = t.BuiltIn ? t.Name : $"{t.Name}   ({t.Base})", Tag = t.Id });
+        var all = Themes.All();
+        foreach (var t in all)
+            ThemeBox.Items.Add(new ComboBoxItem { Content = t.Id == "system" ? "follow the system" : t.BuiltIn ? t.Name : $"{t.Name}   ({t.Base})", Tag = t.Id });
+        // following the system: which theme for light and which for dark
+        var following = Themes.Current.Id == "system";
+        SystemThemes.Visibility = following ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var (box, chosen) in new[] { (LightThemeBox, S.ThemeLight), (DarkThemeBox, S.ThemeDark) })
+        {
+            box.Items.Clear();
+            foreach (var t in all.Where(t => t.Id != "system"))
+                box.Items.Add(new ComboBoxItem { Content = t.BuiltIn ? t.Name : $"{t.Name}   ({t.Base})", Tag = t.Id });
+            box.SelectedItem = box.Items.OfType<ComboBoxItem>().FirstOrDefault(i => string.Equals((string)i.Tag, chosen, StringComparison.OrdinalIgnoreCase))
+                               ?? box.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == (box == LightThemeBox ? "light" : "dark"));
+        }
         ThemeBox.SelectedItem = ThemeBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => string.Equals((string)i.Tag, Themes.Current.Id, StringComparison.OrdinalIgnoreCase))
                                 ?? ThemeBox.Items[0];
         _listingThemes = false;
         var mine = !Themes.Current.BuiltIn;
         ThemeDeleteBtn.IsEnabled = mine;
-        ThemeNote.Text = mine
+        ThemeNote.Text = following
+            ? $"Phoenix shows the first while Windows is set to light for apps and the second while it is dark, and switches when Windows does (now: {(Themes.SystemIsDark ? "dark" : "light")})."
+            : mine
             ? $"Saved as {Themes.Current.Id}.json in the themes folder. Edit it there by hand and Phoenix shows the change as soon as you save."
             : "Customise to make a theme of your own from this one: pick its colours and fonts while Phoenix shows them as you go.";
     }
@@ -30,6 +44,13 @@ public partial class SettingsView
     {
         if (_listingThemes || ThemeBox.SelectedItem is not ComboBoxItem { Tag: string id }) return;
         UseTheme(id);
+    }
+
+    void SideTheme_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_listingThemes || sender is not ComboBox { SelectedItem: ComboBoxItem { Tag: string id } } box) return;
+        if (box == LightThemeBox) S.ThemeLight = id; else S.ThemeDark = id;
+        UseTheme("system");
     }
 
     void UseTheme(string id)
@@ -72,6 +93,8 @@ public partial class SettingsView
         if (MessageBox.Show($"Delete the theme \"{t.Name}\"? Its file goes from the themes folder, and Phoenix goes back to {t.Base}.", "Phoenix",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         Themes.Delete(t.Id);
+        if (string.Equals(S.ThemeLight, t.Id, StringComparison.OrdinalIgnoreCase)) S.ThemeLight = "light";
+        if (string.Equals(S.ThemeDark, t.Id, StringComparison.OrdinalIgnoreCase)) S.ThemeDark = "dark";
         UseTheme(t.Base);
     }
 

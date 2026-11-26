@@ -84,6 +84,14 @@ public static partial class Api
         catch { return null; }
     }
 
+    /// <summary>The theme shown while the system is light (or dark) and the theme follows it; light or dark if that one is gone.</summary>
+    static ThemeFile SideTheme(bool dark)
+    {
+        var id = dark ? S.ThemeDark : S.ThemeLight;
+        var t = string.Equals(id, "system", StringComparison.OrdinalIgnoreCase) ? null : FindTheme(id);
+        return t is null || (!string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase)) ? FindTheme(dark ? "dark" : "light") : t;
+    }
+
     static ThemeFile FindTheme(string? id)
     {
         if (string.Equals(id, "dark", StringComparison.OrdinalIgnoreCase)) return new ThemeFile { Id = "dark", Name = "dark", Base = "dark" };
@@ -128,7 +136,9 @@ public static partial class Api
             _themeWatcher = new FileSystemWatcher(ThemesFolder, "*.json") { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size, EnableRaisingEvents = true };
             void OnDisk(object _, FileSystemEventArgs e)
             {
-                if (!string.Equals(Path.GetFileNameWithoutExtension(e.FullPath), S.Theme, StringComparison.OrdinalIgnoreCase)) return;
+                var changed = Path.GetFileNameWithoutExtension(e.FullPath);
+                if (!string.Equals(changed, S.Theme, StringComparison.OrdinalIgnoreCase)
+                    && !(S.Theme == "system" && (string.Equals(changed, S.ThemeLight, StringComparison.OrdinalIgnoreCase) || string.Equals(changed, S.ThemeDark, StringComparison.OrdinalIgnoreCase)))) return;
                 // editors save in a few steps: wait for the file to settle before reading it
                 _themeReload?.Dispose();
                 _themeReload = new Timer(_ => MainLoop.Post(() => Rpc.Emit("theme", ThemeShape(FindTheme(S.Theme)))), null, 250, Timeout.Infinite);
@@ -148,11 +158,23 @@ public static partial class Api
             var list = new List<ThemeFile> { FindTheme("light"), FindTheme("dark"), FindTheme("system") };
             try { if (Directory.Exists(ThemesFolder)) list.AddRange(Directory.GetFiles(ThemesFolder, "*.json").Select(ReadTheme).OfType<ThemeFile>().Where(t => !BuiltInTheme(t.Id)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)); }
             catch { }
-            return new { current = FindTheme(S.Theme).Id, themes = list.Select(t => new { id = t.Id, name = t.Name, @base = t.Base }), folder = ThemesFolder };
+            return new { current = FindTheme(S.Theme).Id, themes = list.Select(t => new { id = t.Id, name = t.Name, @base = t.Base }), folder = ThemesFolder,
+                light = SideTheme(false).Id, dark = SideTheme(true).Id };
         });
         Rpc.On("themes.keys", _ => ThemeKeys.Select(k => new { key = k.Key, group = k.Group, label = k.Label, tip = k.Tip }));
         Rpc.On("themes.current", _ => ThemeShape(FindTheme(S.Theme)));
         Rpc.On("themes.get", p => ThemeShape(FindTheme(p.Str("id"))));
+        // following the system: the theme chosen for its light side or its dark side
+        Rpc.On("themes.side", p => ThemeShape(SideTheme(p.Bool("dark"))));
+        Rpc.On("themes.setSide", p =>
+        {
+            var t = FindTheme(p.Str("id"));
+            if (t.Id == "system") t = FindTheme(p.Bool("dark") ? "dark" : "light");
+            if (p.Bool("dark")) S.ThemeDark = t.Id; else S.ThemeLight = t.Id;
+            S.Theme = "system";
+            Save();
+            return ThemeShape(FindTheme("system"));
+        });
         // what a theme would look like with these changes (the designer, before saving)
         Rpc.On("themes.preview", p =>
         {
@@ -194,6 +216,8 @@ public static partial class Api
             var id = p.Str("id");
             var back = FindTheme(id).Base;   // read before the file goes
             if (!BuiltInTheme(id)) try { File.Delete(ThemeFileOf(id)); } catch { }
+            if (string.Equals(S.ThemeLight, id, StringComparison.OrdinalIgnoreCase)) { S.ThemeLight = "light"; Save(); }
+            if (string.Equals(S.ThemeDark, id, StringComparison.OrdinalIgnoreCase)) { S.ThemeDark = "dark"; Save(); }
             if (string.Equals(S.Theme, id, StringComparison.OrdinalIgnoreCase)) { S.Theme = back; Save(); }
             return ThemeShape(FindTheme(S.Theme));
         });

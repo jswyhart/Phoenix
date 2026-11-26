@@ -131,8 +131,24 @@ public static class Themes
 
     public static Theme Light => new() { Id = "light", Name = "light", Base = "light" };
     public static Theme Dark => new() { Id = "dark", Name = "dark", Base = "dark" };
-    /// <summary>Light or dark as Windows is set for apps, following it when that changes.</summary>
-    public static Theme System => new() { Id = "system", Name = "system", Base = SystemIsDark ? "dark" : "light" };
+    /// <summary>
+    /// Following Windows: the theme chosen for light (settings → display) while Windows is set to light for apps, the
+    /// one chosen for dark while it is dark; it switches when Windows does.
+    /// </summary>
+    public static Theme System
+    {
+        get
+        {
+            var id = SystemIsDark ? App.Settings.ThemeDark : App.Settings.ThemeLight;
+            var t = (string.Equals(id, "system", StringComparison.OrdinalIgnoreCase) ? (SystemIsDark ? Dark : Light) : Find(id)).Copy();
+            t.Id = "system";
+            t.Name = "follow the system";
+            return t;
+        }
+    }
+
+    /// <summary>Which of the two the system theme shows now (for settings).</summary>
+    public static string SystemSide => SystemIsDark ? App.Settings.ThemeDark : App.Settings.ThemeLight;
 
     /// <summary>Windows is set to dark for apps (settings → personalisation → colours).</summary>
     public static bool SystemIsDark
@@ -160,7 +176,7 @@ public static class Themes
             if (e.Category != Microsoft.Win32.UserPreferenceCategory.General) return;
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (Current.Id == "system" && Current.IsDark != SystemIsDark) Apply(System);
+                if (Current.Id == "system") Apply(System);
             });
         };
     }

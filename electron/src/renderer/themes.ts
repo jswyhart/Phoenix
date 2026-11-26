@@ -29,12 +29,12 @@ export let currentTheme: ThemeShape | null = null;
 const systemDark = matchMedia("(prefers-color-scheme: dark)");
 let following = false;
 
-/** Draws the window in a theme. "system" draws light or dark as the operating system is set, and keeps following it. */
+/** Draws the window in a theme. "system" draws the theme chosen for the system's light or dark side, and keeps following it. */
 export function applyTheme(t: ThemeShape) {
   if (t.id === "system") {
     following = true;
     void host.themeBase("system", "").catch(() => {});
-    void call<ThemeShape>("themes.get", { id: systemDark.matches ? "dark" : "light" }).then(base => { if (following) draw({ ...base, id: "system", name: "system", builtIn: true }); });
+    void call<ThemeShape>("themes.side", { dark: systemDark.matches }).then(side => { if (following) draw({ ...side, id: "system", name: "follow the system", builtIn: true }); });
     return;
   }
   following = false;
@@ -95,8 +95,8 @@ let designing = false;
 
 /** Changes a theme's colours and fonts, or makes a new theme from it. Shows each change at once. */
 export async function designTheme(id: string): Promise<ThemeShape | null> {
-  // "system" is light or dark as the system is set: a new theme starts from whichever is showing
-  if (id === "system") id = systemDark.matches ? "dark" : "light";
+  // following the system: change the theme showing now (or start a new one from it)
+  if (id === "system") id = (await call<{ light: string; dark: string }>("themes.list"))[systemDark.matches ? "dark" : "light"];
   const [start, keys] = await Promise.all([call<ThemeShape>("themes.get", { id }), call<ThemeKey[]>("themes.keys")]);
   const before = currentTheme;
   let own: Record<string, string> = { ...start.own }, base = start.base;
@@ -174,17 +174,37 @@ export async function designTheme(id: string): Promise<ThemeShape | null> {
 export function themeSection() {
   const box = h("select.box", { style: { width: "260px" } });
   const noteEl = h("div.note", { style: { marginTop: "6px" } });
+  const lightBox = h("select.box.sidetheme", { style: { width: "260px" }, data: { side: "light" }, title: "The theme Phoenix shows while the system is set to light" });
+  const darkBox = h("select.box.sidetheme", { style: { width: "260px" }, data: { side: "dark" }, title: "The theme Phoenix shows while the system is set to dark" });
+  const sideRow = (label: string, b: HTMLSelectElement) =>
+    h("div", { style: { display: "flex", alignItems: "center", marginTop: "8px" } }, h("span", { style: { width: "170px", flex: "none", color: "var(--fg-dim)" } }, label), b);
+  const sides = h("div.systemthemes", { style: { marginTop: "6px" } }, sideRow("when the system is light", lightBox), sideRow("when the system is dark", darkBox));
   let folder = "";
   async function refresh() {
-    const l = await call<{ current: string; themes: { id: string; name: string; base: string }[]; folder: string }>("themes.list");
+    const l = await call<{ current: string; themes: { id: string; name: string; base: string }[]; folder: string; light: string; dark: string }>("themes.list");
     folder = l.folder;
-    box.replaceChildren(...l.themes.map(t => h("option", { value: t.id }, t.name)));
+    const named = (t: { id: string; name: string; base: string }) => t.id === "system" ? "follow the system" : t.id === "light" || t.id === "dark" ? t.name : `${t.name}   (${t.base})`;
+    box.replaceChildren(...l.themes.map(t => h("option", { value: t.id }, named(t))));
     box.value = l.current;
+    const following = l.current === "system";
+    sides.style.display = following ? "" : "none";
+    for (const [b, chosen] of [[lightBox, l.light], [darkBox, l.dark]] as const) {
+      b.replaceChildren(...l.themes.filter(t => t.id !== "system").map(t => h("option", { value: t.id }, named(t))));
+      b.value = chosen;
+    }
     const t = currentTheme;
     exportBtn.disabled = deleteBtn.disabled = !t || t.builtIn;
     const p = t ? problems(t.colours) : [];
-    noteEl.textContent = p.length ? p.join("\n") : t && !t.builtIn ? "This theme is a file in the themes folder: edit it there and Phoenix shows the change as soon as you save." : "";
+    noteEl.textContent = following
+      ? `Phoenix shows the first while the system is set to light and the second while it is dark, and switches when the system does (now: ${systemDark.matches ? "dark" : "light"}).`
+      : p.length ? p.join("\n") : t && !t.builtIn ? "This theme is a file in the themes folder: edit it there and Phoenix shows the change as soon as you save." : "";
   }
+  for (const b of [lightBox, darkBox]) b.onchange = async () => {
+    applyTheme(await call<ThemeShape>("themes.setSide", { dark: b === darkBox, id: b.value }));
+    shell.settings = await call("settings.get");
+    await refresh();
+  };
+  systemDark.addEventListener("change", () => { if (following) void refresh(); });
   box.onchange = async () => {
     const t = await call<ThemeShape>("themes.use", { id: box.value });
     applyTheme(t);
@@ -206,6 +226,7 @@ export function themeSection() {
   });
   const el = h("div", h("div.label", "THEME"),
     h("div", { style: { display: "flex", alignItems: "center", marginTop: "4px" } }, box, customise),
+    sides,
     h("div", { style: { display: "flex", marginTop: "8px" } },
       text("import", "Add a theme file someone gave you", async () => {
         const file = await host.openFile("Import a theme", [{ name: "Phoenix theme", extensions: ["json"] }]);

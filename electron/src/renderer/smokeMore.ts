@@ -340,6 +340,21 @@ async function runThemes(check: Check, shot: Shot, settle: Settle, until: Until)
   await settle(400);
   const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
   check("the system theme draws light or dark as the system is set", (document.documentElement.dataset.theme === "dark") === sysDark && currentTheme?.id === "system", `system dark: ${sysDark}, drawn ${document.documentElement.dataset.theme}`);
+  {
+    // following the system with a theme of your own for the side it is on
+    const side = await call<ThemeShape>("themes.save", { id: "", asNew: true, name: "Side Test", base: sysDark ? "dark" : "light", own: { Accent: "#22AA55" }, textFont: "", headFont: "" });
+    applyTheme(await call<ThemeShape>("themes.setSide", { dark: sysDark, id: side.id }));
+    await settle(400);
+    check("following the system can use a theme of your own for its light or dark side", currentTheme?.id === "system" && v("--accent") === "#22AA55", v("--accent"));
+    settings.showCategory("software", "Display");
+    await settle(300);
+    const sideBoxes = [...document.querySelectorAll<HTMLSelectElement>("select.sidetheme")].filter(visible);
+    check("settings shows a theme for light and one for dark while following the system", sideBoxes.length === 2 && sideBoxes.some(b => b.value === side.id), sideBoxes.map(b => b.value).join());
+    await shot("44-theme-follow-system");
+    await call("themes.delete", { id: side.id });
+    const after = await call<{ light: string; dark: string }>("themes.list");
+    check("deleting it puts that side back to light or dark", after.light === "light" && after.dark === "dark", `${after.light} ${after.dark}`);
+  }
   applyTheme(await call<ThemeShape>("themes.use", { id: "light" }));
   const lightBar = await until(() => !matchMedia("(prefers-color-scheme: dark)").matches, 3000);
   check("and a light theme a light one", lightBar);
