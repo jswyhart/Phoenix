@@ -57,6 +57,11 @@ public class Settings
     public Dictionary<string, string> Views { get; set; } = new();
     /// <summary>Podcast lists you added yourself to browse from.</summary>
     public List<PodcastSource> PodcastSources { get; set; } = new();
+    public bool PodcastAutoRefresh { get; set; } = true;  // look for new episodes at start and every hour (desktop)
+    public int PodcastKeep { get; set; }                  // newest unplayed episodes kept downloaded per series (0 none)
+    public Dictionary<string, int> PodcastKeepBySeries { get; set; } = new();   // feed address -> its own choice
+    public bool PodcastRemovePlayed { get; set; } = true; // remove a download once its episode has been played
+    public string PodcastFolder { get; set; } = "";       // where downloads go; blank = "podcasts" in the data folder
     /// <summary>Streaming services switched on (desktop).</summary>
     public List<string> WebServicesOn { get; set; } = new();
     public List<CustomService> CustomServices { get; set; } = new();

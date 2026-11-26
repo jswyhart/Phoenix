@@ -226,6 +226,42 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runTools(check, shot, settle, songs);
   await runNow(check, shot, settle, until, songs);
   await runPlayback(check, shot, settle, until, songs);
+  await runPodcastDownloads(check, shot, settle, until);
+}
+
+// ---------- podcast downloads ----------
+
+async function runPodcastDownloads(check: Check, shot: Shot, settle: Settle, until: Until) {
+  const feed = await call<string>("smoke.podcastFeed");
+  const id = await call<number>("podcasts.add", { url: feed });
+  let eps = await call<{ total: number; episodes: { id: number; title: string; downloaded: boolean }[] }>("podcasts.episodes", { id });
+  check("a podcast is subscribed to from its feed", eps.total === 3 && eps.episodes[0].title === "Episode 1", `${eps.total} episodes`);
+  await call("episode.download", { podcast: id, episode: eps.episodes[0].id });
+  eps = await call("podcasts.episodes", { id });
+  let ps = await call<{ usage: string; folder: string }>("podcastSettings.state");
+  check("an episode is downloaded into the podcasts folder", eps.episodes[0].downloaded && ps.usage.startsWith("1 episode downloaded"), ps.usage);
+  await call("player.volume", { value: 0 });
+  await call("podcasts.play", { podcast: id, episode: eps.episodes[0].id });
+  const playing = await until(async () => (await call<PlayerState>("player.state")).pos > 300, 6000);
+  check("a downloaded episode plays from its file", playing && (await call<PlayerState>("player.state")).current?.title === "Episode 1");
+  await call("player.stop");
+  shell.navigate("podcasts");
+  const pods = shell.get<PodcastsPage>("podcasts");
+  await pods.ready();
+  await pods.select(id);
+  await settle(300);
+  check("the podcasts page marks the downloaded episode", text(".page").includes("downloaded"));
+  await shot("40-podcast-downloads");
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Podcasts");
+  await settle(400);
+  check("settings: podcasts shows the download choices and folder", text("#root").includes("KEEP DOWNLOADED") && text("#root").includes("1 episode downloaded"));
+  await shot("41-settings-podcasts");
+  ps = await call("podcastSettings.removeAll");
+  check("all downloads can be removed", ps.usage === "No episodes are downloaded.", ps.usage);
+  await call("podcasts.remove", { id });
+  settings.showCategory("software");
 }
 
 // ---------- playback: equalizer, levelling, crossfade ----------

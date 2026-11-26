@@ -490,7 +490,10 @@ public class Player
         PlayBook(b);
     }
 
-    public static PlayItem From(Episode e, Podcast p) => new PlayItem
+    public static PlayItem From(Episode e, Podcast p) => e.File != "" && System.IO.File.Exists(e.File)
+        // downloaded: played from the file
+        ? new PlayItem { Title = e.Title, Subtitle = p.Title, ArtPath = p.ArtUrl, DurationMs = e.DurationMs, IsVideo = e.IsVideo, Episode = e, Url = e.File }
+        : new PlayItem
     {
         Title = e.Title, Subtitle = p.Title, ArtPath = p.ArtUrl, DurationMs = e.DurationMs, IsVideo = e.IsVideo, Episode = e, Url = e.Url,
         // Hosts hide the audio behind redirects: find the real address when the episode starts (the original one if that fails),

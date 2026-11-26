@@ -159,6 +159,10 @@ public class Episode : Observable
     public long PositionMs { get; set; }
     public string Description { get; set; } = "";
     public bool IsVideo { get; set; }
+    /// <summary>The downloaded file, if the episode has been downloaded ("" if not).</summary>
+    public string File { get; set; } = "";
+    /// <summary>Downloaded by hand: kept until played or removed by hand, whatever the settings say.</summary>
+    public bool Manual { get; set; }
     public string DateText => Published > 0 ? DateTimeOffset.FromUnixTimeSeconds(Published).LocalDateTime.ToString("MMM d, yyyy") : "";
     public string DurationText => Fmt.Time(DurationMs);
 }

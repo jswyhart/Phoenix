@@ -3,11 +3,11 @@
 // subscribe from). Video podcasts play in now playing like any video.
 import { call, host, on, time } from "./api";
 import { Page, shell } from "./shell";
-import { art, ask, confirm, h, iconBtn, menuAt, message, tabs, textBtn, ViewBar, VList } from "./ui";
+import { art, ask, confirm, h, iconBtn, menuAt, message, showMenu, tabs, textBtn, ViewBar, VList } from "./ui";
 import { attachServiceTabs } from "./web";
 
 interface Podcast { id: number; title: string; author: string; description: string; art: string; unplayed: number }
-interface Episode { id: number; title: string; date: string; dur: number; played: boolean; description: string; isVideo: boolean }
+interface Episode { id: number; title: string; date: string; dur: number; played: boolean; description: string; isVideo: boolean; downloaded: boolean; manual: boolean }
 export interface Hit { title: string; author: string; art: string; feedUrl: string; detail: string; appleId: string; subtitle: string; have: boolean }
 interface Source { id: string; name: string; note: string; hasGenres: boolean; yours: boolean }
 interface Sources { sources: Source[]; genres: { name: string; id: number }[] }
@@ -40,10 +40,23 @@ export function podcastsPage(): PodcastsPage {
       const p = sel[0];
       if (!p) return;
       void showPodcast(p);
-      menuAt([
-        { label: "Play newest episode", action: () => call("podcasts.play", { podcast: p.id }) },
-        { label: "Unsubscribe", action: async () => { if (await confirm(`Unsubscribe from “${p.title}”?`, "unsubscribe")) { await call("podcasts.remove", { id: p.id }); await reload(null); } } },
-      ], e);
+      void (async () => {
+        const k = await call<{ keep: number; own: boolean; choices: { n: number; text: string }[] }>("podcast.keepOf", { id: p.id });
+        const x = e.clientX, y = e.clientY;
+        showMenu([
+          { label: "Play newest episode", action: () => call("podcasts.play", { podcast: p.id }) },
+          "-",
+          { label: "Keep downloaded", sub: [
+            { label: "As in settings", checked: !k.own, action: () => call("podcast.keep", { id: p.id }) },
+            "-",
+            ...k.choices.map(c => ({ label: c.text, checked: k.own && k.keep === c.n, action: () => call("podcast.keep", { id: p.id, keep: c.n }) })),
+          ] },
+          { label: "Download all unplayed episodes", action: async () => { const n = await call<number>("podcast.downloadAll", { id: p.id }); shell.setStatus(`${n} episode${n === 1 ? "" : "s"} downloaded`); await showPodcast(p, true); } },
+          { label: "Remove its downloads", action: async () => { await call("podcast.removeDownloads", { id: p.id }); await showPodcast(p, true); } },
+          "-",
+          { label: "Unsubscribe", action: async () => { if (await confirm(`Unsubscribe from “${p.title}”?`, "unsubscribe")) { await call("podcasts.remove", { id: p.id }); await reload(null); } } },
+        ], x, y);
+      })();
     },
   });
   const list = new VList<Episode>({
@@ -51,6 +64,7 @@ export function podcastsPage(): PodcastsPage {
     render: ep => h("div", { title: ep.description.slice(0, 600), style: { opacity: ep.played ? "0.45" : "1" } },
       h("div.grow.ell", ep.title),
       ep.isVideo ? h("div.faint", { style: { width: "46px", flex: "none", fontSize: "11px" } }, "video") : null,
+      ep.downloaded ? h("div.faint", { style: { width: "78px", flex: "none", fontSize: "11px" }, title: "Downloaded: plays without the internet" }, "downloaded") : null,
       h("div.dim", { style: { width: "110px", flex: "none" } }, ep.date),
       h("div.dim", { style: { width: "70px", flex: "none", textAlign: "right", paddingRight: "16px" } }, time(ep.dur))),
     onActivate: ep => play(ep),
@@ -61,6 +75,13 @@ export function podcastsPage(): PodcastsPage {
       menuAt([
         { label: "Play", action: () => play(ep) },
         { label: ep.played ? "Mark as unplayed" : "Mark as played", action: async () => { await call("podcasts.togglePlayed", { podcast: pod.id, episode: ep.id }); await showPodcast(pod, true); } },
+        "-",
+        ep.downloaded
+          ? { label: "Remove download", action: async () => { await call("episode.removeDownload", { podcast: pod.id, episode: ep.id }); await showPodcast(pod, true); } }
+          : { label: "Download", action: async () => {
+            try { await call("episode.download", { podcast: pod.id, episode: ep.id }); } catch (err: any) { await message("Couldn't download it.\n\n" + (err.message ?? err)); }
+            await showPodcast(pod, true);
+          } },
       ], e);
     },
   });
@@ -281,6 +302,8 @@ export function podcastsPage(): PodcastsPage {
     } catch (e: any) { await message(String(e.message ?? e)); }
   }
 
+  // new episodes found by the hourly look, or downloads that came or went
+  on("podcasts", () => { if (el.isConnected) void reload(podcast?.id ?? null); });
   // an episode that finishes is marked as played: show that when the player moves on
   let lastIndex = -2;
   on("player", s => { if (s.index !== lastIndex) { lastIndex = s.index; if (el.isConnected && podcast) void showPodcast(podcast, true); } });

@@ -223,12 +223,12 @@ public static partial class Api
         {
             var v = ViewOf(p, "podcasts");
             var all = EpisodesOf(p.Long("id"), true);
-            var shown = all.Where(e => (v.Show switch { "unplayed" => !e.Played, "video" => e.IsVideo, "audio" => !e.IsVideo, _ => true }) && v.Matches(e.Title, e.Description)).ToList();
+            var shown = all.Where(e => (v.Show switch { "unplayed" => !e.Played, "downloaded" => e.File != "", "video" => e.IsVideo, "audio" => !e.IsVideo, _ => true }) && v.Matches(e.Title, e.Description)).ToList();
             var video = all.Count(e => e.IsVideo);
             return new
             {
                 total = all.Count, video = video == 0 ? "" : video == all.Count ? "a video podcast" : $"{video} in video",
-                episodes = shown.Select(e => new { id = e.Id, title = e.Title, date = e.DateText, dur = e.DurationMs, played = e.Played, description = e.Description, isVideo = e.IsVideo })
+                episodes = shown.Select(e => new { id = e.Id, title = e.Title, date = e.DateText, dur = e.DurationMs, played = e.Played, description = e.Description, isVideo = e.IsVideo, downloaded = e.File != "", manual = e.Manual })
             };
         });
         Rpc.On("podcasts.add", async p =>
@@ -245,20 +245,9 @@ public static partial class Api
         });
         Rpc.On("podcasts.refresh", async _ =>
         {
-            var failed = 0;
-            foreach (var pod in Lib.Podcasts.ToList())
-            {
-                App.SetStatus($"refreshing {pod.Title}…");
-                try
-                {
-                    var (podcast, episodes) = await PodcastService.FetchAsync(pod.FeedUrl);
-                    Lib.Db.SavePodcast(podcast, episodes);
-                }
-                catch { failed++; }
-            }
-            Lib.Podcasts = Lib.Db.LoadPodcasts();
+            // new episodes, then the downloads the settings ask for
+            var (_, failed) = await PodcastSync.RefreshAllAsync(App.SetStatus);
             EpisodeLists.Clear();
-            App.SetStatus(failed > 0 ? $"{failed} podcast feed(s) could not be refreshed" : "");
             return (object?)failed;
         });
         Rpc.On("podcasts.remove", p =>

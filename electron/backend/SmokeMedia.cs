@@ -74,6 +74,39 @@ public static partial class Api
             handovers = Program.Engine.Handovers,
             options = LevelOptions(Lib.ById[p.Long("id")].SourceId, false).ToList()
         });
+        // a stand-in podcast on this machine: a feed with three episodes, each one of the sample songs
+        Rpc.On("smoke.podcastFeed", feedParams =>
+        {
+            var port = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            port.Start();
+            var n = ((System.Net.IPEndPoint)port.LocalEndpoint).Port;
+            port.Stop();
+            var root = $"http://localhost:{n}/";
+            var listener = new System.Net.HttpListener();
+            listener.Prefixes.Add(root);
+            listener.Start();
+            var audio = File.ReadAllBytes(Lib.Tracks.First(t => t.IsLocal).SourceId);
+            var items = string.Concat(Enumerable.Range(1, 3).Select(i =>
+                $"<item><title>Episode {i}</title><guid>ep{i}</guid><pubDate>{DateTime.UtcNow.AddDays(-i):R}</pubDate><enclosure url=\"{root}ep{i}.wav\" type=\"audio/wav\" length=\"{audio.Length}\"/></item>"));
+            var feed = Encoding.UTF8.GetBytes($"<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>Test Cast</title><description>A stand-in</description>{items}</channel></rss>");
+            _ = Task.Run(async () =>
+            {
+                while (listener.IsListening)
+                {
+                    try
+                    {
+                        var c = await listener.GetContextAsync();
+                        var body = c.Request.Url!.AbsolutePath.EndsWith(".xml") ? feed : audio;
+                        c.Response.ContentType = c.Request.Url.AbsolutePath.EndsWith(".xml") ? "application/rss+xml" : "audio/wav";
+                        c.Response.ContentLength64 = body.Length;
+                        await c.Response.OutputStream.WriteAsync(body);
+                        c.Response.Close();
+                    }
+                    catch { }
+                }
+            });
+            return root + "feed.xml";
+        });
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>

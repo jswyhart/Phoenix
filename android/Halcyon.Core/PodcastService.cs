@@ -53,6 +53,20 @@ public static class PodcastService
         return file;
     }
 
+    /// <summary>Downloads an episode to a file of its own (podcast downloads).</summary>
+    public static async Task DownloadToAsync(string url, string file)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        if (File.Exists(file) && new FileInfo(file).Length > 0) return;
+        using var resp = await Audio.SendAsync(AudioRequest(url), HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
+        var part = file + ".part";
+        await using (var src = await resp.Content.ReadAsStreamAsync())
+        await using (var dst = File.Create(part))
+            await src.CopyToAsync(dst);
+        File.Move(part, file, true);
+    }
+
     public static async Task<(Podcast podcast, List<Episode> episodes)> FetchAsync(string url)
     {
         url = url.Trim();

@@ -34,6 +34,8 @@ public partial class Database
         AddColumn("tracks", "RatedAt", "INT DEFAULT 0");
         foreach (var c in new[] { "Kind TEXT", "Series TEXT", "Season INT", "Episode INT", "Year INT", "Collection TEXT", "GroupArt TEXT", "Edited INT DEFAULT 0" })
             AddColumn("videos", c.Split(' ')[0], c[(c.IndexOf(' ') + 1)..]);
+        AddColumn("episodes", "File", "TEXT DEFAULT ''");
+        AddColumn("episodes", "Manual", "INT DEFAULT 0");
     }
 
     void AddColumn(string table, string column, string decl)
@@ -187,23 +189,36 @@ public partial class Database
     });
 
     public List<Episode> LoadEpisodes(long podcastId) => Query(
-        "SELECT Id,PodcastId,Guid,Title,Published,Url,DurationMs,Played,PositionMs,Description,IsVideo FROM episodes WHERE PodcastId=$p0 ORDER BY Published DESC, Id", r => new Episode
+        "SELECT Id,PodcastId,Guid,Title,Published,Url,DurationMs,Played,PositionMs,Description,IsVideo,File,Manual FROM episodes WHERE PodcastId=$p0 ORDER BY Published DESC, Id", r => new Episode
         {
             Id = L(r, 0), PodcastId = L(r, 1), Guid = S(r, 2), Title = S(r, 3), Published = L(r, 4), Url = S(r, 5), DurationMs = L(r, 6),
-            Played = L(r, 7) != 0, PositionMs = L(r, 8), Description = S(r, 9), IsVideo = L(r, 10) != 0
+            Played = L(r, 7) != 0, PositionMs = L(r, 8), Description = S(r, 9), IsVideo = L(r, 10) != 0, File = S(r, 11), Manual = L(r, 12) != 0
         }, podcastId);
 
-    public void SavePodcast(Podcast p, List<Episode> episodes) => Batch(() =>
+    /// <summary>Saves a podcast and its episodes; returns how many episodes are new.</summary>
+    public int SavePodcast(Podcast p, List<Episode> episodes)
     {
+        var added = 0;
+        Batch(() =>
+        {
         p.Id = Query(
             "INSERT INTO podcasts(FeedUrl,Title,Author,Description,ArtUrl) VALUES($p0,$p1,$p2,$p3,$p4) " +
             "ON CONFLICT(FeedUrl) DO UPDATE SET Title=excluded.Title,Author=excluded.Author,Description=excluded.Description,ArtUrl=excluded.ArtUrl RETURNING Id",
             r => L(r, 0), p.FeedUrl, p.Title, p.Author, p.Description, p.ArtUrl)[0];
+        var known = Query("SELECT Guid FROM episodes WHERE PodcastId=$p0", r => S(r, 0), p.Id).ToHashSet();
         foreach (var e in episodes)
+        {
+            if (!known.Contains(e.Guid)) added++;
             Exec("INSERT INTO episodes(PodcastId,Guid,Title,Published,Url,DurationMs,Description,IsVideo) VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7) " +
                  "ON CONFLICT(PodcastId,Guid) DO UPDATE SET Title=excluded.Title,Url=excluded.Url,Published=excluded.Published,Description=excluded.Description",
                 p.Id, e.Guid, e.Title, e.Published, e.Url, e.DurationMs, e.Description, e.IsVideo ? 1 : 0);
-    });
+        }
+        });
+        return added;
+    }
+
+    public void SaveEpisodeFile(Episode e) => Exec("UPDATE episodes SET File=$p0,Manual=$p1 WHERE Id=$p2", e.File, e.Manual ? 1 : 0, e.Id);
+    public List<string> EpisodeFiles(long podcastId) => Query("SELECT File FROM episodes WHERE PodcastId=$p0 AND File<>''", r => S(r, 0), podcastId);
 
     public void SaveEpisodeState(Episode e) => Exec("UPDATE episodes SET Played=$p0,PositionMs=$p1 WHERE Id=$p2", e.Played ? 1 : 0, e.PositionMs, e.Id);
 

@@ -25,6 +25,7 @@ public static partial class Api
         RegisterTools();
         RegisterNow();
         RegisterPlayback();
+        RegisterPodcastSync();
         Updates.Register();
     }
 
@@ -91,7 +92,7 @@ public static partial class Api
         },
         ["pictures"] = new { sorts = Pairs(("", "name"), ("date", "date")), shows = Pairs() },
         ["playlists"] = new { sorts = Pairs(), shows = Pairs(("", "everything"), ("liked", "liked"), ("unplayed", "never played")) },
-        ["podcasts"] = new { sorts = Pairs(("", "title"), ("new", "new episodes"), ("author", "author")), shows = Pairs(("", "all episodes"), ("unplayed", "unplayed"), ("video", "video"), ("audio", "audio")) },
+        ["podcasts"] = new { sorts = Pairs(("", "title"), ("new", "new episodes"), ("author", "author")), shows = Pairs(("", "all episodes"), ("unplayed", "unplayed"), ("downloaded", "downloaded"), ("video", "video"), ("audio", "audio")) },
         ["radio"] = new { sorts = Pairs(("", "name"), ("country", "country"), ("genre", "genre")), shows = Pairs() },
     };
 
