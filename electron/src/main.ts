@@ -247,6 +247,8 @@ function createWindow() {
       sandbox: true,
       webSecurity: true,
       spellcheck: false,
+      // streaming services are shown in <webview>s; what they may do is set in "will-attach-webview" below
+      webviewTag: true,
       additionalArguments: [`--phoenix-platform=${isMac ? "mac" : isWin ? "win" : "linux"}`, ...(smokeDir ? [`--phoenix-smoke=${smokeDir}`] : [])],
     },
   });
@@ -284,6 +286,32 @@ else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.on("window-all-closed", () => { void quit(); });
   app.on("before-quit", e => { if (!quitting) { e.preventDefault(); void quit(); } });
+
+  // ---------- streaming services: each in a <webview> with its own sign-in (partition) ----------
+  // A service's page gets no Node, a sandbox, and the hook (webguest.js) that lets Phoenix's player bar work it. It
+  // may go full screen; everything else it asks for (camera, location, notifications…) is refused. New windows open
+  // in the same view, as on Windows. It is shown as an ordinary browser, not as Electron, which some services refuse.
+  const plainAgent = () => app.userAgentFallback.replace(/ Electron\/\S+/, "").replace(/ phoenix\/\S+/i, "");
+  app.on("web-contents-created", (_e, contents) => {
+    contents.on("will-attach-webview", (e, prefs, params) => {
+      const src = String(params.src ?? "");
+      if (!/^(https?|file):/i.test(src) || !String(params.partition ?? "").startsWith("persist:webview-")) { e.preventDefault(); return; }
+      delete (prefs as any).preloadURL;
+      prefs.preload = path.join(__dirname, "webguest.js");
+      prefs.nodeIntegration = false;
+      prefs.nodeIntegrationInSubFrames = false;
+      prefs.contextIsolation = true;
+      prefs.sandbox = true;
+      prefs.webSecurity = true;
+    });
+    if (contents.getType() !== "webview") return;
+    contents.setUserAgent(plainAgent());
+    contents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:/i.test(url)) void contents.loadURL(url);
+      return { action: "deny" };
+    });
+    contents.session.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === "fullscreen" || permission === "mediaKeySystem"));
+  });
 
   app.whenReady().then(async () => {
     // nothing in the page needs the camera, location, notifications and so on

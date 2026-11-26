@@ -21,6 +21,8 @@ export const shell = {
   /** The page object, made on first use. */
   get: <T extends Page>(_name: string): T => null as unknown as T,
   showNow: (_show: boolean) => {},
+  /** Play / pause: Phoenix's own player, or the streaming page being listened to. */
+  toggle: () => {},
   nowOpen: () => false,
   /** The video drawing surface (self-test and measurement). */
   video: null as unknown as import("./video").VideoView,

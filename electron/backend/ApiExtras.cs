@@ -19,6 +19,7 @@ public static partial class Api
         RegisterPlayerExtras();
         RegisterListening();
         RegisterBackup();
+        RegisterWeb();
         Updates.Register();
     }
 
@@ -139,7 +140,8 @@ public static partial class Api
     static object TabsState() => new
     {
         tabs = Settings.Tabs.Select(t => new { key = t, on = S.TabOn(t) }),
-        custom = CustomTabsShape()
+        custom = CustomTabsShape(),
+        own = WebServices.OwnTabs.Select(w => new { id = w.Id, name = w.Name, page = w.Page }).ToList()
     };
 
     static object CustomTabsShape() => S.CustomTabs.Select(t => new { id = t.Id, name = t.Name, page = t.Page }).ToList();
@@ -156,6 +158,7 @@ public static partial class Api
             if (!S.TabOn("radio") && P.Current?.Station != null) P.Stop();
             Save();
             Rpc.Emit("tabs", TabsState());
+            Rpc.Emit("web", WebState());   // a service under a tab that went away moves to a tab of its own
             return TabsState();
         });
         Rpc.On("view.options", p => ViewOptions.GetValueOrDefault(p.Str("page")));

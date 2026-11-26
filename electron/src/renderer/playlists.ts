@@ -3,6 +3,7 @@ import { call, on, Song, TileData } from "./api";
 import { debounce, Page } from "./shell";
 import { albumMenu, menuHooks, SongHeader, songMenu, songRow } from "./songs";
 import { ask, confirm, h, menuAt, MenuEntry, showMenu, textBtn, TileGrid, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface ListRow { name: string; id: number | null; auto: string | null; pinned: boolean }
 
@@ -50,7 +51,9 @@ export function playlistsPage(): Page {
     textBtn("shuffle", () => void call("play.tracks", { ids: songs.map(s => s.id), shuffle: true })));
   const left = h("div.pane", h("div.split", h("div.cap", "PLAYLISTS"), h("div", { style: { margin: "-4px 4px 6px 0" } }, textBtn("new playlist", create))), lists.el);
   const right = h("div.pane", { style: { marginLeft: "18px" } }, h("div.split", songCap, actions), header.el, songList.el);
-  const el = h("div.page", h("div.cols", { style: { gridTemplateColumns: "280px 1fr" } }, left, right));
+  const serviceRow = h("div.tabs.hidden");
+  attachServiceTabs(serviceRow, "playlists", () => serviceRow.classList.toggle("hidden", serviceRow.childElementCount === 0));
+  const el = h("div.page", serviceRow, h("div.cols", { style: { gridTemplateColumns: "280px 1fr" } }, left, right));
 
   const same = (a: ListRow | null, b: ListRow) => !!a && a.auto === b.auto && a.id === b.id;
 

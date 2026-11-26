@@ -3,6 +3,7 @@ import { call, on, Song, TileData } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { albumMenu, artistMenu, SongHeader, songMenu, songRow } from "./songs";
 import { h, menuAt, pill, showMenu, tabButton, tabs, TileGrid, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface MusicView { counts: string; empty: boolean; left: string[] | null; sel: string | null; albums: TileData[] | null; album: string | null; songs: Song[] }
 
@@ -45,6 +46,7 @@ export function musicPage(): MusicPage {
   const bar = new ViewBar("music", call);
   bar.onChange = () => load(false);
   tabBar.el.append(shuffleAll, count, bar.el);
+  attachServiceTabs(tabBar.el, "music");
 
   const leftPane = h("div.pane", leftCap, left.el);
   const midPane = h("div.pane.gap", midCap, albums.el);

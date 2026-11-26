@@ -3,6 +3,7 @@
 import { call, host, isMac, on } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { artUrl, ask, dialogButtons, h, menuAt, message, openDialog, pill, showMenu, tabs, textBtn, TileGrid, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface BookTile { id: number; title: string; caption: string; art: string }
 interface View { empty: boolean; counts: string; authors: string[]; author: string | null; books: BookTile[] }
@@ -336,6 +337,7 @@ export function booksPage(): Page {
   const bar = new ViewBar("books", call);
   bar.onChange = () => void load();
   tabBar.el.append(count, bar.el);
+  attachServiceTabs(tabBar.el, "books");
   const authorList = new VList<string>({
     rowHeight: 30,
     render: name => h("div.name", h("div.grow.ell", name)),

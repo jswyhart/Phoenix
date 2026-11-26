@@ -5,6 +5,7 @@ import { debounce, Page, shell } from "./shell";
 import { computer, PhoneState } from "./phone";
 import { h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
+import { customTabsSection, streamingPanel } from "./settingsWeb";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -45,7 +46,7 @@ export interface SettingsPage extends Page {
 }
 
 const GROUPS: Record<string, string[]> = {
-  software: ["Collection", "Metadata", "Listening", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex"],
+  software: ["Collection", "Metadata", "Listening", "Display", "Storage", "Updates"], phone: ["Sync options"], servers: ["Jellyfin", "Plex", "Streaming"],
 };
 
 export function settingsPage(): SettingsPage {
@@ -215,7 +216,8 @@ export function settingsPage(): SettingsPage {
 
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, viz] };
+  const streaming = streamingPanel(), ownTabs = customTabsSection();
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, viz], Streaming: [streaming] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -232,7 +234,8 @@ export function settingsPage(): SettingsPage {
         await refreshStatus();
       }), pill("REMOVE TOKEN", async () => { discogsStatus.textContent = await call<string>("discogs.saveToken", { token: "" }); discogs.placeholder = "personal access token"; await refreshStatus(); })), discogsStatus),
     Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
-      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, viz.el),
+      row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, viz.el),
+    Streaming: streaming.el,
     Listening: listening.el,
     Storage: storage.el,
     Updates: updates.el,

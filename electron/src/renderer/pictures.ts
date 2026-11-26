@@ -2,6 +2,7 @@
 import { call } from "./api";
 import { Page } from "./shell";
 import { artUrl, h, textBtn, TileGrid, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface Folder { name: string; count: number }
 interface Pic { name: string; file: string; art: string }
@@ -41,7 +42,9 @@ export function picturesPage(): PicturesPage {
   const viewer = h("div.hidden", { style: { position: "absolute", inset: "0", background: "#000", zIndex: "10" } }, image, caption, navBtn("‹", "left", () => manual(-1)), nextBtn, closeBtn);
   // double-clicking the picture closes the viewer, but quick clicks on the arrows or close button must not
   viewer.addEventListener("dblclick", e => { if (!(e.target as HTMLElement).closest("button")) closeViewer(); });
-  const el = h("div.page", { style: { position: "relative" } }, browse, viewer);
+  const serviceRow = h("div.tabs.hidden");
+  attachServiceTabs(serviceRow, "pictures", () => serviceRow.classList.toggle("hidden", serviceRow.childElementCount === 0));
+  const el = h("div.page", { style: { position: "relative" } }, serviceRow, browse, viewer);
 
   async function reload() {
     loaded = true;

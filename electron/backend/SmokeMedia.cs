@@ -39,6 +39,26 @@ public static partial class Api
             foreach (var t in tracks) { Lib.Db.LogPlay(new PlayRow(at, t.Id, t.Title, t.Artist, t.Album, Math.Max(t.DurationMs, 1000), true)); at += 60; }
             return tracks.Count;
         });
+        // a stand-in for a streaming service's page: a song in an <audio> element and a media session, as a web player has
+        Rpc.On("smoke.webPage", p =>
+        {
+            var song = Lib.Tracks.Where(t => t.IsLocal).OrderBy(t => t.Id).First();
+            var html = $$"""
+                <!doctype html><html><head><meta charset="utf-8"><title>Stand-in Player</title></head>
+                <body style="font: 20px sans-serif"><h1>Stand-in Player</h1>
+                <audio id="a" src="{{new Uri(song.SourceId).AbsoluteUri}}" loop></audio>
+                <script>
+                  var a = document.getElementById('a');
+                  navigator.mediaSession.metadata = new MediaMetadata({ title: 'Web Song', artist: 'Web Artist', album: 'Web Album' });
+                  navigator.mediaSession.setActionHandler('play', function () { a.play(); });
+                  navigator.mediaSession.setActionHandler('pause', function () { a.pause(); });
+                  navigator.mediaSession.setActionHandler('nexttrack', function () { document.title = 'next pressed'; });
+                </script></body></html>
+                """;
+            var file = Path.Combine(p.Str("dir"), "standin-player.html");
+            File.WriteAllText(file, html);
+            return new Uri(file).AbsoluteUri;
+        });
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>

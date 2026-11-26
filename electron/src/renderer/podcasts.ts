@@ -4,6 +4,7 @@
 import { call, host, on, time } from "./api";
 import { Page, shell } from "./shell";
 import { art, ask, confirm, h, iconBtn, menuAt, message, tabs, textBtn, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface Podcast { id: number; title: string; author: string; description: string; art: string; unplayed: number }
 interface Episode { id: number; title: string; date: string; dur: number; played: boolean; description: string; isVideo: boolean }
@@ -23,6 +24,7 @@ export function podcastsPage(): PodcastsPage {
   bar.onChange = () => void reload(podcast?.id ?? null);
   const tabBar = tabs([["mine", "my podcasts"], ["sources", "sources"]], t => showTab(t));
   tabBar.el.append(bar.el);
+  attachServiceTabs(tabBar.el, "podcasts");
 
   // ---- my podcasts ----
   const seriesCap = h("div.cap", "SERIES"), epCap = h("div.cap", "EPISODES");

@@ -3,6 +3,7 @@
 import { call, on } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { art, ask, h, iconBtn, MenuEntry, menuAt, tabs, textBtn, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 export interface Station { id: number; name: string; url: string; art: string; tags: string; country: string; subtitle: string; saved: boolean; pinned: boolean }
 interface Group { name: string; key: string; count: number }
@@ -20,6 +21,7 @@ export function radioPage(): RadioPage {
   bar.onChange = () => void loadMine();
   const tabBar = tabs([["mine", "my stations"], ["sources", "sources"]], t => showTab(t));
   tabBar.el.append(bar.el);
+  attachServiceTabs(tabBar.el, "radio");
 
   // ---- my stations ----
   const mineCap = h("div.cap", "MY STATIONS");

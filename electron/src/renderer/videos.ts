@@ -2,6 +2,7 @@
 import { call, host, isMac, on, time } from "./api";
 import { debounce, Page } from "./shell";
 import { art, ask, dialogButtons, h, menuAt, MenuEntry, openDialog, showMenu, tabs, TileGrid, ViewBar, VList } from "./ui";
+import { attachServiceTabs } from "./web";
 
 interface Video { id: number; title: string; caption: string; art: string; rowTitle: string; code: string; dur: number; local: boolean }
 interface Group { name: string; art: string; count: number; key: string }
@@ -44,6 +45,7 @@ export function videosPage(): VideosPage {
   const bar = new ViewBar("videos", call);
   bar.onChange = () => load(false);
   tabBar.el.append(count, bar.el);
+  attachServiceTabs(tabBar.el, "videos");
 
   const groups = new VList<Group>({
     rowHeight: 32,

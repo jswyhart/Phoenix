@@ -9,6 +9,7 @@ import { shell } from "./shell";
 import type { StatsPage } from "./stats";
 import { sleep } from "./ui";
 import type { VideosPage } from "./videos";
+import { remote, WebServicePage } from "./web";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
 type Shot = (name: string) => Promise<void>;
@@ -212,5 +213,90 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   check(host.platform === "win" ? "a development copy says it can't replace itself" : "this copy knows where it is installed",
     host.platform === "win" ? !!u && !u.canInstall : !!u, u ? `${u.canInstall} ${u.installFolder}` : "");
   await shot("27-settings-updates");
+  settings.showCategory("software");
+
+  await runStreaming(check, shot, settle, until);
+}
+
+// ---------- streaming services and tabs of your own ----------
+
+async function runStreaming(check: Check, shot: Shot, settle: Settle, until: Until) {
+  const tabsIn = (row: Element | null) => [...(row?.querySelectorAll<HTMLElement>(".service-tab") ?? [])].map(t => t.textContent ?? "");
+  shell.navigate("videos");
+  const videos = shell.get<VideosPage>("videos");
+  await call("web.set", { id: "youtube", on: true });
+  await until(() => tabsIn(videos.tabRow).length === 1, 3000);
+  check("a video service switched on sits under videos, after its tabs", tabsIn(videos.tabRow).join() === "youtube" && videos.tabRow.querySelector(".service-tab")!.previousElementSibling?.textContent === "all",
+    tabsIn(videos.tabRow).join());
+  const own = [...videos.tabRow.querySelectorAll<HTMLElement>(".nav.tab:not(.service-tab)")].find(visible)!.getBoundingClientRect(), svc = videos.tabRow.querySelector<HTMLElement>(".service-tab")!.getBoundingClientRect();
+  check("its tab is drawn like the page's own and on their line", Math.abs(own.top - svc.top) < 1.5 && Math.abs(own.height - svc.height) < 1.5, `${svc.top} vs ${own.top}`);
+  await shot("28-videos-with-service");
+  await call("web.set", { id: "ytmusic", on: true });
+  await until(() => subTabs().includes("youtube music"), 3000);
+  check("a music service gets a collection tab of its own", subTabs().at(-1) === "youtube music", subTabs().join(","));
+  await call("web.place", { id: "ytmusic", place: "music" });
+  await until(() => !subTabs().includes("youtube music"), 3000);
+  shell.navigate("music");
+  const music = shell.get<MusicPage>("music");
+  await until(() => tabsIn(music.tabRow).length === 1, 3000);
+  check("a service can be put under any collection", tabsIn(music.tabRow).join() === "youtube music" && !subTabs().includes("youtube music"), tabsIn(music.tabRow).join());
+
+  // a tab of your own
+  const made = await call<{ id: string; page: string }>("tabs.addCustom", { name: "Watch" });
+  await until(() => subTabs().includes("watch"), 3000);
+  check("a tab of your own joins the collection after its tabs", subTabs().join(",") === "music,videos,pictures,podcasts,books,playlists,radio,watch", subTabs().join(","));
+  await call("web.place", { id: "youtube", place: made.page });
+  shell.navigate(made.page);
+  await settle(300);
+  check("a tab of your own shows its services as tabs and cards", tabsIn(document.querySelector(".page")).join() === "youtube" && document.querySelectorAll(".webcard").length === 1 && document.querySelector(".subnav .on")?.textContent === "watch",
+    `${tabsIn(document.querySelector(".page")).join()} / ${document.querySelectorAll(".webcard").length} cards`);
+  await shot("29-custom-tab");
+
+  // a service's page, with a stand-in web player: the bar works it
+  const url = await call<string>("smoke.webPage", { dir: host.smoke });
+  const page = shell.get<WebServicePage>("web:youtube");
+  const loading = page.loadTestPage(url);   // it loads once it is in the window
+  shell.navigate("web:youtube");
+  await loading;
+  await settle(500);
+  check("a service's page lights the tab it is placed in and offers the way back", document.querySelector(".subnav .on")?.textContent === "watch" && text(".webbar").startsWith("‹  watch") && tabsIn(document.querySelector(".webbar")).join() === "youtube",
+    `${document.querySelector(".subnav .on")?.textContent} / ${text(".webbar")}`);
+  check("the page loads in its webview with the hook in place", page.ready && (await page.view.executeJavaScript("typeof window.__phx")) === "object");
+  await page.command("volume", 0);
+  await page.command("toggle");
+  await until(() => remote.active === page && !!page.state?.playing, 6000);
+  await settle(400);
+  check("the page playing takes the player bar", remote.active === page && text(".transport .title") === "Web Song" && text(".transport .artist") === "Web Artist  ·  YouTube", `${text(".transport .title")} / ${text(".transport .artist")}`);
+  await shot("30-web-player");
+  (document.querySelector<HTMLElement>(".transport .iconbtn.filled[title^='Play']")!).click();
+  await until(() => page.state?.playing === false, 4000);
+  check("the bar's pause pauses the page", page.state?.playing === false);
+  shell.navigate("music");
+  await settle(300);
+  check("leaving the page keeps it (the page is moved out of sight, not closed)", page.el.isConnected && page.el.classList.contains("offstage"));
+  await page.command("toggle");
+  await until(() => !!page.state?.playing, 4000);
+  const songs = shell.get<MusicPage>("music").state().songs;
+  await call("play.tracks", { ids: songs.map(s => s.id), start: songs[0].id });
+  await until(() => page.state?.playing === false, 5000);
+  check("Phoenix playing pauses the page and takes the bar back", page.state?.playing === false && remote.active === null && text(".transport .title") !== "Web Song", text(".transport .title"));
+  await call("player.stop");
+
+  // settings, and taking it all away again
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("servers", "Streaming");
+  await settle(400);
+  const rows = [...document.querySelectorAll<HTMLElement>(".webrow")].filter(visible);
+  const yt = rows.find(r => r.dataset.service === "youtube");
+  check("settings: streaming lists the services with where each is shown", rows.length >= 11 && !!yt && yt.querySelector("select")!.value === made.page, `${rows.length} rows, youtube in ${yt?.querySelector("select")?.value}`);
+  await shot("31-settings-streaming");
+  await call("tabs.removeCustom", { id: made.id });
+  await until(() => !subTabs().includes("watch"), 3000);
+  const back = (await call<{ services: { id: string; place: string }[] }>("web.state")).services.find(s => s.id === "youtube");
+  check("removing a tab of your own puts its services back", !subTabs().includes("watch") && back?.place === "videos", back?.place);
+  await call("web.set", { id: "youtube", on: false });
+  await call("web.set", { id: "ytmusic", on: false });
+  await call("web.place", { id: "ytmusic", place: "tab" });
   settings.showCategory("software");
 }
