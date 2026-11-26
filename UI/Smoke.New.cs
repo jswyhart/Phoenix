@@ -524,6 +524,52 @@ public static partial class Smoke
         await Task.Delay(200);
         await Shot("38-settings-tabs");
 
+        // ---------- streaming services anywhere, and tabs of your own ----------
+        var youtube = WebServices.Find("youtube")!;
+        var spotify = WebServices.Find("spotify")!;
+        var webBefore = (S.WebServicesOn.ToList(), new Dictionary<string, string>(S.ServicePlaces));
+        WebServices.Set(youtube, true);
+        WebServices.Set(spotify, true);
+        await Task.Delay(200);
+        var defaults = WebServices.PlaceOf(youtube) == "videos" && WebServices.PlaceOf(spotify) == WebServices.OwnTab && win.WebTabs.Contains("web:spotify");
+        var mine = settings.AddTab("Anime");
+        WebServices.SetPlace(youtube, mine!.Page);
+        WebServices.SetPlace(spotify, "music");
+        await Task.Delay(300);
+        win.Navigate(mine.Page);
+        await Task.Delay(300);
+        var tabView = win.Page<CustomTabView>(mine.Page);
+        var inTab = tabView.Services.SequenceEqual(new[] { "web:youtube" }) && win.CustomTabsShown.SequenceEqual(new[] { mine.Page }) && win.LitTab == mine.Page;
+        await Shot("42-custom-tab");
+        win.Navigate("music");
+        await Task.Delay(300);
+        var musicView = win.Page<MusicView>("music");
+        var musicRow = (Panel)musicView.FindName("TopBar");
+        var underMusic = ServiceTabs.In(musicRow).SequenceEqual(new[] { "web:spotify" }) && !win.WebTabs.Contains("web:spotify");
+        // same style and line as the page's own tabs
+        var own = musicRow.Children.OfType<RadioButton>().First(rb => rb.Uid != "service-tab");
+        var svc = musicRow.Children.OfType<RadioButton>().First(rb => rb.Uid == "service-tab");
+        var aligned = svc.Style == own.Style && Math.Abs(svc.TranslatePoint(new Point(0, 0), musicRow).Y - own.TranslatePoint(new Point(0, 0), musicRow).Y) < 1 && svc.FontSize == own.FontSize;
+        var shuffle = (Button)musicView.FindName("ShuffleAllBtn");
+        var shuffleAligned = shuffle.FontSize == own.FontSize && Math.Abs(shuffle.TranslatePoint(new Point(0, 0), musicRow).Y - own.TranslatePoint(new Point(0, 0), musicRow).Y) < 1;
+        var counts = ((TextBlock)musicView.FindName("CountText")).Text;
+        await Shot("43-musicView-tabs");
+        win.Navigate("web:spotify");
+        await Task.Delay(300);
+        var litMusic = win.LitTab == "music";
+        WebServices.RemoveTab(mine);
+        await Task.Delay(200);
+        var back = WebServices.PlaceOf(youtube) == "videos" && win.CustomTabsShown.Count == 0 && ServiceTabs.In((Panel)win.Page<VideosView>("videos").FindName("TabStrip")).Contains("web:youtube");
+        Check("a streaming service can go in a tab of its own, under any collection, or in a tab you make; removing a tab puts its services back",
+            defaults && inTab && underMusic && litMusic && back, $"defaults {defaults}, in your tab {inTab}, under music {underMusic}, music lit on its page {litMusic}, back after removing {back}");
+        Check("services under a collection are tabs of the same style and on the same line as its own, and shuffle all is too", aligned && shuffleAligned, $"service tab aligned {aligned}, shuffle all aligned {shuffleAligned}");
+        Check("the music page counts its total playing time", counts.Contains("songs  ·  ") && (counts.Contains("minute") || counts.Contains("hour") || counts.Contains("day")), counts);
+        Check("long stretches of time read in words", Fmt.Long(90_000) == "1 minute" && Fmt.Long(3 * 3600_000L + 5 * 60_000) == "3 hours 5 minutes" && Fmt.Long(26 * 3600_000L) == "1 day 2 hours" && Fmt.Long(48 * 3600_000L) == "2 days");
+        S.WebServicesOn = webBefore.Item1;
+        S.ServicePlaces = webBefore.Item2;
+        WebServices.RaiseChanged();
+        win.Navigate("music");
+
         // ---------- sorting and filtering ----------
         win.Navigate("music");
         var music = win.Page<MusicView>("music");

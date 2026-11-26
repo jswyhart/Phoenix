@@ -44,6 +44,7 @@ public partial class BooksView : UserControl
     {
         InitializeComponent();
         TopBar.Children.Add(Options);
+        ServiceTabs.Attach(this, TopBar, "books");
         Options.Changed += LoadBooks;
         Tiles.ItemClicked += o => Tiles.SelectedItem = o;
         Tiles.ItemActivated += o => OpenBook(((BookTile)o).Book);

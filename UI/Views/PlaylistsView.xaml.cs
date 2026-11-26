@@ -25,6 +25,7 @@ public partial class PlaylistsView : UserControl
         InitializeComponent();
         Options.Margin = new Thickness(0, 0, 18, 0);
         SongBar.Children.Insert(0, Options);
+        ServiceTabs.Attach(this, TabRow, "playlists", () => TabRow.Visibility = TabRow.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed);
         Options.Changed += () => { if (_row != null) Show(_row); };
         SongHdr.Changed += () => { if (_row != null) Show(_row); };
         // sorting is a view of the list: choosing another playlist starts from its own order again

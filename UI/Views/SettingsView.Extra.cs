@@ -87,6 +87,43 @@ public partial class SettingsView
 
     public List<CheckBox> TabBoxes => TabChecks.Children.OfType<CheckBox>().ToList();
 
+    void LoadCustomTabs()
+    {
+        CustomTabRows.Children.Clear();
+        foreach (var tab in S.CustomTabs.ToList())
+        {
+            var t = tab;
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var remove = Make.Button("remove", "TextBtn", () => { WebServices.RemoveTab(t); LoadCustomTabs(); }, "The services in it go back to where they were before", new Thickness(12, 0, 0, 0));
+            var rename = Make.Button("rename", "TextBtn", () =>
+            {
+                var name = InputDialog.Ask("Rename tab", "Name", t.Name);
+                if (!string.IsNullOrWhiteSpace(name)) { WebServices.RenameTab(t, name); LoadCustomTabs(); }
+            }, null, new Thickness(12, 0, 0, 0));
+            DockPanel.SetDock(remove, Dock.Right);
+            DockPanel.SetDock(rename, Dock.Right);
+            row.Children.Add(remove);
+            row.Children.Add(rename);
+            var count = WebServices.Under(t.Page).Count;
+            row.Children.Add(Make.Text($"{t.Name}   ·   {(count == 0 ? "empty" : count == 1 ? "1 service" : $"{count} services")}", 13));
+            CustomTabRows.Children.Add(row);
+        }
+    }
+
+    void AddTab_Click(object sender, RoutedEventArgs e) => AddTab(NewTabName.Text);
+
+    /// <summary>Adds a collection tab of your own (also used by the self-test).</summary>
+    public CustomTab? AddTab(string name)
+    {
+        name = name.Trim();
+        if (name == "") { App.Win.SetStatus("give the tab a name"); return null; }
+        var tab = WebServices.AddTab(name);
+        NewTabName.Text = "";
+        LoadCustomTabs();
+        App.Win.SetStatus($"“{name}” added to your collection tabs; put services in it under settings → servers → streaming");
+        return tab;
+    }
+
     void Scrobble_Click(object sender, RoutedEventArgs e)
     {
         S.ScrobbleListenBrainz = LbOn.IsChecked == true;
@@ -157,6 +194,7 @@ public partial class SettingsView
     void LoadBackdrops()
     {
         LoadTabs();
+        LoadCustomTabs();
         BackdropsBox.IsChecked = S.Backdrops;
         var (artists, bytes) = Backdrops.Usage();
         BackdropUsage.Text = artists == 0 ? "No photos kept yet." : $"Photos of {artists} artist{(artists == 1 ? "" : "s")} kept, using {Storage.SizeText(bytes)}.";

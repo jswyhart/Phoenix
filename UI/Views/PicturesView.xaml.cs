@@ -40,6 +40,7 @@ public partial class PicturesView : UserControl
         Options.Margin = new Thickness(0, -6, 18, 4);
         DockPanel.SetDock(Options, Dock.Right);
         PicBar.Children.Insert(1, Options);
+        ServiceTabs.Attach(this, TabRow, "pictures", () => TabRow.Visibility = TabRow.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed);
         Options.Changed += ShowPics;
         // photos open on a single click
         PicGrid.DrawWith(TileStyle.Picture, o => o is PictureItem pic ? new TileLook(pic.ArtPath, Tip: pic.Name) : default);

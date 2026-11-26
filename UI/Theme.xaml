@@ -223,6 +223,26 @@
         <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
         <Setter Property="Margin" Value="0,0,18,0"/>
     </Style>
+    <!-- an action that sits in a row of tabs and looks like one of them ("shuffle all" beside artists, albums…) -->
+    <Style x:Key="NavTabButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource FgFaint}"/>
+        <Setter Property="FontSize" Value="17"/>
+        <Setter Property="FontFamily" Value="{DynamicResource TextFont}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,0,18,0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent"><ContentPresenter/></Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource FgDim}"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="{DynamicResource Fg}"/></Trigger>
+        </Style.Triggers>
+    </Style>
 
     <!-- ===== buttons ===== -->
     <Style x:Key="IconBtn" TargetType="ButtonBase">

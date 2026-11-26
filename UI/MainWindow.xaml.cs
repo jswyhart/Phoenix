@@ -76,6 +76,7 @@ public partial class MainWindow : Window
         BuildTaskbarButtons();
         ShowTabs();
         ShowWebTabs();
+        WebServices.Changed += () => Dispatcher.BeginInvoke(ShowWebTabs);
         ShowQueueTab(App.Settings.ShowLyrics);
         Navigate("quickplay");
         RefreshTransport();
@@ -257,6 +258,7 @@ public partial class MainWindow : Window
         "care" => new CareView(),
         "mixview" => new MixviewPage(),
         _ when page.StartsWith("web:") && WebServices.Find(page[4..]) is { } service => HookWeb(new WebServiceView(service)),
+        _ when page.StartsWith("tab:") => new CustomTabView(page),
         _ => throw new ArgumentException(page)
     };
 
@@ -272,8 +274,9 @@ public partial class MainWindow : Window
         var web = page.StartsWith("web:") ? WebServices.Find(page[4..]) : null;
         if (page.StartsWith("web:") && (web == null || !WebServices.IsOn(web))) { page = "music"; web = null; }
         if (Settings.Tabs.Contains(page) && !App.Settings.TabOn(page)) page = FirstTab;   // a tab that is switched off
+        if (page.StartsWith("tab:") && App.Settings.CustomTabs.All(t => t.Page != page)) page = FirstTab;   // a tab of your own that was removed
         _page = page;
-        var isColl = CollectionPages.Contains(page) || web != null;
+        var isColl = CollectionPages.Contains(page) || web != null || page.StartsWith("tab:");
         if (isColl) _collPage = page;
         Host.Content = Page<FrameworkElement>(page);
 
@@ -281,7 +284,8 @@ public partial class MainWindow : Window
         NavColl.IsChecked = isColl || page == "search";
         NavSettings.IsChecked = page is "settings" or "care";
         SubNav.Visibility = isColl ? Visibility.Visible : Visibility.Collapsed;
-        var lit = web is { Video: true } ? "videos" : page;
+        // a service shown under a collection lights that collection's tab; one with a tab of its own lights its own
+        var lit = web != null && WebServices.PlaceOf(web) is var place && place != WebServices.OwnTab ? place : page;
         foreach (RadioButton rb in SubNav.Children) rb.IsChecked = (string)rb.Tag == lit;
         BackBtn.IsEnabled = _back.Count > 0;
     }
@@ -607,16 +611,31 @@ public partial class MainWindow : Window
         _settingSeek = false;
     }
 
-    /// <summary>Shows a tab after playlists for each music streaming service switched on in settings.</summary>
+    /// <summary>
+    /// After the collection's own tabs: your tabs of your own, then the streaming services that have a tab of their
+    /// own. Services placed under a collection are shown by that collection's page instead.
+    /// </summary>
     public void ShowWebTabs()
     {
-        foreach (var old in SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && t.StartsWith("web:")).ToList()) SubNav.Children.Remove(old);
-        foreach (var service in WebServices.Enabled(video: false))
+        foreach (var old in SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && (t.StartsWith("web:") || t.StartsWith("tab:"))).ToList()) SubNav.Children.Remove(old);
+        var lit = _page.StartsWith("web:") && WebServices.Find(_page[4..]) is { } shown && WebServices.PlaceOf(shown) is var place && place != WebServices.OwnTab ? place : _page;
+        foreach (var custom in App.Settings.CustomTabs)
         {
-            var tab = new RadioButton { Content = service.Name.ToLowerInvariant(), Tag = service.Page, GroupName = "sub", Style = (Style)FindResource("NavSection"), IsChecked = _page == service.Page };
+            var tab = new RadioButton { Content = custom.Name.ToLowerInvariant(), Tag = custom.Page, GroupName = "sub", Style = (Style)FindResource("NavSection"), IsChecked = lit == custom.Page };
             tab.Click += NavSub_Click;
             SubNav.Children.Add(tab);
         }
+        foreach (var service in WebServices.OwnTabs)
+        {
+            var tab = new RadioButton { Content = service.Name.ToLowerInvariant(), Tag = service.Page, GroupName = "sub", Style = (Style)FindResource("NavSection"), IsChecked = lit == service.Page };
+            tab.Click += NavSub_Click;
+            SubNav.Children.Add(tab);
+        }
+        // the lit tab follows a service that was just moved
+        foreach (RadioButton rb in SubNav.Children) rb.IsChecked = (string)rb.Tag == lit;
+        // a tab of your own that was removed is left
+        if (_page.StartsWith("tab:") && App.Settings.CustomTabs.All(t => t.Page != _page)) Navigate(FirstTab);
+        if (_collPage.StartsWith("tab:") && App.Settings.CustomTabs.All(t => t.Page != _collPage)) _collPage = FirstTab;
         // a service that was switched off stops playing, and its page is left
         foreach (var (page, view) in _pages.Where(kv => kv.Value is WebServiceView).Select(kv => (kv.Key, (WebServiceView)kv.Value)).ToList())
         {
@@ -626,10 +645,13 @@ public partial class MainWindow : Window
             if (_page == page) Navigate("music");
             if (_collPage == page) _collPage = "music";
         }
-        if (_pages.TryGetValue("videos", out var videos)) ((VideosView)videos).ShowServices();
     }
 
     public List<string> WebTabs => SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && t.StartsWith("web:")).Select(rb => (string)rb.Tag).ToList();
+    /// <summary>The tabs of your own on show (for the self-test).</summary>
+    public List<string> CustomTabsShown => SubNav.Children.OfType<RadioButton>().Where(rb => rb.Tag is string t && t.StartsWith("tab:")).Select(rb => (string)rb.Tag).ToList();
+    /// <summary>The collection tab lit right now (for the self-test).</summary>
+    public string LitTab => SubNav.Children.OfType<RadioButton>().FirstOrDefault(rb => rb.IsChecked == true)?.Tag as string ?? "";
 
     bool _webFull;
     WindowState _stateBeforeWebFull;

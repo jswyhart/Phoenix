@@ -37,11 +37,11 @@ public partial class PodcastsView : UserControl
         TabBar.Children.Clear();
         foreach (var (id, label) in new[] { ("mine", "my podcasts"), ("sources", "sources") })
         {
-            var b = Make.Button(label, "TextBtn", () => ShowTab(id), id == "sources" ? "Browse podcast directories and subscribe" : null, new Thickness(0, 0, 22, 0));
-            b.Opacity = id == Tab ? 1 : 0.5;
-            b.FontSize = 15;
-            TabBar.Children.Add(b);
+            var button = new RadioButton { Content = label, Style = Make.Style("NavTab"), GroupName = "podcastTabs", IsChecked = id == Tab, ToolTip = id == "sources" ? "Browse podcast directories and subscribe" : null };
+            button.Click += (_, _) => ShowTab(id);
+            TabBar.Children.Add(button);
         }
+        ServiceTabs.Fill(TabBar, "podcasts");
         Options.Visibility = Tab == "mine" ? Visibility.Visible : Visibility.Collapsed;
         TabBar.Children.Add(Options);
         MinePane.Visibility = Tab == "mine" ? Visibility.Visible : Visibility.Collapsed;
@@ -52,6 +52,7 @@ public partial class PodcastsView : UserControl
     public PodcastsView()
     {
         InitializeComponent();
+        Halcyon.Services.WebServices.Changed += () => Dispatcher.BeginInvoke(() => ServiceTabs.Fill(TabBar, "podcasts"));
         ShowTab("mine");
         Options.Changed += () => Reload(_podcast?.Id);
         // a background refresh found something, or downloads changed

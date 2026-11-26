@@ -165,6 +165,13 @@
                     <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>
                     <WrapPanel x:Name="TabChecks"/>
+                    <TextBlock Style="{StaticResource Label}" Text="TABS OF YOUR OWN" Margin="0,16,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="A tab of your own sits with the others in your collection and holds the streaming services you put in it (settings → servers → streaming → “show in”)."/>
+                    <StackPanel x:Name="CustomTabRows"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <TextBox x:Name="NewTabName" Width="220" ToolTip="A name for the new tab"/>
+                        <Button Style="{StaticResource PillBtn}" Content="ADD TAB" Margin="8,0,0,0" Click="AddTab_Click"/>
+                    </StackPanel>
                     <TextBlock Style="{StaticResource Label}" Text="QUICKPLAY" Margin="0,22,0,3"/>
                     <CheckBox x:Name="QuickplayPlaysBox" Content="Clicking an album in quickplay plays it straight away" Margin="0,4,0,0" Click="QuickplayPlays_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: a click opens the album in your collection; right-click a tile to play it."/>
@@ -357,7 +364,7 @@
 
                 <StackPanel x:Name="PanelWeb" Visibility="Collapsed">
                     <TextBlock Text="streaming services" Style="{StaticResource Head}"/>
-                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a streaming service's own web player in its window. Music services get a tab after playlists; video services get a link on the videos page. You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the equalizer and visualizer do not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a streaming service's own web player in its window. Choose where each one goes with “show in”: a collection tab of its own, under any part of your collection (music services start on a tab of their own, video services under videos), or in a tab you made yourself under settings → display. You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the equalizer and visualizer do not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."/>
                     <TextBlock Style="{StaticResource Label}" Text="MUSIC"/>
                     <StackPanel x:Name="WebMusicPanel" Margin="0,4,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="VIDEO" Margin="0,18,0,3"/>

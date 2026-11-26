@@ -106,6 +106,7 @@ public class RadioView : UserControl
         _groups.SelectionChanged += (_, _) => { if ((_groups.SelectedItem as ListBoxItem)?.Tag is Radio.Group g) _ = OpenGroupAsync(g); };
         App.Lib.Changed += () => { if (IsVisible) ShowMine(); };
         IsVisibleChanged += (_, _) => { if (IsVisible) ShowTab(_tab); };
+        WebServices.Changed += () => Dispatcher.BeginInvoke(() => ServiceTabs.Fill(_tabs, "radio"));
         ShowTab("mine");
     }
 
@@ -117,11 +118,11 @@ public class RadioView : UserControl
         _tabs.Children.Clear();
         foreach (var (id, label) in new[] { ("mine", "my stations"), ("sources", "sources") })
         {
-            var b = Make.Button(label, "TextBtn", () => ShowTab(id), id == "sources" ? "Browse the station directory and add stations" : null, new Thickness(0, 0, 22, 0));
-            b.Opacity = id == _tab ? 1 : 0.5;
-            b.FontSize = 15;
-            _tabs.Children.Add(b);
+            var button = new RadioButton { Content = label, Style = Make.Style("NavTab"), GroupName = "radioTabs", IsChecked = id == _tab, ToolTip = id == "sources" ? "Browse the station directory and add stations" : null };
+            button.Click += (_, _) => ShowTab(id);
+            _tabs.Children.Add(button);
         }
+        ServiceTabs.Fill(_tabs, "radio");
         _minePane.Visibility = _tab == "mine" ? Visibility.Visible : Visibility.Collapsed;
         _sourcesPane.Visibility = _tab == "sources" ? Visibility.Visible : Visibility.Collapsed;
         ShowMine();

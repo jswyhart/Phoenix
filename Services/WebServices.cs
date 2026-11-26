@@ -62,10 +62,88 @@ public static class WebServices
         App.Settings.WebServicesOn.Remove(s.Id);
         if (on) App.Settings.WebServicesOn.Add(s.Id);
         if (!App.SmokeMode) App.Settings.Save();
+        Changed?.Invoke();
     }
 
     /// <summary>The services switched on, in the order they are listed.</summary>
     public static List<WebService> Enabled(bool video) => All.Where(s => s.Video == video && IsOn(s)).ToList();
 
     public static WebService? Find(string id) => All.FirstOrDefault(s => s.Id == id);
+
+    // ---------- where each service is shown ----------
+
+    /// <summary>Raised when services are switched on or off, moved, or tabs of your own change.</summary>
+    public static event Action? Changed;
+    public static void RaiseChanged() => Changed?.Invoke();
+
+    public const string OwnTab = "tab";
+
+    /// <summary>A place that can be chosen right now: its own tab, a collection tab that is on, or a tab of your own.</summary>
+    static bool Usable(string place) =>
+        place == OwnTab
+        || (Settings.Tabs.Contains(place) && App.Settings.TabOn(place))
+        || (place.StartsWith("tab:") && App.Settings.CustomTabs.Any(t => t.Page == place));
+
+    /// <summary>
+    /// Where a service is shown. As before unless you chose otherwise: music services get a tab of their own, video
+    /// services sit with your videos. A place that is gone (a tab switched off or removed) falls back to its own tab.
+    /// </summary>
+    public static string PlaceOf(WebService s)
+    {
+        if (App.Settings.ServicePlaces.TryGetValue(s.Id, out var chosen) && Usable(chosen)) return chosen;
+        var usual = s.Video ? "videos" : OwnTab;
+        return Usable(usual) ? usual : OwnTab;
+    }
+
+    public static void SetPlace(WebService s, string place)
+    {
+        App.Settings.ServicePlaces[s.Id] = place;
+        if (!App.SmokeMode) App.Settings.Save();
+        Changed?.Invoke();
+    }
+
+    /// <summary>The services switched on that are shown under a collection (or a tab of your own).</summary>
+    public static List<WebService> Under(string collection) => All.Where(s => IsOn(s) && PlaceOf(s) == collection).ToList();
+
+    /// <summary>The services switched on that have a collection tab of their own.</summary>
+    public static List<WebService> OwnTabs => All.Where(s => IsOn(s) && PlaceOf(s) == OwnTab).ToList();
+
+    /// <summary>Every place a service can be shown, as (place, name), for settings.</summary>
+    public static List<(string Place, string Name)> Places() =>
+        new[] { (OwnTab, "its own tab") }
+            .Concat(Settings.Tabs.Where(App.Settings.TabOn).Select(t => (t, "under " + t)))
+            .Concat(App.Settings.CustomTabs.Select(t => (t.Page, "under " + t.Name.ToLowerInvariant())))
+            .ToList();
+
+    /// <summary>The name a place is shown with ("videos", or a tab of your own's name).</summary>
+    public static string PlaceName(string place) =>
+        place.StartsWith("tab:") ? App.Settings.CustomTabs.FirstOrDefault(t => t.Page == place)?.Name.ToLowerInvariant() ?? "" : place;
+
+    // ---------- tabs of your own ----------
+
+    public static CustomTab AddTab(string name)
+    {
+        var tab = new CustomTab { Name = name.Trim() };
+        App.Settings.CustomTabs.Add(tab);
+        if (!App.SmokeMode) App.Settings.Save();
+        Changed?.Invoke();
+        return tab;
+    }
+
+    public static void RenameTab(CustomTab tab, string name)
+    {
+        if (name.Trim() == "") return;
+        tab.Name = name.Trim();
+        if (!App.SmokeMode) App.Settings.Save();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Removes a tab of your own; the services in it go back to where they were before.</summary>
+    public static void RemoveTab(CustomTab tab)
+    {
+        App.Settings.CustomTabs.Remove(tab);
+        foreach (var key in App.Settings.ServicePlaces.Where(kv => kv.Value == tab.Page).Select(kv => kv.Key).ToList()) App.Settings.ServicePlaces.Remove(key);
+        if (!App.SmokeMode) App.Settings.Save();
+        Changed?.Invoke();
+    }
 }

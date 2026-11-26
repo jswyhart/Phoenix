@@ -35,6 +35,16 @@ public static class Fmt
         return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
     }
     public static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    /// <summary>A long stretch of time in words: "2 days 7 hours", "5 hours 12 minutes", "48 minutes".</summary>
+    public static string Long(long ms)
+    {
+        var t = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        static string N(int n, string unit) => $"{n} {unit}{(n == 1 ? "" : "s")}";
+        if (t.TotalDays >= 1) return t.Hours > 0 ? $"{N((int)t.TotalDays, "day")} {N(t.Hours, "hour")}" : N((int)t.TotalDays, "day");
+        if (t.TotalHours >= 1) return t.Minutes > 0 ? $"{N((int)t.TotalHours, "hour")} {N(t.Minutes, "minute")}" : N((int)t.TotalHours, "hour");
+        return N((int)t.TotalMinutes, "minute");
+    }
 }
 
 public static class AppPaths

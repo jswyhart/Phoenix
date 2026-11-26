@@ -12,8 +12,8 @@
             <RadioButton Style="{StaticResource NavTab}" Content="genres" Tag="genres" GroupName="musicTabs" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="albums" Tag="albums" GroupName="musicTabs" Click="Tab_Click"/>
             <RadioButton Style="{StaticResource NavTab}" Content="songs" Tag="songs" GroupName="musicTabs" Click="Tab_Click"/>
-            <Button Style="{StaticResource TextBtn}" Content="&#xE8B1;  shuffle all" Click="ShuffleAll_Click" Margin="18,2,0,0"/>
-            <TextBlock x:Name="CountText" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="18,2,0,0"/>
+            <Button x:Name="ShuffleAllBtn" Style="{StaticResource NavTabButton}" Content="shuffle all" Click="ShuffleAll_Click" ToolTip="Play the songs on show in a random order"/>
+            <TextBlock x:Name="CountText" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Margin="6,2,0,0"/>
         </StackPanel>
 
         <Grid Grid.Row="1">

@@ -109,12 +109,24 @@ public class WebServiceView : UserControl, IRemotePlayer
             return b;
         }
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 0, 4) };
-        if (service.Video)
+        // shown under a collection: a way back to it, and the other services there as tabs (this one lit)
+        var siblings = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) };
+        tools.Children.Add(siblings);
+        void ShowSiblings()
         {
-            var back = new Button { Content = "‹  videos", Style = (Style)FindResource("TextBtn"), Margin = new Thickness(6, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Back to your videos" };
-            back.Click += (_, _) => App.Win.Navigate("videos");
-            tools.Children.Add(back);
+            siblings.Children.Clear();
+            var place = WebServices.PlaceOf(service);
+            if (place == WebServices.OwnTab) return;
+            var back = new Button { Content = "‹  " + WebServices.PlaceName(place), Style = (Style)FindResource("NavTabButton"), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Back to " + WebServices.PlaceName(place) };
+            back.Click += (_, _) => App.Win.Navigate(place);
+            siblings.Children.Add(back);
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            siblings.Children.Add(row);
+            ServiceTabs.Fill(row, place, service.Page);
         }
+        ShowSiblings();
+        IsVisibleChanged += (_, _) => { if (IsVisible) ShowSiblings(); };
+        WebServices.Changed += () => Dispatcher.BeginInvoke(ShowSiblings);
         tools.Children.Add(Tool("", "Back", () => { if (_web.CoreWebView2?.CanGoBack == true) _web.CoreWebView2.GoBack(); }));
         tools.Children.Add(Tool("", "Forward", () => { if (_web.CoreWebView2?.CanGoForward == true) _web.CoreWebView2.GoForward(); }));
         tools.Children.Add(Tool("", "Reload", () => _web.CoreWebView2?.Reload()));

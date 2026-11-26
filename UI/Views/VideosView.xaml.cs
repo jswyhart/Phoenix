@@ -53,8 +53,7 @@ public partial class VideosView : UserControl
         InitializeComponent();
         TabStrip.Children.Add(Options);
         Options.Changed += LoadContent;
-        IsVisibleChanged += (_, _) => { if (IsVisible) ShowServices(); };
-        ShowServices();
+        ServiceTabs.Attach(this, TabStrip, "videos");
         Tiles.ItemActivated += o => Play(((VideoTile)o).Video);
         Tiles.ItemClicked += o => Tiles.SelectedItem = o;
         Tiles.ItemContext += (o, el) => Menus.Open(MenuFor(new List<VideoItem> { ((VideoTile)o).Video }), el);
@@ -69,20 +68,10 @@ public partial class VideosView : UserControl
 
     void Tab_Click(object sender, RoutedEventArgs e) => ShowTab((string)((FrameworkElement)sender).Tag);
 
-    /// <summary>Adds a link for each video streaming service switched on in settings, after the tabs.</summary>
-    public void ShowServices()
-    {
-        foreach (var old in TabStrip.Children.OfType<Button>().Where(b => b.Tag is string t && t.StartsWith("web:")).ToList()) TabStrip.Children.Remove(old);
-        var at = TabStrip.Children.IndexOf(TabAll) + 1;
-        foreach (var service in Halcyon.Services.WebServices.Enabled(video: true))
-        {
-            var link = new Button { Content = service.Name.ToLowerInvariant(), Tag = service.Page, Style = (Style)FindResource("TextBtn"), FontSize = 15, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = $"Open {service.Name} here" };
-            link.Click += (_, _) => App.Win.Navigate(service.Page);
-            TabStrip.Children.Insert(at++, link);
-        }
-    }
+    /// <summary>The streaming services placed under videos, as tabs after the page's own (kept for callers).</summary>
+    public void ShowServices() => ServiceTabs.Fill(TabStrip, "videos");
 
-    public List<string> ServiceLinks => TabStrip.Children.OfType<Button>().Where(b => b.Tag is string t && t.StartsWith("web:")).Select(b => (string)b.Tag).ToList();
+    public List<string> ServiceLinks => ServiceTabs.In(TabStrip);
 
     public void ShowTab(string tab)
     {

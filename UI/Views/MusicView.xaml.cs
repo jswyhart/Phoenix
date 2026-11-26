@@ -31,6 +31,7 @@ public partial class MusicView : UserControl
     {
         InitializeComponent();
         TopBar.Children.Add(Options);
+        ServiceTabs.Attach(this, TopBar, "music");
         Options.Changed += () => { _gridStale = true; LoadAlbums(); };
         AlbumGrid.ItemClicked += o => { _album = ReferenceEquals(_album, o) ? null : (Album)o; AlbumGrid.SelectedItem = _album; LoadSongs(); };
         AlbumGrid.ItemActivated += o => Menus.Play(((Album)o).Tracks);
@@ -107,7 +108,7 @@ public partial class MusicView : UserControl
         if (!ReferenceEquals(SongList.ItemTemplate, rowTemplate)) SongList.ItemTemplate = rowTemplate;
         Lay("template");
         Header.Visibility = _mode == "songs" ? Visibility.Visible : Visibility.Collapsed;
-        CountText.Text = $"{lib.Albums.Select(a => a.Artist).Distinct(StringComparer.OrdinalIgnoreCase).Count()} artists  ·  {lib.Albums.Count} albums  ·  {lib.Tracks.Count} songs";
+        CountText.Text = $"{lib.Albums.Select(a => a.Artist).Distinct(StringComparer.OrdinalIgnoreCase).Count()} artists  ·  {lib.Albums.Count} albums  ·  {lib.Tracks.Count} songs  ·  {Fmt.Long(lib.Tracks.Sum(t => t.DurationMs))}";
 
         Lay("chrome"); sw.Restart();
         if (showLeft)

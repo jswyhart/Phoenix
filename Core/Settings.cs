@@ -6,6 +6,14 @@ using System.Text.Json.Serialization;
 
 namespace Halcyon.Core;
 
+/// <summary>A collection tab of your own, holding the streaming services you put in it.</summary>
+public class CustomTab
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+    public string Name { get; set; } = "";
+    public string Page => "tab:" + Id;
+}
+
 public class PodcastSource
 {
     public string Name { get; set; } = "";
@@ -83,6 +91,9 @@ public class Settings
     public Dictionary<string, string> Views { get; set; } = new();
     /// <summary>Podcast lists you added yourself to browse from: a name and the address (or file) of an OPML list.</summary>
     public List<PodcastSource> PodcastSources { get; set; } = new();
+    /// <summary>Where each streaming service is shown: "tab" (a collection tab of its own), a collection ("videos"), or a tab of your own ("tab:&lt;id&gt;").</summary>
+    public Dictionary<string, string> ServicePlaces { get; set; } = new();
+    public List<CustomTab> CustomTabs { get; set; } = new();
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
     public bool CheckUpdates { get; set; } = true;        // ask GitHub once a day whether there is a newer Phoenix
     public bool AutoUpdate { get; set; }                  // download a newer Phoenix when one is found and install it when Phoenix is closed

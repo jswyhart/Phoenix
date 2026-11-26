@@ -237,24 +237,42 @@ public partial class SettingsView
         WebCustomPanel.Children.Clear();
         foreach (var service in WebServices.Presets)
         {
-            var box = new CheckBox { Content = service.Name, IsChecked = WebServices.IsOn(service), Margin = new Thickness(0, 3, 0, 3), ToolTip = service.Url };
-            box.Click += (_, _) => { WebServices.Set(service, box.IsChecked == true); App.Win.ShowWebTabs(); };
-            (service.Video ? WebVideoPanel : WebMusicPanel).Children.Add(box);
+            var box = new CheckBox { Content = service.Name, IsChecked = WebServices.IsOn(service), VerticalAlignment = VerticalAlignment.Center, ToolTip = service.Url };
+            var place = PlaceBox(service);
+            box.Click += (_, _) => { WebServices.Set(service, box.IsChecked == true); place.IsEnabled = box.IsChecked == true; };
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            DockPanel.SetDock(place, Dock.Right);
+            row.Children.Add(place);
+            row.Children.Add(box);
+            (service.Video ? WebVideoPanel : WebMusicPanel).Children.Add(row);
         }
         foreach (var custom in App.Settings.CustomServices.ToList())
         {
-            var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
-            var remove = new Button { Content = "remove", Style = (Style)FindResource("TextBtn"), Margin = new Thickness(12, 0, 0, 0) };
-            remove.Click += (_, _) => { App.Settings.CustomServices.Remove(custom); if (!App.SmokeMode) App.Settings.Save(); App.Win.ShowWebTabs(); LoadWeb(); };
+            var service = WebServices.Custom.FirstOrDefault(c => c.Id == "custom-" + custom.Id);
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var remove = new Button { Content = "remove", Style = (Style)FindResource("TextBtn"), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            remove.Click += (_, _) => { App.Settings.CustomServices.Remove(custom); if (!App.SmokeMode) App.Settings.Save(); WebServices.RaiseChanged(); LoadWeb(); };
             DockPanel.SetDock(remove, Dock.Right);
             row.Children.Add(remove);
-            var text = new TextBlock { Text = $"{custom.Name}   ·   {(custom.Video ? "video" : "music")}   ·   {custom.Url}", TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+            if (service != null) { var place = PlaceBox(service); DockPanel.SetDock(place, Dock.Right); row.Children.Add(place); }
+            var text = new TextBlock { Text = $"{custom.Name}   ·   {custom.Url}", TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(text);
             WebCustomPanel.Children.Add(row);
         }
     }
 
     public int WebChoices => WebMusicPanel.Children.Count + WebVideoPanel.Children.Count;
+
+    /// <summary>The "show in" choice beside a service: its own tab, under a collection, or in a tab of your own.</summary>
+    ComboBox PlaceBox(WebService service)
+    {
+        var places = WebServices.Places();
+        var box = new ComboBox { Width = 190, FontSize = 12, Margin = new Thickness(12, 0, 0, 0), IsEnabled = WebServices.IsOn(service), ToolTip = "Where " + service.Name + " is shown in your collection",
+            ItemsSource = places.Select(p => p.Name).ToList() };
+        box.SelectedIndex = Math.Max(0, places.FindIndex(p => p.Place == WebServices.PlaceOf(service)));
+        box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0) WebServices.SetPlace(service, places[box.SelectedIndex].Place); };
+        return box;
+    }
 
     void WebAdd_Click(object sender, RoutedEventArgs e) => AddCustomService(WebNameBox.Text, WebUrlBox.Text, WebKindBox.SelectedIndex == 1);
 
@@ -268,8 +286,8 @@ public partial class SettingsView
         App.Settings.CustomServices.Add(new CustomService { Name = name, Url = url.Trim(), Video = video });
         if (!App.SmokeMode) App.Settings.Save();
         WebNameBox.Text = WebUrlBox.Text = "";
-        WebStatus.Text = video ? $"“{name}” is on the videos page" : $"“{name}” has a tab after playlists";
-        App.Win.ShowWebTabs();
+        WebStatus.Text = video ? $"“{name}” is on the videos page; choose “show in” to move it" : $"“{name}” has a tab of its own; choose “show in” to move it";
+        WebServices.RaiseChanged();
         LoadWeb();
         return true;
     }

@@ -9,7 +9,12 @@
                 <ColumnDefinition Width="260"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <DockPanel>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <StackPanel x:Name="TabRow" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="8,0,0,12" Visibility="Collapsed"/>
+            <DockPanel Grid.Row="1">
                 <TextBlock x:Name="FolderCap" DockPanel.Dock="Top" Style="{StaticResource Cap}" Text="FOLDERS"/>
                 <ListBox x:Name="FolderList" SelectionChanged="Folder_SelectionChanged">
                     <ListBox.ItemTemplate>
@@ -22,14 +27,14 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
-            <DockPanel Grid.Column="1" Margin="10,0,0,0">
+            <DockPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
                 <DockPanel x:Name="PicBar" DockPanel.Dock="Top">
                     <Button DockPanel.Dock="Right" Style="{StaticResource TextBtn}" Content="&#xE768;  play slideshow" Click="Slideshow_Click" Margin="0,-4,28,6"/>
                     <TextBlock x:Name="PicCap" Style="{StaticResource Cap}" Text="PICTURES"/>
                 </DockPanel>
                 <ui:TileGrid x:Name="PicGrid" TileWidth="160" TileTemplate="{StaticResource PictureTile}"/>
             </DockPanel>
-            <TextBlock x:Name="EmptyText" Grid.ColumnSpan="2" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock x:Name="EmptyText" Grid.Row="1" Grid.ColumnSpan="2" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Text="No pictures found. Add picture folders in settings." Visibility="Collapsed"/>
         </Grid>
 
