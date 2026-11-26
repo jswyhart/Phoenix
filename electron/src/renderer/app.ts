@@ -3,6 +3,7 @@ import { call, clock, host, Init, on, PlayerState, time } from "./api";
 import { booksPage } from "./books";
 import { carePage } from "./care";
 import { installDialogs } from "./dialogs";
+import { installTools } from "./tools";
 import { musicPage } from "./music";
 import { NowPlaying } from "./nowplaying";
 import { installPhoneMenu, phonePage } from "./phone";
@@ -337,6 +338,7 @@ async function start() {
   installPlaylistMenu();
   installPhoneMenu();
   installDialogs();
+  installTools();
   navigate("quickplay");
   paintPlayer(init.player);
   if (host.smoke) void runSmoke();

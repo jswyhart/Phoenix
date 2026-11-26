@@ -4,8 +4,9 @@ import { debounce, Page } from "./shell";
 import { albumMenu, menuHooks, SongHeader, songMenu, songRow } from "./songs";
 import { ask, confirm, h, menuAt, MenuEntry, showMenu, textBtn, TileGrid, ViewBar, VList } from "./ui";
 import { attachServiceTabs } from "./web";
+import { editSmart, SmartRule } from "./tools";
 
-interface ListRow { name: string; id: number | null; auto: string | null; pinned: boolean }
+interface ListRow { name: string; id: number | null; auto: string | null; smart: string | null; rules: string; pinned: boolean }
 
 /** "Add to playlist ▸" for the song, album and artist menus. */
 export function installPlaylistMenu() {
@@ -33,7 +34,7 @@ export function playlistsPage(): Page {
   header.onChange = () => void show(false);
   const lists = new VList<ListRow>({
     rowHeight: 30,
-    render: r => h("div.name", h("div.grow.ell", r.name)),
+    render: r => h("div.name", { title: r.rules || "" }, h("div.grow.ell", r.name), r.smart ? h("div.faint", { style: { fontSize: "11px", marginLeft: "8px" } }, "auto") : null),
     onSelect: items => { row = items[0] ?? null; void show(false); },
     onActivate: () => void call("play.tracks", { ids: songs.map(s => s.id) }),
     onContext: (items, e) => { row = items[0]; void show(false); menuAt(listMenu(items[0]), e); },
@@ -49,13 +50,16 @@ export function playlistsPage(): Page {
   const actions = h("div", { style: { margin: "-6px 28px 6px 0", display: "flex", gap: "8px", alignItems: "center" } }, bar.el,
     textBtn("play", () => void call("play.tracks", { ids: songs.map(s => s.id) })),
     textBtn("shuffle", () => void call("play.tracks", { ids: songs.map(s => s.id), shuffle: true })));
-  const left = h("div.pane", h("div.split", h("div.cap", "PLAYLISTS"), h("div", { style: { margin: "-4px 4px 6px 0" } }, textBtn("new playlist", create))), lists.el);
-  const right = h("div.pane", { style: { marginLeft: "18px" } }, h("div.split", songCap, actions), header.el, songList.el);
+  const newAuto = textBtn("new auto playlist", async () => { const id = await editSmart(null); if (id) { row = { name: "", id: null, auto: null, smart: id, rules: "", pinned: false }; await reload(); } });
+  newAuto.title = "A playlist that fills itself by rules: genre, years, rating, how often or how lately played";
+  const left = h("div.pane", h("div.split", h("div.cap", "PLAYLISTS"), h("div", { style: { margin: "-4px 4px 6px 0", display: "flex", gap: "12px" } }, textBtn("new playlist", create), newAuto)), lists.el);
+  const rulesText = h("div.faint.hidden", { style: { fontSize: "12px", margin: "-4px 0 6px 8px" } });
+  const right = h("div.pane", { style: { marginLeft: "18px" } }, h("div.split", songCap, actions), rulesText, header.el, songList.el);
   const serviceRow = h("div.tabs.hidden");
   attachServiceTabs(serviceRow, "playlists", () => serviceRow.classList.toggle("hidden", serviceRow.childElementCount === 0));
   const el = h("div.page", serviceRow, h("div.cols", { style: { gridTemplateColumns: "280px 1fr" } }, left, right));
 
-  const same = (a: ListRow | null, b: ListRow) => !!a && a.auto === b.auto && a.id === b.id;
+  const same = (a: ListRow | null, b: ListRow) => !!a && a.auto === b.auto && a.id === b.id && a.smart === b.smart;
 
   async function reload() {
     rows = await call<ListRow[]>("playlists.list");
@@ -68,7 +72,9 @@ export function playlistsPage(): Page {
   async function show(keep: boolean) {
     if (!row) return;
     const mine = ++seq;
-    const v = await call<{ songs: Song[]; total: string; all: number }>("playlists.songs", { id: row.id, auto: row.auto, sortKey: header.key, sortDesc: header.desc, view: bar.value });
+    rulesText.textContent = row.rules;
+    rulesText.classList.toggle("hidden", !row.smart);
+    const v = await call<{ songs: Song[]; total: string; all: number }>("playlists.songs", { id: row.id, auto: row.auto, smart: row.smart, sortKey: header.key, sortDesc: header.desc, view: bar.value });
     if (mine !== seq) return;
     songs = v.songs;
     songCap.textContent = `SONGS  ${songs.length === v.all ? songs.length : `${songs.length} of ${v.all}`}` + (v.total ? `   ·   ${v.total}` : "");
@@ -79,7 +85,7 @@ export function playlistsPage(): Page {
     const name = await ask("New playlist", "Playlist name", "");
     if (!name || name.trim() === "") return;
     const id = await call<number>("playlist.create", { name });
-    row = { name: name.trim(), id, auto: null, pinned: false };
+    row = { name: name.trim(), id, auto: null, smart: null, rules: "", pinned: false };
     await reload();
   }
 
@@ -90,6 +96,16 @@ export function playlistsPage(): Page {
       { label: "Add to now playing", action: () => call("queue.tracks", { ids }) },
       menuHooks.addToPhone(() => ids),
     ];
+    if (r.smart != null) {
+      const sid = r.smart;
+      items.push("-",
+        { label: "Edit rules…", action: async () => { const rule = await call<SmartRule | null>("smart.get", { id: sid }); if (rule && (await editSmart(rule))) await reload(); } },
+        { label: "Delete auto playlist", action: async () => {
+          if (!(await confirm(`Delete the auto playlist “${r.name}”? The songs stay in your collection.`, "delete"))) return;
+          row = null;
+          await call("smart.delete", { id: sid });
+        } });
+    }
     if (r.id != null) {
       const id = r.id;
       items.push(

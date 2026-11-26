@@ -484,11 +484,15 @@ public static partial class Api
 
     static void RegisterPlaylists()
     {
-        Rpc.On("playlists.list", _ => Catalog.AutoPlaylists.Select(k => new { name = k, id = (long?)null, auto = (string?)k, pinned = false })
-            .Concat(Lib.Playlists.Select(x => new { name = x.Name, id = (long?)x.Id, auto = (string?)null, pinned = Lib.IsPinned("playlist", x.Id.ToString()) })));
+        Rpc.On("playlists.list", _ => Catalog.AutoPlaylists.Select(k => new { name = k, id = (long?)null, auto = (string?)k, smart = (string?)null, rules = "", pinned = false })
+            .Concat(Lib.Playlists.Select(x => new { name = x.Name, id = (long?)x.Id, auto = (string?)null, smart = (string?)null, rules = "", pinned = Lib.IsPinned("playlist", x.Id.ToString()) }))
+            // auto playlists of your own, made by rules
+            .Concat(S.SmartPlaylists.Select(x => new { name = x.Name, id = (long?)null, auto = (string?)null, smart = (string?)x.Id, rules = Library.Describe(x), pinned = false })));
         Rpc.On("playlists.songs", p =>
         {
-            var songs = p.LongOrNull("id") is { } id ? (PlaylistById(id) is { } pl ? Lib.TracksOf(pl) : new List<Track>()) : Lib.AutoPlaylist(p.Str("auto"));
+            var songs = p.LongOrNull("id") is { } id ? (PlaylistById(id) is { } pl ? Lib.TracksOf(pl) : new List<Track>())
+                : p.StrOrNull("smart") is { } smart ? (S.SmartPlaylists.FirstOrDefault(x => x.Id == smart) is { } sp ? Lib.Evaluate(sp) : new List<Track>())
+                : Lib.AutoPlaylist(p.Str("auto"));
             var v = ViewOf(p, "playlists");
             var count = songs.Count;
             songs = songs.Where(t => (v.Show switch { "liked" => t.Rating > 0, "unplayed" => t.PlayCount == 0, _ => true }) && v.Matches(t.Title, t.Artist, t.Album)).ToList();

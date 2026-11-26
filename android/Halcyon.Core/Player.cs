@@ -240,8 +240,34 @@ public class Player
         _order.Insert(0, first);
     }
 
+    // ---------- smart dj ----------
+
+    /// <summary>The song a Smart DJ mix is built around, while one is playing.</summary>
+    public Track? DjSeed { get; private set; }
+
+    /// <summary>Starts an endless mix of music like the given song.</summary>
+    public void PlaySmartDj(Track seed)
+    {
+        var mix = App.Lib.SmartDj(seed, new[] { seed }, 30);
+        Play(new[] { seed }.Concat(mix).Select(From));
+        DjSeed = seed;
+    }
+
+    /// <summary>Near the end of a mix, more like the seed is added.</summary>
+    void RefillDj()
+    {
+        if (DjSeed == null) return;
+        var pos = _order.IndexOf(_index);
+        if (_order.Count - pos > 3) return;
+        var have = Queue.Where(q => q.Track != null).Select(q => q.Track!).ToList();
+        // recent songs must not come straight back, but an old mix may repeat itself eventually
+        var more = App.Lib.SmartDj(DjSeed, have.Skip(Math.Max(0, have.Count - 150)), 20);
+        if (more.Count > 0) Enqueue(more.Select(From));
+    }
+
     public void Play(IEnumerable<PlayItem> items, int start = 0)
     {
+        DjSeed = null;
         SaveEpisodePosition();
         if (Current != null) Current.IsCurrent = false;
         _index = -1;
@@ -300,6 +326,7 @@ public class Player
         if (_me is ISpeedEngine fast) fast.Speed = (float)_speed;
         Listening.Started(item);
         if (item.Track is { } t) { t.LastPlayed = Fmt.Now; App.Lib.Db.SaveStats(t); }
+        RefillDj();
         CurrentChanged?.Invoke();
         StateChanged?.Invoke();
         _ = StartAsync(item, gen);
@@ -362,6 +389,7 @@ public class Player
 
     public void Stop()
     {
+        DjSeed = null;
         LeaveCurrent();
         SaveEpisodePosition();
         _gen++;

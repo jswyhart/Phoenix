@@ -22,6 +22,7 @@ public static partial class Api
         RegisterWeb();
         RegisterCare();
         RegisterMetadata();
+        RegisterTools();
         Updates.Register();
     }
 

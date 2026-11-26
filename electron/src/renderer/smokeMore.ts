@@ -12,6 +12,7 @@ import type { VideosPage } from "./videos";
 import { remote, WebServicePage } from "./web";
 import type { CarePage } from "./care";
 import { albumMenu } from "./songs";
+import { cleanUp, fromFileName, tagEditor, titleCase } from "./tools";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
 type Shot = (name: string) => Promise<void>;
@@ -219,6 +220,65 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
 
   await runStreaming(check, shot, settle, until);
   await runCare(check, shot, settle, songs);
+  await runTools(check, shot, settle, songs);
+}
+
+// ---------- the tag editor, your own tags, Smart DJ and auto playlists ----------
+
+async function runTools(check: Check, shot: Shot, settle: Settle, songs: Song[]) {
+  check("tidy capitals keeps small words small and leaves capitals inside words", titleCase("the end of the road") === "The End of the Road" && titleCase("songs by AC/DC") === "Songs by AC/DC" && titleCase("mcCartney live") === "mcCartney Live",
+    titleCase("the end of the road"));
+  check("clean up takes out underscores, extra spaces and a leading number", cleanUp("03 - my_song  title ", true) === "my song title" && cleanUp("a__b", false) === "a b", cleanUp("03 - my_song  title ", true));
+  const read = fromFileName("07 - Artist Name - A Title", "%n - %a - %t");
+  check("a file name is read by its pattern", read?.n === "07" && read?.a === "Artist Name" && read?.t === "A Title" && fromFileName("no numbers here", "%n - %t") === null, JSON.stringify(read));
+
+  shell.navigate("music");
+  const album = (await call<{ albums: { key: string; title: string }[] }>("music.view", { mode: "albums" })).albums.find(a => a.title === "Later Record")!;
+  const info = await call<{ ids: number[] }>("album.info", { key: album.key });
+  const ed = (await tagEditor(info.ids))!;
+  await settle(300);
+  check("the tag editor opens with a row for each song", ed.rows.length === 4 && document.querySelectorAll(".tagrow[data-i]").length === 4, `${ed.rows.length} rows`);
+  const fromNames = ed.fromFileNames("%n %t");
+  check("from file names fills in numbers and titles", fromNames.done === 4 && ed.rows.every(r => /^Song \d$/.test(r.title) && r.trackNo > 0), `${fromNames.done} done, ${fromNames.skipped} skipped`);
+  const swapped = ed.replace("Song", "Track");
+  ed.numberTracks();
+  await shot("35-tag-editor");
+  const failed = await ed.save();
+  ed.close();
+  let now = (await call<Song[]>("album.songs", { key: album.key })).map(s => s.title);
+  check("the tag editor saves its changes", swapped === 4 && failed === 0 && now.every(t => t.startsWith("Track ")), now.join(", "));
+  const back = (await tagEditor(info.ids))!;
+  back.replace("Track", "Song");
+  await back.save();
+  back.close();
+  now = (await call<Song[]>("album.songs", { key: album.key })).map(s => s.title);
+  check("and back again", now.every(t => t.startsWith("Song ")), now.join(", "));
+
+  // your own tags
+  await call("owntags.apply", { ids: [songs[2].id, songs[3].id], text: "workout, late night", before: [] });
+  const tagged = (await call<Song[]>("album.songs", { key: (await call<string>("track.albumKey", { id: songs[2].id })) })).find(s => s.id === songs[2].id)!;
+  const shared = await call<{ common: string[]; all: { tag: string; count: number }[] }>("owntags.get", { ids: [songs[2].id, songs[3].id] });
+  check("your own tags go on the songs and are listed with their counts", tagged.tags.includes("workout") && shared.common.length === 2 && shared.all.some(t => t.tag === "workout" && t.count === 2), `${tagged.tags} / ${shared.all.map(t => t.tag + " " + t.count).join(", ")}`);
+  await call("owntags.apply", { ids: [songs[2].id, songs[3].id], text: "", before: shared.common });
+
+  // Smart DJ
+  await call("player.volume", { value: 0 });
+  const said = await call<string>("dj.start", { ids: [songs[0].id] });
+  const q = await call<PlayerState>("player.state");
+  check("Smart DJ starts a mix like the song", said.startsWith("smart dj") && shell.queue.length >= 1 && q.current != null, `${said}; ${shell.queue.length} in the queue`);
+  await call("player.stop");
+
+  // an auto playlist made by rules
+  shell.navigate("playlists");
+  const id = await call<string>("smart.save", { name: "Rule list", rating: 1, sort: 0, limit: 0, maxPlays: -1 });
+  const lists = await call<{ name: string; smart: string | null; rules: string }[]>("playlists.list");
+  const row = lists.find(l => l.smart === id);
+  const liked = await call<{ songs: Song[] }>("playlists.songs", { smart: id });
+  check("an auto playlist made by rules lists the songs that match", !!row && row.rules.startsWith("liked") && liked.songs.length >= 1 && liked.songs.every(s => s.rating > 0), `${row?.rules}; ${liked.songs.length} songs`);
+  check("its rules count what they match", (await call<string>("smart.count", { name: "x", rating: 0, limit: 5, maxPlays: -1 })) === "12 songs match; the playlist keeps 5");
+  await settle(400);
+  await shot("36-auto-playlist");
+  await call("smart.delete", { id });
 }
 
 // ---------- library care and metadata ----------

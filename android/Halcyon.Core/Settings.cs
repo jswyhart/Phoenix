@@ -63,6 +63,8 @@ public class Settings
     /// <summary>Where each streaming service is shown: "tab" (a collection tab of its own), a collection ("videos"), or a tab of your own ("tab:&lt;id&gt;").</summary>
     public Dictionary<string, string> ServicePlaces { get; set; } = new();
     public List<CustomTab> CustomTabs { get; set; } = new();
+    /// <summary>Playlists made by rules (desktop).</summary>
+    public List<SmartPlaylist> SmartPlaylists { get; set; } = new();
     /// <summary>Which metadata sources are on, and their weights (desktop).</summary>
     public List<Halcyon.Services.MetaSourceSetting> MetaSources { get; set; } = new();
     /// <summary>Album key -> the source it is tied to ("none" = never).</summary>
