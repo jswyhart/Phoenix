@@ -1,7 +1,7 @@
 // Phoenix for macOS and Linux: the Electron main process. It opens the window, starts the .NET helper that owns the
 // library and the VLC engine, passes the page's requests to it over stdin/stdout, and serves the page and its pictures
 // through the private phoenix:// scheme. The page itself has no Node access (see preload.ts).
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, session, shell, Tray } from "electron";
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
@@ -229,6 +229,41 @@ function appResponse(url: URL): Response {
 
 let mini: BrowserWindow | null = null;
 
+// ---------- running on in the tray (settings → display; off by default) ----------
+// With it on, closing the window hides it and the music carries on; the tray icon (the menu bar on a Mac) brings it
+// back, works play and pause, previous and next, and quits Phoenix for good.
+
+let trayOn = false;
+let tray: Tray | null = null;
+let trayTold = false;
+
+function showMain() {
+  if (!win) return;
+  win.show();
+  if (win.isMinimized()) win.restore();
+  win.focus();
+}
+
+function syncTray() {
+  if (!trayOn) { tray?.destroy(); tray = null; return; }
+  if (tray) return;
+  let image = nativeImage.createFromPath(path.join(webRoot, "phoenix-512.png")).resize({ width: isMac ? 18 : 22, height: isMac ? 18 : 22, quality: "best" });
+  if (image.isEmpty()) image = nativeImage.createEmpty();
+  tray = new Tray(image);
+  tray.setToolTip("Phoenix");
+  const act = (method: string) => () => { void backend.call(method).catch(() => {}); };
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Show Phoenix", click: showMain },
+    { type: "separator" },
+    { label: "Play / pause", click: act("player.toggle") },
+    { label: "Previous", click: act("player.prev") },
+    { label: "Next", click: act("player.next") },
+    { type: "separator" },
+    { label: "Quit Phoenix", click: () => { trayOn = false; void quit(); } },
+  ]));
+  tray.on("click", showMain);
+}
+
 function fromOurPage(e: Electron.IpcMainInvokeEvent): boolean {
   const ours = [win, mini].find(w => !!w && e.sender === w.webContents);
   return !!ours && e.senderFrame === ours.webContents.mainFrame && (e.senderFrame?.url ?? "").startsWith("phoenix://app/");
@@ -288,6 +323,13 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.once("ready-to-show", () => win?.show());
   win.on("closed", () => { win = null; });
+  // with "keep running in the tray" on, closing only hides the window
+  win.on("close", e => {
+    if (!trayOn || quitting || smokeDir) return;
+    e.preventDefault();
+    win?.hide();
+    if (!trayTold && process.platform === "win32") { trayTold = true; tray?.displayBalloon({ title: "Phoenix is still running", content: "It keeps playing here. Click the icon to bring it back; right-click it to quit." }); }
+  });
   win.on("enter-full-screen", () => win?.webContents.send("phoenix:event", "fullscreen", true));
   win.on("leave-full-screen", () => win?.webContents.send("phoenix:event", "fullscreen", false));
   win.loadURL("phoenix://app/index.html");
@@ -315,7 +357,9 @@ async function quit(code = 0) {
 if (!smokeDir && !app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.on("window-all-closed", () => { void quit(); });
+  app.on("window-all-closed", () => { if (!trayOn) void quit(); });
+  // a Mac: clicking Phoenix in the dock brings the hidden window back
+  app.on("activate", showMain);
   app.on("before-quit", e => { if (!quitting) { e.preventDefault(); void quit(); } });
 
   // ---------- streaming services: each in a <webview> with its own sign-in (partition) ----------
@@ -397,6 +441,7 @@ else {
     });
     handle("phoenix:quit", async () => { if (!smokeDir) await quit(0); });
     handle("phoenix:mini", (on: unknown) => showMini(!!on));
+    handle("phoenix:tray", (on: unknown) => { trayOn = !!on; syncTray(); return !!tray; });
     // the title bar the system draws (and its menus) follow the theme's base, not the system's own setting
     handle("phoenix:themeBase", (base: unknown, background: unknown) => {
       nativeTheme.themeSource = base === "dark" ? "dark" : base === "system" ? "system" : "light";

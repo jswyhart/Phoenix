@@ -172,6 +172,9 @@
                         <TextBox x:Name="NewTabName" Width="220" ToolTip="A name for the new tab"/>
                         <Button Style="{StaticResource PillBtn}" Content="ADD TAB" Margin="8,0,0,0" Click="AddTab_Click"/>
                     </StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="WHEN THE WINDOW IS CLOSED" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="RunInTrayBox" Content="Keep Phoenix running in the notification area" Margin="0,4,0,0" Click="RunInTray_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: closing the window hides it and the music carries on. Phoenix's icon by the clock brings it back; right-click the icon to play, pause, skip or quit. Off: closing the window quits Phoenix."/>
                     <TextBlock Style="{StaticResource Label}" Text="QUICKPLAY" Margin="0,22,0,3"/>
                     <CheckBox x:Name="QuickplayPlaysBox" Content="Clicking an album in quickplay plays it straight away" Margin="0,4,0,0" Click="QuickplayPlays_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Off: a click opens the album in your collection; right-click a tile to play it."/>

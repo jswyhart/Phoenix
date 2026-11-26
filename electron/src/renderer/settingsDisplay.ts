@@ -1,6 +1,6 @@
 // The parts of settings → display about quickplay and artist photos, and the lyrics part of settings → translation
 // and lyrics. As on Windows.
-import { call } from "./api";
+import { call, host } from "./api";
 import { shell } from "./shell";
 import { h } from "./ui";
 
@@ -13,6 +13,14 @@ const check = (text: string, change: (on: boolean) => void) => {
 };
 
 async function set(p: Partial<Display>) { shell.display = await call<Display>("display.set", p); return shell.display; }
+
+export function traySection() {
+  const where = host.platform === "mac" ? "the menu bar" : "the system tray";
+  const keep = check(`Keep Phoenix running in ${where}`, on => void set({ runInTray: on }).then(d => host.tray(d.runInTray)));
+  const el = h("div", h("div.label", { style: { margin: "22px 0 3px 0" } }, "WHEN THE WINDOW IS CLOSED"), keep.el,
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, `On: closing the window hides it and the music carries on. Phoenix's icon in ${where} brings it back; its menu plays, pauses, skips or quits. Off: closing the window quits Phoenix.`));
+  return { el, shown: () => { keep.box.checked = shell.display.runInTray; } };
+}
 
 export function quickplaySection() {
   const plays = check("Clicking an album in quickplay plays it straight away", on => void set({ quickplayPlays: on }));

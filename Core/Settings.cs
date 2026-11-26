@@ -60,6 +60,7 @@ public class Settings
     public bool SpotifyEnabled { get; set; }              // older setting: carried into WebServicesOn when read
     public List<string> WebServicesOn { get; set; } = new();                       // streaming services shown as pages (ids from WebServices.Presets)
     public List<Halcyon.Services.CustomService> CustomServices { get; set; } = new();   // your own addresses
+    public bool RunInTray { get; set; }                   // closing the window leaves Phoenix playing in the notification area
     public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)
     public string FpcalcPath { get; set; } = "";                                         // Chromaprint's fpcalc.exe, for identifying songs by sound
     public Dictionary<string, string> ApiKeysEnc { get; set; } = new();                  // other sources' keys, encrypted like the tokens below

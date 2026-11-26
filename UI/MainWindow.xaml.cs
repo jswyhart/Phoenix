@@ -65,8 +65,11 @@ public partial class MainWindow : Window
             MaxBtn.Content = WindowState == WindowState.Maximized ? "" : "";
         };
         SourceInitialized += (_, _) => _smtc.Init(new WindowInteropHelper(this).Handle);
-        Closing += (_, _) =>
+        Closing += (_, e) =>
         {
+            // run on in the notification area, if that is switched on: the window only hides
+            if (Tray.HideInstead()) { e.Cancel = true; return; }
+            Tray.Dispose();
             P.SaveEpisodePosition();
             P.StopCast(resumeHere: false);
             App.Settings.Shuffle = P.Shuffle;
@@ -74,6 +77,7 @@ public partial class MainWindow : Window
         };
 
         BuildTaskbarButtons();
+        Tray.Sync();
         ShowTabs();
         ShowWebTabs();
         WebServices.Changed += () => Dispatcher.BeginInvoke(ShowWebTabs);

@@ -50,6 +50,7 @@ async function start() {
   shell.tabs = init.tabs;
   await loadWeb();
   await loadDisplay();
+  if (shell.display.runInTray) void host.tray(true);
   await loadTranslation();
   void call<{ canIdentify: boolean }>("meta.state").then(m => { shell.canIdentify = m.canIdentify; });
   const root = document.getElementById("root")!;

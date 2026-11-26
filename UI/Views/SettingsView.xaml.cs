@@ -78,6 +78,7 @@ public partial class SettingsView : UserControl
     void LoadDisplay()
     {
         QuickplayPlaysBox.IsChecked = App.Settings.QuickplayPlays;
+        RunInTrayBox.IsChecked = App.Settings.RunInTray;
         _settingUp = true;
         VizStyle.ItemsSource = Visualizer.Styles;
         VizColour.ItemsSource = Visualizer.Palettes;

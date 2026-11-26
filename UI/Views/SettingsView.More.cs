@@ -292,6 +292,15 @@ public partial class SettingsView
         return true;
     }
 
+    // ---------- when the window is closed ----------
+
+    void RunInTray_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.RunInTray = RunInTrayBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        Tray.Sync();
+    }
+
     // ---------- quickplay ----------
 
     void QuickplayPlays_Click(object sender, RoutedEventArgs e)

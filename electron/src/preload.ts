@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("phoenix", {
   quit: (): Promise<void> => ipcRenderer.invoke("phoenix:quit"),
   /** Opens (true) or closes (false) the mini player. */
   mini: (on: boolean): Promise<void> => ipcRenderer.invoke("phoenix:mini", on),
+  /** Keeps Phoenix running in the tray when its window is closed (true), or not; says whether the icon is shown. */
+  tray: (on: boolean): Promise<boolean> => ipcRenderer.invoke("phoenix:tray", on),
   /** Tells the system whether the theme is light or dark, so the title bar it draws matches. */
   themeBase: (base: string, background: string): Promise<void> => ipcRenderer.invoke("phoenix:themeBase", base, background),
   miniState: (): Promise<unknown> => ipcRenderer.invoke("phoenix:miniState"),

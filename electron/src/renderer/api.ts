@@ -14,6 +14,7 @@ export interface Host {
   quit(): Promise<void>;
   trash(path: string): Promise<boolean>;
   mini(on: boolean): Promise<void>;
+  tray(on: boolean): Promise<boolean>;
   themeBase(base: string, background: string): Promise<void>;
   miniState(): Promise<{ open: boolean; visible?: boolean; onTop?: boolean; text?: string }>;
   setFullscreen(on: boolean): Promise<void>;

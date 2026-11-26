@@ -831,6 +831,25 @@ public static partial class Smoke
             string.Join(",", Themes.All().Take(3).Select(t => t.Id)) == "light,dark,system" && Themes.Current.Id == "system" && Themes.Current.IsDark == Themes.SystemIsDark && Themes.Current.BuiltIn,
             $"Windows dark: {Themes.SystemIsDark}, drawn {Themes.Current.Base}");
         Themes.Apply(Themes.Light);
+
+        // running on in the notification area: off by default; on, closing the window only hides it
+        {
+            var win = App.Win;
+            var offAtFirst = !App.Settings.RunInTray && !Tray.Shown;
+            App.Settings.RunInTray = true;
+            Tray.Sync();
+            var shown = Tray.Shown;
+            win.Close();
+            await Task.Delay(300);
+            var hidden = !win.IsVisible && Application.Current.MainWindow == win;
+            Tray.Restore();
+            await Task.Delay(300);
+            Check("keeping Phoenix in the notification area: off at first; on, closing the window hides it and the icon brings it back",
+                offAtFirst && shown && hidden && win.IsVisible, $"off at first {offAtFirst}, icon {shown}, hidden {hidden}, back {win.IsVisible}");
+            App.Settings.RunInTray = false;
+            Tray.Sync();
+            Check("switching it off takes the icon away", !Tray.Shown);
+        }
         try { File.Delete(export); File.Delete(notTheme); } catch { }
         S.Theme = wasTheme;
         App.ApplyTheme(wasTheme);

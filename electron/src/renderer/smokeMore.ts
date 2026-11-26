@@ -234,6 +234,13 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runCast(check);
   await runTranslate(check, settle);
   await runMove(check);
+  // keeping Phoenix in the tray: off at first; on, its icon is put in the tray, and taken away again when off
+  const offAtFirst = !(await call<{ runInTray: boolean }>("display.state")).runInTray;
+  const d = await call<{ runInTray: boolean }>("display.set", { runInTray: true });
+  const shown = await host.tray(d.runInTray);
+  const gone = !(await host.tray(false));
+  await call("display.set", { runInTray: false });
+  check("keeping Phoenix in the tray: off at first, and the icon comes and goes with the setting", offAtFirst && d.runInTray && shown && gone, `${offAtFirst} ${shown} ${gone}`);
 }
 
 // ---------- moving the data folder (the self-test copies, but never changes where Phoenix keeps its data) ----------

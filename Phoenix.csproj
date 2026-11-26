@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- for the notification-area icon (UI\Tray.cs) only; its names are not imported everywhere -->
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Phoenix</AssemblyName>
     <!-- the app was first called Halcyon; the code keeps that namespace -->
     <RootNamespace>Halcyon</RootNamespace>
@@ -24,6 +26,11 @@
   </PropertyGroup>
 
 
+
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <!-- the offline translation engine (see translate-engine\NOTICE.txt) ships beside the program -->
   <ItemGroup>

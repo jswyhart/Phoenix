@@ -82,6 +82,7 @@ public class Settings
     public string LibreTranslateUrl { get; set; } = "";
     public bool LyricsAuto { get; set; }                  // look lyrics up online when a song has none
     public bool ShowLyrics { get; set; }                  // now playing's side shows lyrics instead of the queue
+    public bool RunInTray { get; set; }                   // closing the window leaves Phoenix playing in the tray (desktop)
     public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)
     public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
     public bool Levelling { get; set; }                   // play every song at about the same loudness

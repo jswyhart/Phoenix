@@ -7,7 +7,7 @@ import { h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 import { customTabsSection, streamingPanel } from "./settingsWeb";
 import { metadataPanel } from "./settingsMeta";
-import { loadDisplay, lyricsSection, photosSection, quickplaySection, translationSection } from "./settingsDisplay";
+import { loadDisplay, lyricsSection, photosSection, quickplaySection, translationSection, traySection } from "./settingsDisplay";
 import { playbackPanel } from "./settingsPlayback";
 import { podcastsPanel } from "./settingsPodcasts";
 import { themeSection } from "./themes";
@@ -213,8 +213,9 @@ export function settingsPage(): SettingsPage {
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
   const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
+  const trayBox = traySection();
   const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), translate = translationSection(), playback = playbackPanel(), podcasts = podcastsPanel(), theme = themeSection();
-  const display = { shown: async () => { await loadDisplay(); quick.shown(); photos.shown(); lyrics.shown(); } };
+  const display = { shown: async () => { await loadDisplay(); trayBox.shown(); quick.shown(); photos.shown(); lyrics.shown(); } };
   const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display, translate], Playback: [playback], Podcasts: [podcasts] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
@@ -224,7 +225,7 @@ export function settingsPage(): SettingsPage {
         (() => { const b = pill("FIND DUPLICATES AND MISSING FILES", () => shell.navigate("care")); b.title = "The same song stored twice, and songs whose files have gone"; return b; })()),
       scanStatus),
     Metadata: meta.el,
-    Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, ownTabs.el, quick.el, photos.el, viz.el),
+    Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, ownTabs.el, trayBox.el, quick.el, photos.el, viz.el),
     Translation: h("div", h("div.h2", "translation and lyrics"), translate.el, lyrics.el),
     Playback: playback.el,
     Podcasts: podcasts.el,

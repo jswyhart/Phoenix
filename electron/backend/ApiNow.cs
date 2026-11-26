@@ -18,7 +18,7 @@ public static partial class Api
 
     static object DisplayState() => new
     {
-        quickplayPlays = S.QuickplayPlays, backdrops = S.Backdrops, lyricsAuto = S.LyricsAuto, showLyrics = S.ShowLyrics,
+        quickplayPlays = S.QuickplayPlays, backdrops = S.Backdrops, runInTray = S.RunInTray, lyricsAuto = S.LyricsAuto, showLyrics = S.ShowLyrics,
         backdropUsage = Backdrops.Usage() is var (artists, bytes) && artists > 0 ? $"photos of {artists} artist{(artists == 1 ? "" : "s")} kept  ·  {bytes / 1048576.0:0.#} MB" : "no photos kept"
     };
 
@@ -28,6 +28,7 @@ public static partial class Api
         Rpc.On("display.set", p =>
         {
             if (p.Has("quickplayPlays")) S.QuickplayPlays = p.Bool("quickplayPlays");
+            if (p.Has("runInTray")) S.RunInTray = p.Bool("runInTray");
             if (p.Has("backdrops")) S.Backdrops = p.Bool("backdrops");
             if (p.Has("lyricsAuto")) S.LyricsAuto = p.Bool("lyricsAuto");
             if (p.Has("showLyrics")) S.ShowLyrics = p.Bool("showLyrics");

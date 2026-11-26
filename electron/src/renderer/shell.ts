@@ -26,7 +26,7 @@ export const shell = {
   /** AcoustID is set up (a key and fpcalc): songs can be identified by their sound. */
   canIdentify: false,
   /** settings → display's choices the screens follow (quickplay clicks, artist photos, lyrics). */
-  display: { quickplayPlays: false, backdrops: false, lyricsAuto: false, showLyrics: false, backdropUsage: "" },
+  display: { quickplayPlays: false, backdrops: false, lyricsAuto: false, showLyrics: false, backdropUsage: "", runInTray: false },
   nowOpen: () => false,
   /** The video drawing surface (self-test and measurement). */
   video: null as unknown as import("./video").VideoView,

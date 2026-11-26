@@ -111,6 +111,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Halcyon.UI.Tray.Dispose();
         try { if (!SmokeMode) Settings.Save(); } catch { }
         if (!SmokeMode) Updater.InstallWaiting();   // an update fetched earlier goes in now that Phoenix is closing
         base.OnExit(e);
