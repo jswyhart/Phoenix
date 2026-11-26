@@ -1,6 +1,6 @@
 ; Phoenix for Windows: setup wizard. Built by build.py (which passes Arch, Version and SourceDir).
 #ifndef Version
-  #define Version "1.0.0"
+  #define Version "1.0.1"
 #endif
 #ifndef Arch
   #define Arch "x64"

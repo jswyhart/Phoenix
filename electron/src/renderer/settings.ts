@@ -216,7 +216,7 @@ export function settingsPage(): SettingsPage {
   const trayBox = traySection();
   const quick = quickplaySection(), photos = photosSection(), lyrics = lyricsSection(), translate = translationSection(), playback = playbackPanel(), podcasts = podcastsPanel(), theme = themeSection();
   const display = { shown: async () => { await loadDisplay(); trayBox.shown(); quick.shown(); photos.shown(); lyrics.shown(); } };
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, ownTabs, display, viz], Streaming: [streaming], Metadata: [meta], Translation: [display, translate], Playback: [playback], Podcasts: [podcasts] };
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [theme, tabsBox, display, viz], Streaming: [streaming, ownTabs], Metadata: [meta], Translation: [display, translate], Playback: [playback], Podcasts: [podcasts] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
@@ -225,11 +225,11 @@ export function settingsPage(): SettingsPage {
         (() => { const b = pill("FIND DUPLICATES AND MISSING FILES", () => shell.navigate("care")); b.title = "The same song stored twice, and songs whose files have gone"; return b; })()),
       scanStatus),
     Metadata: meta.el,
-    Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, ownTabs.el, trayBox.el, quick.el, photos.el, viz.el),
+    Display: h("div", h("div.h2", "display"), theme.el, tabsBox.el, trayBox.el, quick.el, photos.el, viz.el),
     Translation: h("div", h("div.h2", "translation and lyrics"), translate.el, lyrics.el),
     Playback: playback.el,
     Podcasts: podcasts.el,
-    Streaming: streaming.el,
+    Streaming: h("div", streaming.el, ownTabs.el),
     Listening: listening.el,
     Storage: storage.el,
     Updates: updates.el,

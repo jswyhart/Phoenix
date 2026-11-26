@@ -1,5 +1,4 @@
-// settings → servers → streaming (which services are on and where each is shown) and the "tabs of your own" part of
-// settings → display. As on Windows.
+// settings → servers → streaming: which services are on, where each is shown, and tabs of your own. As on Windows.
 import { call, host } from "./api";
 import { confirm, h, pill } from "./ui";
 import { loadWeb, onWeb, Service, webState } from "./web";
@@ -52,7 +51,7 @@ export function streamingPanel() {
   const example = host.platform === "mac" ? "/Users/me/player/index.html" : host.platform === "win" ? "C:\\apps\\player\\index.html" : "/home/me/player/index.html";
 
   const el = h("div", h("div.h2", "streaming services"),
-    note("Phoenix can show a streaming service's own web player in its window. Choose where each one goes with “show in”: a collection tab of its own, under any part of your collection (music services start on a tab of their own, video services under videos), or in a tab you made yourself under settings → display. You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the visualizer does not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."),
+    note("Phoenix can show a streaming service's own web player in its window. Choose where each one goes with “show in”: a collection tab of its own, under any part of your collection (music services start on a tab of their own, video services under videos), or in a tab you made yourself (below). You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the visualizer does not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."),
     label("MUSIC", true), musicRows,
     label("VIDEO"), videoRows,
     label("YOUR OWN"), note(`Any web address, or an HTML file on this computer (for example ${example}).`), customRows,
@@ -87,7 +86,7 @@ export function customTabsSection() {
   const addBtn = pill("ADD TAB", () => void add());
   addBtn.style.marginLeft = "8px";
   const el = h("div", label("TABS OF YOUR OWN"),
-    note("A tab of your own sits with the others in your collection and holds the streaming services you put in it (settings → servers → streaming → “show in”)."),
+    note("A tab of your own sits with the others in your collection and holds the streaming services you put in it (choose it under “show in” above)."),
     rows, h("div", { style: { display: "flex", alignItems: "center", marginTop: "6px" } }, nameBox, addBtn));
   return { el, shown: paint };
 }

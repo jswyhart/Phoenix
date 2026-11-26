@@ -94,11 +94,11 @@ public partial class SettingsView
         {
             var t = tab;
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
-            var remove = Make.Button("remove", "TextBtn", () => { WebServices.RemoveTab(t); LoadCustomTabs(); }, "The services in it go back to where they were before", new Thickness(12, 0, 0, 0));
+            var remove = Make.Button("remove", "TextBtn", () => { WebServices.RemoveTab(t); LoadWeb(); }, "The services in it go back to where they were before", new Thickness(12, 0, 0, 0));
             var rename = Make.Button("rename", "TextBtn", () =>
             {
                 var name = InputDialog.Ask("Rename tab", "Name", t.Name);
-                if (!string.IsNullOrWhiteSpace(name)) { WebServices.RenameTab(t, name); LoadCustomTabs(); }
+                if (!string.IsNullOrWhiteSpace(name)) { WebServices.RenameTab(t, name); LoadWeb(); }
             }, null, new Thickness(12, 0, 0, 0));
             DockPanel.SetDock(remove, Dock.Right);
             DockPanel.SetDock(rename, Dock.Right);
@@ -119,8 +119,8 @@ public partial class SettingsView
         if (name == "") { App.Win.SetStatus("give the tab a name"); return null; }
         var tab = WebServices.AddTab(name);
         NewTabName.Text = "";
-        LoadCustomTabs();
-        App.Win.SetStatus($"“{name}” added to your collection tabs; put services in it under settings → servers → streaming");
+        LoadWeb();   // the new tab is offered under each service's "show in"
+        App.Win.SetStatus($"“{name}” added to your collection tabs; choose it under a service's “show in”");
         return tab;
     }
 
@@ -194,7 +194,6 @@ public partial class SettingsView
     void LoadBackdrops()
     {
         LoadTabs();
-        LoadCustomTabs();
         BackdropsBox.IsChecked = S.Backdrops;
         var (artists, bytes) = Backdrops.Usage();
         BackdropUsage.Text = artists == 0 ? "No photos kept yet." : $"Photos of {artists} artist{(artists == 1 ? "" : "s")} kept, using {Storage.SizeText(bytes)}.";

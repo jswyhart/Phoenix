@@ -232,6 +232,7 @@ public partial class SettingsView
 
     void LoadWeb()
     {
+        LoadCustomTabs();   // tabs of your own sit with the streaming services they hold
         WebMusicPanel.Children.Clear();
         WebVideoPanel.Children.Clear();
         WebCustomPanel.Children.Clear();

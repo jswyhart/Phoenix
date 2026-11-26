@@ -692,7 +692,13 @@ async function runStreaming(check: Check, shot: Shot, settle: Settle, until: Unt
   const rows = [...document.querySelectorAll<HTMLElement>(".webrow")].filter(visible);
   const yt = rows.find(r => r.dataset.service === "youtube");
   check("settings: streaming lists the services with where each is shown", rows.length >= 11 && !!yt && yt.querySelector("select")!.value === made.page, `${rows.length} rows, youtube in ${yt?.querySelector("select")?.value}`);
+  const shownLabels = () => [...document.querySelectorAll<HTMLElement>(".label")].filter(visible).map(l => l.textContent);
+  check("tabs of your own are set up with the streaming services", shownLabels().includes("TABS OF YOUR OWN") && [...document.querySelectorAll(".customtab")].some(visible));
   await shot("31-settings-streaming");
+  settings.showCategory("software", "Display");
+  await settle(300);
+  check("and not under display", !shownLabels().includes("TABS OF YOUR OWN"));
+  settings.showCategory("servers", "Streaming");
   await call("tabs.removeCustom", { id: made.id });
   await until(() => !subTabs().includes("watch"), 3000);
   const back = (await call<{ services: { id: string; place: string }[] }>("web.state")).services.find(s => s.id === "youtube");

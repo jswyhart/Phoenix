@@ -832,6 +832,12 @@ public static partial class Smoke
             $"Windows dark: {Themes.SystemIsDark}, drawn {Themes.Current.Base}");
         Themes.Apply(Themes.Light);
 
+        {
+            var sv = App.Win.Page<SettingsView>("settings");
+            var holder = (FrameworkElement)((FrameworkElement)sv.FindName("CustomTabRows")).Parent;
+            Check("tabs of your own are set up under servers → streaming, not display", holder.Name == "PanelWeb", holder.Name);
+        }
+
         // running on in the notification area: off by default; on, closing the window only hides it
         {
             var win = App.Win;

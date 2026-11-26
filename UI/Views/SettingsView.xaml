@@ -165,13 +165,6 @@
                     <TextBlock Style="{StaticResource Label}" Text="COLLECTION TABS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="Choose which tabs your collection shows. A tab that is off is only hidden: nothing in it is removed, and it comes back as it was."/>
                     <WrapPanel x:Name="TabChecks"/>
-                    <TextBlock Style="{StaticResource Label}" Text="TABS OF YOUR OWN" Margin="0,16,0,3"/>
-                    <TextBlock Style="{StaticResource Note}" Text="A tab of your own sits with the others in your collection and holds the streaming services you put in it (settings → servers → streaming → “show in”)."/>
-                    <StackPanel x:Name="CustomTabRows"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <TextBox x:Name="NewTabName" Width="220" ToolTip="A name for the new tab"/>
-                        <Button Style="{StaticResource PillBtn}" Content="ADD TAB" Margin="8,0,0,0" Click="AddTab_Click"/>
-                    </StackPanel>
                     <TextBlock Style="{StaticResource Label}" Text="WHEN THE WINDOW IS CLOSED" Margin="0,22,0,3"/>
                     <CheckBox x:Name="RunInTrayBox" Content="Keep Phoenix running in the notification area" Margin="0,4,0,0" Click="RunInTray_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: closing the window hides it and the music carries on. Phoenix's icon by the clock brings it back; right-click the icon to play, pause, skip or quit. Off: closing the window quits Phoenix."/>
@@ -367,7 +360,7 @@
 
                 <StackPanel x:Name="PanelWeb" Visibility="Collapsed">
                     <TextBlock Text="streaming services" Style="{StaticResource Head}"/>
-                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a streaming service's own web player in its window. Choose where each one goes with “show in”: a collection tab of its own, under any part of your collection (music services start on a tab of their own, video services under videos), or in a tab you made yourself under settings → display. You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the equalizer and visualizer do not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."/>
+                    <TextBlock Style="{StaticResource Note}" Text="Phoenix can show a streaming service's own web player in its window. Choose where each one goes with “show in”: a collection tab of its own, under any part of your collection (music services start on a tab of their own, video services under videos), or in a tab you made yourself (below). You sign in on the service's own page; Phoenix does not see your password. Their music and videos stay in their players: they are not added to your library, playlists or search, and the equalizer and visualizer do not apply. While a service is playing, the player bar's controls work it, showing only the controls that service supports."/>
                     <TextBlock Style="{StaticResource Label}" Text="MUSIC"/>
                     <StackPanel x:Name="WebMusicPanel" Margin="0,4,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="VIDEO" Margin="0,18,0,3"/>
@@ -391,6 +384,14 @@
                         <Button Grid.Column="3" Style="{StaticResource PillBtn}" Content="ADD" Margin="8,0,0,0" Click="WebAdd_Click"/>
                     </Grid>
                     <TextBlock x:Name="WebStatus" Style="{StaticResource Status}"/>
+                    <TextBlock Style="{StaticResource Label}" Text="TABS OF YOUR OWN" Margin="0,22,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="A tab of your own sits with the others in your collection and holds the streaming services you put in it (choose it under “show in” above)."/>
+                    <StackPanel x:Name="CustomTabRows"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <TextBox x:Name="NewTabName" Width="220" ToolTip="A name for the new tab"/>
+                        <Button Style="{StaticResource PillBtn}" Content="ADD TAB" Margin="8,0,0,0" Click="AddTab_Click"/>
+                    </StackPanel>
+
                     <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Pages are shown with the browser engine built into Windows (Microsoft Edge WebView2), which can play protected streams. Firefox cannot be placed inside another program's window, so it could not be used here. Some services limit picture quality in browsers, or may refuse an embedded browser."/>
                 </StackPanel>
 
