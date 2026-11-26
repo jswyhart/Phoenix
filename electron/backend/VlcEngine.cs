@@ -308,7 +308,61 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
 
     // ---------- video thumbnails ----------
 
-    static readonly object ThumbLock = new(), LogLock = new();
+    static readonly object ThumbLock = new(), LogLock = new(), SpeechLock = new();
+
+    /// <summary>
+    /// A song as 16 kHz mono samples for the speech model: VLC converts it to a WAV file as fast as it can (no sound
+    /// plays), and the samples are read back from it.
+    /// </summary>
+    public float[] DecodeForSpeech(string source, CancellationToken cancel)
+    {
+        lock (SpeechLock)
+        {
+            var wav = Path.Combine(Path.GetTempPath(), $"phoenix-speech-{Guid.NewGuid():N}.wav");
+            try
+            {
+                using var media = Open(source);
+                media.AddOption($":sout=#transcode{{vcodec=none,acodec=s16l,channels=1,samplerate=16000}}:std{{access=file,mux=wav,dst='{wav.Replace("'", "\\'")}'}}");
+                media.AddOption(":no-sout-video");
+                media.AddOption(":sout-keep");
+                using var mp = new MediaPlayer(media);
+                using var done = new ManualResetEventSlim();
+                mp.EndReached += (_, _) => done.Set();
+                mp.EncounteredError += (_, _) => done.Set();
+                mp.Stopped += (_, _) => done.Set();
+                mp.Play();
+                while (!done.Wait(200))
+                    if (cancel.IsCancellationRequested) break;
+                ThreadPool.QueueUserWorkItem(_ => { try { mp.Stop(); } catch { } });
+                Thread.Sleep(300);
+                cancel.ThrowIfCancellationRequested();
+                return ReadWav(wav);
+            }
+            finally { try { File.Delete(wav); } catch { } }
+        }
+    }
+
+    /// <summary>16-bit PCM from a WAV file, as -1..1.</summary>
+    static float[] ReadWav(string file)
+    {
+        var bytes = File.ReadAllBytes(file);
+        // find the "data" chunk
+        var at = 12;
+        while (at + 8 <= bytes.Length)
+        {
+            var id = System.Text.Encoding.ASCII.GetString(bytes, at, 4);
+            var size = BitConverter.ToInt32(bytes, at + 4);
+            if (id == "data")
+            {
+                var n = Math.Min(size < 0 ? int.MaxValue : size, bytes.Length - at - 8) / 2;
+                var samples = new float[n];
+                for (var i = 0; i < n; i++) samples[i] = BitConverter.ToInt16(bytes, at + 8 + i * 2) / 32768f;
+                return samples;
+            }
+            at += 8 + Math.Max(0, size) + (size & 1);
+        }
+        return Array.Empty<float>();
+    }
 
     /// <summary>
     /// Saves a picture from about a tenth of the way into a video as a PNG <paramref name="width"/> pixels wide.

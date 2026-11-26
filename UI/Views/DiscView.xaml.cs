@@ -29,8 +29,16 @@ public partial class DiscView : UserControl
     {
         InitializeComponent();
         BurnList.ItemsSource = App.BurnList;
+        foreach (var k in CdAudio.DiscKinds) BurnKindBox.Items.Add(k);
+        BurnKindBox.SelectedIndex = Math.Clamp(App.Settings.BurnKind, 0, CdAudio.DiscKinds.Length - 1);
         App.BurnList.CollectionChanged += (_, _) => UpdateBurnCaption();
-        IsVisibleChanged += (_, _) => { if (IsVisible) { RefreshDrives(); UpdateRipFormat(); } };
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) return;
+            RefreshDrives();
+            UpdateRipFormat();
+            BurnKindBox.SelectedIndex = Math.Clamp(App.Settings.BurnKind, 0, CdAudio.DiscKinds.Length - 1);
+        };
         TrackDrag.Attach(BurnList, o => o is Track t ? new[] { t } : null, BurnList);
         UpdateBurnCaption();
         ShowPivot("burn");
@@ -200,11 +208,42 @@ public partial class DiscView : UserControl
 
     // ---------- burn ----------
 
+    void BurnKind_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (BurnKindBox.SelectedIndex < 0 || BurnKindBox.SelectedIndex == App.Settings.BurnKind) { UpdateBurnCaption(); return; }
+        App.Settings.BurnKind = BurnKindBox.SelectedIndex;
+        App.Settings.Save();
+        UpdateBurnCaption();
+    }
+
+    /// <summary>About how many bytes the burn list takes on an MP3 CD or a data disc.</summary>
+    public static long DiscBytes(IEnumerable<Track> tracks, bool mp3Only)
+    {
+        long total = 0;
+        foreach (var t in tracks)
+        {
+            var copy = t.IsLocal && (!mp3Only || Path.GetExtension(t.Location).Equals(".mp3", StringComparison.OrdinalIgnoreCase));
+            long size = 0;
+            if (copy) try { size = new FileInfo(t.Location).Length; } catch { }
+            total += size > 0 ? size : t.DurationMs * Math.Clamp(App.Settings.BurnMp3Kbps, 64, 320) / 8;
+        }
+        return total;
+    }
+
     void UpdateBurnCaption()
     {
         var ms = App.BurnList.Sum(t => t.DurationMs);
         BurnEmpty.Visibility = App.BurnList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        BurnCap.Text = $"BURN LIST  {App.BurnList.Count}   ·   {Fmt.Time(ms)}{(ms > 80 * 60_000 ? "   ·   too long for one CD" : "")}";
+        var kind = Math.Clamp(App.Settings.BurnKind, 0, CdAudio.DiscKinds.Length - 1);
+        if (kind == 0)
+        {
+            BurnCap.Text = $"BURN LIST  {App.BurnList.Count}   ·   {Fmt.Time(ms)}{(ms > 80 * 60_000 ? "   ·   too long for one CD" : "")}";
+            return;
+        }
+        var bytes = DiscBytes(App.BurnList, kind == 1);
+        var mb = bytes / 1_000_000;
+        var fits = bytes <= CdAudio.CdBytes ? "" : kind == 1 ? "   ·   too big for one CD" : bytes <= 4_700_000_000 ? "   ·   needs a DVD" : bytes <= 25_000_000_000 ? "   ·   needs a Blu-ray" : "   ·   too big for one disc";
+        BurnCap.Text = $"BURN LIST  {App.BurnList.Count}   ·   {Fmt.Time(ms)}   ·   about {mb:N0} MB{fits}";
     }
 
     void BurnRemove_Click(object sender, RoutedEventArgs e)
@@ -230,6 +269,8 @@ public partial class DiscView : UserControl
         if (Drive is not { } drive) { BurnStatus.Text = "No disc drive found."; return; }
         var tracks = App.BurnList.ToList();
         if (tracks.Count == 0) { BurnStatus.Text = "The burn list is empty."; return; }
+        var kind = Math.Clamp(App.Settings.BurnKind, 0, CdAudio.DiscKinds.Length - 1);
+        if (kind > 0) { await BurnFilesAsync(drive, tracks, kind == 1); return; }
         if (tracks.Count > 99) { BurnStatus.Text = "An audio CD can hold at most 99 tracks."; return; }
         if (tracks.Sum(t => t.DurationMs) > 80 * 60_000) { BurnStatus.Text = "The burn list is longer than 80 minutes. Remove some songs."; return; }
 
@@ -263,6 +304,52 @@ public partial class DiscView : UserControl
             thread.Start();
             if (await done.Task is { } error) throw error;
             BurnStatus.Text = $"Burned {tracks.Count} tracks. The disc is ready.";
+        }
+        catch (OperationCanceledException) { BurnStatus.Text = "Stopped before burning; the disc was not written."; }
+        catch (Exception ex) { BurnStatus.Text = "Burn failed: " + (ex.InnerException?.Message ?? ex.Message); }
+        finally
+        {
+            _burnCancel = null;
+            BurnBtn.Content = "START BURN";
+            try { Directory.Delete(temp, true); } catch { }
+        }
+    }
+
+    /// <summary>The songs for an MP3 or data disc, in burn list order.</summary>
+    public static List<CdAudio.DiscFile> DiscFiles(IEnumerable<Track> tracks) =>
+        tracks.Select(t => new CdAudio.DiscFile(t.IsLocal ? t.Location : Player.From(t).Url, t.IsLocal, t.Title, t.Artist, t.Album, t.TrackNo, t.DurationMs, 0)).ToList();
+
+    /// <summary>A label for the disc: the album when every song is from one, otherwise the date.</summary>
+    public static string DiscLabel(IReadOnlyList<Track> tracks) =>
+        tracks.Select(t => t.Album).Distinct().Count() == 1 && tracks[0].Album != "" ? tracks[0].Album : "Phoenix " + DateTime.Now.ToString("yyyy-MM-dd");
+
+    async Task BurnFilesAsync(string drive, List<Track> tracks, bool mp3Only)
+    {
+        if (mp3Only && DiscBytes(tracks, true) > CdAudio.CdBytes) { BurnStatus.Text = "The songs won't fit on one CD (700 MB). Remove some, choose a lower MP3 quality in settings, or burn a data disc to a DVD."; return; }
+        _burnCancel = new CancellationTokenSource();
+        var cancel = _burnCancel.Token;
+        BurnBtn.Content = "STOP";
+        var temp = Path.Combine(Path.GetTempPath(), $"halcyon-burn-{Guid.NewGuid():N}");
+        try
+        {
+            var songs = DiscFiles(tracks);
+            var kbps = Math.Clamp(App.Settings.BurnMp3Kbps, 64, 320) * 1000;
+            // prepare every file first so a bad one is caught before the disc is touched
+            await Task.Run(() => CdAudio.StageFiles(songs, temp, mp3Only, kbps,
+                i => Dispatcher.BeginInvoke(() => BurnStatus.Text = $"preparing {i + 1} of {songs.Count}: {songs[i].Title}"), cancel), cancel);
+            cancel.ThrowIfCancellationRequested();
+            var label = DiscLabel(tracks);
+            var done = new TaskCompletionSource<Exception?>();
+            var thread = new Thread(() =>
+            {
+                try { CdAudio.BurnData(drive, temp, label, s => Dispatcher.BeginInvoke(() => BurnStatus.Text = s)); done.SetResult(null); }
+                catch (Exception ex) { done.SetResult(ex); }
+            });
+            thread.SetApartmentState(ApartmentState.STA);   // IMAPI2 is apartment-threaded
+            thread.IsBackground = true;
+            thread.Start();
+            if (await done.Task is { } error) throw error;
+            BurnStatus.Text = $"Burned {tracks.Count} songs{(mp3Only ? " as MP3s" : "")}. The disc is ready.";
         }
         catch (OperationCanceledException) { BurnStatus.Text = "Stopped before burning; the disc was not written."; }
         catch (Exception ex) { BurnStatus.Text = "Burn failed: " + (ex.InnerException?.Message ?? ex.Message); }

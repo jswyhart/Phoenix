@@ -72,6 +72,32 @@ public partial class SettingsView : UserControl
     }
 
     void Ok_Click(object sender, RoutedEventArgs e) => App.Win.GoBackOr("quickplay");
+    bool _loadingBurn;
+
+    void LoadBurn()
+    {
+        _loadingBurn = true;
+        var kind = Math.Clamp(S.BurnKind, 0, 2);
+        BurnAudioRadio.IsChecked = kind == 0;
+        BurnMp3Radio.IsChecked = kind == 1;
+        BurnDataRadio.IsChecked = kind == 2;
+        BurnKbpsBox.SelectedItem = BurnKbpsBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == S.BurnMp3Kbps) ?? BurnKbpsBox.Items[2];
+        _loadingBurn = false;
+    }
+
+    void BurnKind_Click(object sender, RoutedEventArgs e)
+    {
+        S.BurnKind = int.Parse((string)((FrameworkElement)sender).Tag);
+        S.Save();
+    }
+
+    void BurnKbps_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingBurn || BurnKbpsBox.SelectedItem is not ComboBoxItem { Tag: int kbps }) return;
+        S.BurnMp3Kbps = kbps;
+        S.Save();
+    }
+
     void ViewBurnList_Click(object sender, RoutedEventArgs e) { App.Win.Navigate("disc"); App.Win.Page<DiscView>("disc").ShowPivot("burn"); }
     void ViewPhone_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("phone");
 
@@ -100,7 +126,7 @@ public partial class SettingsView : UserControl
     public SettingsView()
     {
         InitializeComponent();
-        for (var i = 0; i < CdAudio.Formats.Length; i++)
+        foreach (var i in CdAudio.FormatOrder)
         {
             var index = i;
             var rb = new RadioButton { Content = CdAudio.Formats[i], GroupName = "ripFormat", IsChecked = S.RipFormat == i, Margin = new Thickness(0, 0, 0, 8) };
@@ -108,6 +134,8 @@ public partial class SettingsView : UserControl
             rb.Click += (_, _) => { S.RipFormat = index; S.Save(); };
             RipFormats.Children.Add(rb);
         }
+        foreach (var kbps in new[] { 128, 192, 256, 320 }) BurnKbpsBox.Items.Add(new ComboBoxItem { Content = $"{kbps} kbps", Tag = kbps });
+        LoadBurn();
         ShowCategory("software");
         RefreshFolders();
         RefreshThemes();

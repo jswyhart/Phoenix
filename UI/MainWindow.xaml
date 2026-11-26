@@ -114,6 +114,7 @@
                     <DockPanel x:Name="LyricsPane" Visibility="Collapsed">
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8,4,0,0">
                             <Button x:Name="LyricsFindBtn" Style="{StaticResource TextBtn}" Content="find online" Click="LyricsFind_Click" Margin="0,0,14,0" ToolTip="Look this song up on LRCLIB (sends its title, artist and album)"/>
+                            <Button x:Name="LyricsListenBtn" Style="{StaticResource TextBtn}" Content="listen" Click="LyricsListen_Click" Margin="0,0,14,0" ToolTip="Let the speech model on this computer write down what is sung (download one in settings → translation)"/>
                             <Button x:Name="LyricsImportBtn" Style="{StaticResource TextBtn}" Content="import file" Click="LyricsImport_Click" Margin="0,0,14,0" ToolTip="Use a .lrc or .txt file"/>
                             <Button x:Name="LyricsPasteBtn" Style="{StaticResource TextBtn}" Content="paste" Click="LyricsPaste_Click" Margin="0,0,14,0" ToolTip="Use the lyrics on the clipboard"/>
                             <Button x:Name="LyricsRemoveBtn" Style="{StaticResource TextBtn}" Content="remove" Click="LyricsRemove_Click" ToolTip="Remove the lyrics you imported for this song"/>

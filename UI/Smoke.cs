@@ -1454,7 +1454,7 @@ public static partial class Smoke
         }
         for (var f = 0; f < CdAudio.Formats.Length; f++)
         {
-            var outFile = Path.Combine(_dir, "enc-out" + CdAudio.Extension(f));
+            var outFile = Path.Combine(_dir, (f == 0 ? "enc-out" : $"enc-out-{f}") + CdAudio.Extension(f));
             try
             {
                 await Task.Run(() => CdAudio.Encode(wav, outFile, f));
@@ -1464,6 +1464,32 @@ public static partial class Smoke
                 Check($"rip encoder {CdAudio.Formats[f]}", new FileInfo(outFile).Length > 2000 && Math.Abs(tf.Properties.Duration.TotalSeconds - 3) < 0.3, $"{new FileInfo(outFile).Length} bytes, {tf.Properties.Duration.TotalSeconds:0.00}s");
             }
             catch (Exception ex) { Check($"rip encoder {CdAudio.Formats[f]}", false, ex.Message); }
+        }
+        {
+            // an MP3 CD and a data disc: laid out in burn list order with a playlist, and a disc image built from it
+            var flac = Path.Combine(_dir, "enc-out-4.flac");
+            var songs = new List<CdAudio.DiscFile>
+            {
+                new(Path.Combine(_dir, "enc-out.mp3"), true, "First: Song", "Artist", "Album", 1, 3000, 0),
+                new(flac, true, "Second", "Artist", "Album", 2, 3000, 0),
+            };
+            var mp3Dir = Path.Combine(_dir, "mp3cd");
+            await Task.Run(() => CdAudio.StageFiles(songs, mp3Dir, true, 192000, _ => { }, CancellationToken.None));
+            var files = Directory.GetFiles(mp3Dir).Select(Path.GetFileName).OrderBy(n => n).ToArray();
+            string? converted = null;
+            try { using var tf = TagLib.File.Create(Path.Combine(mp3Dir, "02 Artist - Second.mp3")); converted = tf.Tag.Title; } catch { }
+            Check("an MP3 CD: songs as MP3s, numbered in burn list order, with a playlist",
+                string.Join("|", files) == "01 Artist - First_ Song.mp3|02 Artist - Second.mp3|playlist.m3u" && converted == "Second"
+                && File.ReadAllLines(Path.Combine(mp3Dir, "playlist.m3u")).Length == 2, string.Join("|", files) + " " + converted);
+            var dataDir = Path.Combine(_dir, "datadisc");
+            await Task.Run(() => CdAudio.StageFiles(songs, dataDir, false, 192000, _ => { }, CancellationToken.None));
+            Check("a data disc keeps the files as they are", File.Exists(Path.Combine(dataDir, "02 Artist - Second.flac")) && new FileInfo(Path.Combine(dataDir, "02 Artist - Second.flac")).Length == new FileInfo(flac).Length);
+            long imageBytes = 0; string? imageError = null;
+            var sta = new Thread(() => { try { imageBytes = CdAudio.ImageSize(mp3Dir, "Album"); } catch (Exception ex) { imageError = ex.Message; } });
+            sta.SetApartmentState(ApartmentState.STA);
+            sta.Start();
+            sta.Join();
+            Check("the disc image (ISO 9660 and Joliet) builds from the files", imageBytes > Directory.GetFiles(mp3Dir).Sum(f => new FileInfo(f).Length), imageError ?? $"{imageBytes} bytes");
         }
         var raw = Path.Combine(_dir, "burn-test.raw");
         await Task.Run(() => CdAudio.DecodeForCd(Path.Combine(_dir, "enc-out.mp3"), raw, CancellationToken.None));

@@ -1,0 +1,17 @@
+<Project>
+  <!-- Whisper.net brings the speech model's native libraries for every platform. A publish for one platform keeps only
+       its own (and its Vulkan build, for x64 Windows and Linux), which saves about 120 MB. Used by the Windows app and
+       the Mac/Linux helper. -->
+  <Target Name="PruneWhisperRuntimes" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_WhisperRid>$(RuntimeIdentifier.Replace('osx-', 'macos-'))</_WhisperRid>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WhisperOther Include="linux-arm;linux-arm64;linux-x64;macos-arm64;macos-x64;win-arm64;win-x64;win-x86" Exclude="$(_WhisperRid)" />
+      <_WhisperVulkanOther Include="linux-x64;win-x64" Exclude="$(_WhisperRid)" />
+      <_WhisperRemove Include="@(_WhisperOther->'$(PublishDir)runtimes\%(Identity)')" />
+      <_WhisperRemove Include="@(_WhisperVulkanOther->'$(PublishDir)runtimes\vulkan\%(Identity)')" />
+    </ItemGroup>
+    <RemoveDir Directories="@(_WhisperRemove)" />
+  </Target>
+</Project>

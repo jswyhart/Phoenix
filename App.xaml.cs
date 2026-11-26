@@ -64,6 +64,8 @@ public partial class App : Application
             Lib.Db.MoveDataFolder(restoredFrom.TrimEnd('\\') + "\\", AppPaths.DataDir.TrimEnd('\\') + "\\");
         Lib.Load();
         Translator.Attach(Lib.Db);
+        Halcyon.Services.SpeechLyrics.Decode = Halcyon.Services.CdAudio.DecodeForSpeech;
+        Halcyon.Services.SpeechLyrics.GpuChoice = Settings.LyricsGpu;
         if (!SmokeMode) Storage.CleanUpOld();   // the library opened from here, so copies left in a folder it was moved from can go
         Player = new Player();
         Discogs = new DiscogsClient();

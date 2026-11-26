@@ -515,6 +515,19 @@ async function runNow(check: Check, shot: Shot, settle: Settle, until: Until, so
   settings.showCategory("software", "Translation");
   await settle(300);
   check("settings: translation and lyrics has the LRCLIB switch", text("#root").includes("Look lyrics up on LRCLIB by itself"));
+  await settle(500);
+  const gpuBox = document.querySelector<HTMLSelectElement>("select.speechgpu");
+  const gpus = gpuBox ? [...gpuBox.options].map(o => o.textContent ?? "") : [];
+  check("settings lists where the speech model can run: automatic, each graphics card, the processor",
+    host.platform === "mac" || (gpus.length >= 2 && gpus[0] === "automatic" && gpus[gpus.length - 1] === "the processor only"), gpus.join(" | "));
+  check("and the speech models to download", (document.querySelector<HTMLSelectElement>("select.speechmodel")?.options.length ?? 0) === 4);
+  {
+    const started = performance.now();
+    const heard = await call<{ lrc: string | null; lines: string[]; ranOn: string; skipped: boolean }>("smoke.listenFile", { model: "tiny" });
+    check(heard.skipped ? "the speech model writes lyrics (no tiny model or speech sample to test with)" : "the speech model writes timed lyrics, line by line as it hears them",
+      !heard.skipped && !!heard.lrc && heard.lrc.startsWith("[re:Phoenix speech model") && /brown fox/i.test(heard.lrc) && heard.lines.length >= 1,
+      `${Math.round(performance.now() - started)} ms on ${heard.ranOn}: ${heard.lrc ?? ""}`);
+  }
   settings.showCategory("software");
 }
 

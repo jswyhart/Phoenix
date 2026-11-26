@@ -81,6 +81,7 @@ public partial class SettingsView
         LibreUrlBox.Text = s.LibreTranslateUrl;
         LyricsAutoBox.IsChecked = s.LyricsAuto;
         _loadingMore = false;
+        LoadSpeech();
         ShowTranslateState();
     }
 

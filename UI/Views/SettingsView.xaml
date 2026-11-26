@@ -100,7 +100,7 @@
                     <TextBlock Style="{StaticResource Note}" Text="Ripping copies the songs from an audio CD into your collection. Put a CD in the drive, click the disc icon in the lower left, then START RIP. Songs are saved in your first music folder."/>
                     <TextBlock Style="{StaticResource Label}" Text="AUDIO FORMAT AND QUALITY"/>
                     <StackPanel x:Name="RipFormats" Margin="0,4,0,0"/>
-                    <TextBlock Style="{StaticResource Note}" Margin="0,14,0,0" Text="MP3 plays everywhere. AAC is a little smaller at the same quality. WAV is an exact copy of the disc and much larger."/>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,14,0,0" Text="MP3 plays everywhere; a higher bitrate sounds better and takes more room. AAC is a little smaller at the same quality. FLAC is an exact copy of the disc at about half the size of WAV, and plays in most players. WAV is an exact copy too, and much larger."/>
                 </StackPanel>
 
                 <!-- SOFTWARE / Burn -->
@@ -108,7 +108,14 @@
                     <TextBlock Text="burn" Style="{StaticResource Head}"/>
                     <TextBlock Style="{StaticResource Note}" Text="To burn a disc, drag songs, albums or playlists from your collection to the disc icon in the lower left. That builds your burn list. Then click the disc icon, put a blank CD in the drive and choose START BURN."/>
                     <TextBlock Style="{StaticResource Label}" Text="DISC FORMAT"/>
-                    <RadioButton Content="Audio CD (plays in any CD player; holds about 80 minutes)" IsChecked="True" Foreground="{DynamicResource Fg}" Margin="0,4,0,0"/>
+                    <RadioButton x:Name="BurnAudioRadio" Content="Audio CD (plays in any CD player; holds about 80 minutes)" GroupName="burnKind" Tag="0" Click="BurnKind_Click" Foreground="{DynamicResource Fg}" Margin="0,4,0,0"/>
+                    <RadioButton x:Name="BurnMp3Radio" Content="MP3 CD (songs as MP3 files; hours of music for MP3 CD players, car stereos and computers)" GroupName="burnKind" Tag="1" Click="BurnKind_Click" Foreground="{DynamicResource Fg}" Margin="0,8,0,0"/>
+                    <RadioButton x:Name="BurnDataRadio" Content="Data disc (the files as they are, on a CD, DVD or Blu-ray; for computers and players that read them)" GroupName="burnKind" Tag="2" Click="BurnKind_Click" Foreground="{DynamicResource Fg}" Margin="0,8,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <TextBlock Text="MP3 quality" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="110"/>
+                        <ComboBox x:Name="BurnKbpsBox" Width="150" SelectionChanged="BurnKbps_Changed" ToolTip="Songs that aren't MP3s already are converted at this quality for an MP3 CD (and songs from a server, for a data disc)"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Songs that are MP3s already are copied as they are. On an MP3 or data disc the songs are numbered in burn list order and a playlist is added, so players play them in that order. A CD holds about 700 MB: around 6 hours of MP3s at 256 kbps, or 10 at 128 kbps."/>
                     <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                         <Button Style="{StaticResource PillBtn}" Content="VIEW BURN LIST" Click="ViewBurnList_Click"/>
                     </StackPanel>
@@ -279,6 +286,23 @@
                     <TextBlock Style="{StaticResource Label}" Text="LYRICS" Margin="0,22,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="In now playing, the lyrics tab can find lyrics on LRCLIB (a free, open lyrics database, often with timing), take them from a .lrc or .txt file, or from the clipboard. Lyrics you import are kept in Phoenix's data folder, not in your music folders."/>
                     <CheckBox x:Name="LyricsAutoBox" Content="Look lyrics up on LRCLIB by itself when a song has none" Margin="0,8,0,4" Click="TranslationChanged"/>
+                    <TextBlock Style="{StaticResource Label}" Text="WRITING LYRICS WITH A SPEECH MODEL" Margin="0,18,0,3"/>
+                    <TextBlock Style="{StaticResource Note}" Text="A speech model (whisper.cpp) can listen to a song and write down what is sung, with timing, on this computer: nothing is sent anywhere. It works best on clear vocals and can mishear words, especially under loud music. It runs on the graphics card when it can (AMD, Intel or NVIDIA, built in or separate) and on the processor otherwise. Models are downloaded once from whisper.cpp's page on Hugging Face."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="model" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="110"/>
+                        <ComboBox x:Name="SpeechModelBox" Width="330" SelectionChanged="SpeechModel_Changed"/>
+                        <Button x:Name="SpeechDownloadBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD" Click="SpeechDownload_Click" Margin="10,0,0,0"/>
+                        <Button x:Name="SpeechDeleteBtn" Style="{StaticResource TextBtn}" Content="delete" Click="SpeechDelete_Click" Margin="4,0,0,0" ToolTip="Remove the downloaded model to free its space"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="runs on" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="110"/>
+                        <ComboBox x:Name="SpeechGpuBox" Width="330" SelectionChanged="SpeechGpu_Changed" ToolTip="Automatic uses the separate graphics card if there is one, otherwise the built-in graphics"/>
+                    </StackPanel>
+                    <CheckBox x:Name="LyricsListenBox" Content="Write lyrics with the speech model for songs that have none, as they play" Margin="0,10,0,0" Click="LyricsListen_Click"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="SpeechAllBtn" Style="{StaticResource PillBtn}" Content="WRITE LYRICS FOR SONGS THAT HAVE NONE" Click="SpeechAll_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="SpeechStatus" Style="{StaticResource Status}" TextWrapping="Wrap"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelStorage" Visibility="Collapsed">

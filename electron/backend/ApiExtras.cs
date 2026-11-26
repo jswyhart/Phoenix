@@ -31,6 +31,7 @@ public static partial class Api
         RegisterSmokeCast();
         RegisterTranslate();
         RegisterStorage();
+        RegisterSpeech();
         Updates.Register();
     }
 

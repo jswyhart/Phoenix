@@ -85,6 +85,8 @@
         </DockPanel>
         <StackPanel x:Name="BurnBar" Grid.Row="2" Margin="0,10,0,0">
             <StackPanel Orientation="Horizontal">
+                <ComboBox x:Name="BurnKindBox" Width="130" Margin="0,0,10,0" VerticalAlignment="Center" SelectionChanged="BurnKind_Changed"
+                          ToolTip="Audio CD: plays in any CD player, up to 80 minutes. MP3 CD: hours of music for MP3 CD players and car stereos. Data disc: the files as they are, on a CD, DVD or Blu-ray"/>
                 <Button x:Name="BurnBtn" Style="{StaticResource PillBtn}" Content="START BURN" Click="Burn_Click"/>
                 <Button Style="{StaticResource PillBtn}" Content="MOVE UP" Click="BurnUp_Click"/>
                 <Button Style="{StaticResource PillBtn}" Content="MOVE DOWN" Click="BurnDown_Click"/>

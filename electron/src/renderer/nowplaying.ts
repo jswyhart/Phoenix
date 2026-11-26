@@ -47,6 +47,7 @@ export class NowPlaying {
 
   constructor(private transport: HTMLElement) {
     this.viz = new Viz(this.canvas);
+    on("speech.line", (e: { id: number; ms: number; text: string }) => this.heardLine(e));
     this.queue = new VList<QueueItem>({
       rowHeight: 44,
       render: (q, i) => h("div.queuerow",
@@ -63,6 +64,7 @@ export class NowPlaying {
     this.lyricsPane.append(this.lyricsLines, this.lyricsNote,
       h("div.lyricbtns",
         textBtn("find on LRCLIB", () => void this.lyricsAction("lyrics.find", "looking on LRCLIB…")),
+        this.listenBtn,
         textBtn("from a file…", async () => {
           const file = await host.openFile("Lyrics for this song", [{ name: "Lyrics", extensions: ["lrc", "txt"] }]);
           if (file) await this.lyricsAction("lyrics.import", "", { file });
@@ -122,7 +124,41 @@ export class NowPlaying {
     this.paintLyrics(null, "");
     const l = await call<typeof this.lyrics>("lyrics.get", { id, auto: true });
     if (this.lyricsFor !== id) return;
-    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, or take them from a file or the clipboard.");
+    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, let the speech model listen, or take them from a file or the clipboard.");
+    if (!l && this.listening == null) {
+      const sp = await call<{ listen: boolean; model: string; models: { id: string; have: boolean }[] }>("speech.state");
+      if (this.lyricsFor === id && sp.listen && sp.models.some(m => m.id === sp.model && m.have)) void this.listen(true);
+    }
+  }
+
+  /** The speech model writes the lyrics of the song playing; each line shows as it is written. */
+  private listening: number | null = null;
+  private heard: { ms: number; text: string }[] = [];
+  readonly listenBtn = textBtn("listen", () => void this.listen(false));
+
+  private async listen(quiet: boolean) {
+    const id = shell.player.current?.trackId;
+    if (id == null) return;
+    if (this.listening === id) { await call("lyrics.listen", { id }); return; }   // asking again stops it
+    this.listening = id;
+    this.heard = [];
+    this.listenBtn.textContent = "stop listening";
+    this.lyricsNote.textContent = "the speech model is listening…";
+    try {
+      const l = await call<typeof this.lyrics>("lyrics.listen", { id });
+      if (this.lyricsFor === id) this.paintLyrics(l, l ? "" : "No lyrics for this song.");
+    } catch (e: any) {
+      if (this.lyricsFor === id && (!quiet || !this.lyrics)) this.lyricsNote.textContent = String(e.message ?? e);
+    } finally {
+      if (this.listening === id) this.listening = null;
+      this.listenBtn.textContent = "listen";
+    }
+  }
+
+  private heardLine(e: { id: number; ms: number; text: string }) {
+    if (e.id !== this.listening || e.id !== this.lyricsFor) return;
+    this.heard.push({ ms: e.ms, text: e.text });
+    this.paintLyrics({ synced: true, source: "the speech model is listening…", lines: [...this.heard] } as any, "the speech model is listening…");
   }
 
   private async lyricsAction(method: string, busy: string, extra: Record<string, string> = {}) {

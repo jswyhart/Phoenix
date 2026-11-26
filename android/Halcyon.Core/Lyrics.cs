@@ -51,7 +51,8 @@ public class Lyrics
         try
         {
             // lyrics you imported come first, and work for songs on a server too
-            if (HasStored(t) && Parse(File.ReadAllText(StorePath(t)), "imported") is { } stored) return stored;
+            if (HasStored(t) && File.ReadAllText(StorePath(t)) is var kept
+                && Parse(kept, kept.StartsWith("[re:Phoenix speech model") ? "written by the speech model (it may mishear)" : "imported") is { } stored) return stored;
             if (!t.IsLocal) return null;
             var file = t.Location;
             foreach (var ext in new[] { ".lrc", ".txt" })

@@ -36,6 +36,8 @@ public class Settings
     public int VisualizerColor { get; set; }   // index into Visualizer.Palettes
     public int VisualizerSensitivity { get; set; } = 1;   // 0 low, 1 normal, 2 high, 3 max
     public int RipFormat { get; set; }   // index into CdAudio.Formats
+    public int BurnKind { get; set; }    // index into CdAudio.DiscKinds: audio CD, MP3 CD, data disc
+    public int BurnMp3Kbps { get; set; } = 256;   // songs converted for an MP3 CD (or from a server for a data disc)
     public bool AudioEngine { get; set; } = true;   // music through the built-in engine (gapless, crossfade, equalizer)
     public double Crossfade { get; set; }           // seconds songs overlap; 0 = back to back
     public bool EqEnabled { get; set; }
@@ -56,6 +58,9 @@ public class Settings
     public bool TranslateLatin { get; set; }              // also send names written in Latin letters
     public string LibreTranslateUrl { get; set; } = "";
     public string TranslationFolder { get; set; } = "";   // offline translation engine and language packs; blank = "translation" in the data folder
+    public string LyricsModel { get; set; } = "";          // the speech model that writes lyrics (SpeechLyrics.Models id); "" none
+    public int LyricsGpu { get; set; } = -2;              // -2 automatic, -1 the processor only, or a Vulkan device index
+    public bool LyricsListen { get; set; }                // write lyrics with the speech model for songs that have none, as they play
     public bool LyricsAuto { get; set; }                  // look lyrics up online when a song has none
     public bool SpotifyEnabled { get; set; }              // older setting: carried into WebServicesOn when read
     public List<string> WebServicesOn { get; set; } = new();                       // streaming services shown as pages (ids from WebServices.Presets)

@@ -161,10 +161,78 @@ public partial class MainWindow : Window
         LyricsNote.Text = _lyrics == null ? "" : _lyrics.Synced ? _lyrics.Source + "   ·   double-click a line to jump to it" : _lyrics.Source;
         var track = cur?.Track;
         LyricsFindBtn.IsEnabled = LyricsImportBtn.IsEnabled = LyricsPasteBtn.IsEnabled = track != null;
+        LyricsListenBtn.IsEnabled = track != null && SpeechModel != null;
+        LyricsListenBtn.Content = _listening != null && _listeningTo == track ? "stop listening" : "listen";
         LyricsRemoveBtn.Visibility = track != null && Lyrics.HasStored(track) ? Visibility.Visible : Visibility.Collapsed;
         if (_lyrics is { Lines.Count: > 0 }) LyricsList.ScrollIntoView(_lyrics.Lines[0]);
         // look it up by itself, if that was asked for in settings (once per song per session)
-        if (_lyrics == null && track != null && App.Settings.LyricsAuto && _lyricsAsked.Add(track.Id)) _ = FindLyricsAsync(track, quiet: true);
+        if (_lyrics == null && track != null && _lyricsAsked.Add(track.Id))
+        {
+            if (App.Settings.LyricsAuto) _ = FindThenListenAsync(track);
+            else if (App.Settings.LyricsListen && SpeechModel != null) _ = ListenAsync(track, quiet: true);
+        }
+    }
+
+    public void RefreshLyrics() => ReloadLyrics();
+
+    async Task FindThenListenAsync(Track track)
+    {
+        await FindLyricsAsync(track, quiet: true);
+        if (App.Settings.LyricsListen && SpeechModel != null && Lyrics.For(track) == null && P.Current?.Track == track) await ListenAsync(track, quiet: true);
+    }
+
+    /// <summary>The speech model chosen in settings, when it has been downloaded.</summary>
+    static Halcyon.Services.SpeechLyrics.Model? SpeechModel =>
+        Halcyon.Services.SpeechLyrics.Find(App.Settings.LyricsModel) is { } m && Halcyon.Services.SpeechLyrics.Have(m) ? m : null;
+
+    CancellationTokenSource? _listening;
+    Track? _listeningTo;
+
+    /// <summary>The speech model listens to the song and writes its lyrics; lines show as they are written.</summary>
+    async Task ListenAsync(Track track, bool quiet)
+    {
+        if (SpeechModel is not { } model) { LyricsNote.Text = "download a speech model in settings → translation first"; return; }
+        _listening?.Cancel();
+        var cancel = new CancellationTokenSource();
+        _listening = cancel;
+        _listeningTo = track;
+        var lines = new List<string>();
+        void Show()
+        {
+            if (P.Current?.Track != track || Lyrics.Parse(string.Join("\n", lines), "the speech model is listening…") is not { } partial) return;
+            _lyrics = partial;
+            _lyricLine = -1;
+            LyricsList.ItemsSource = partial.Lines;
+            LyricsEmpty.Visibility = Visibility.Collapsed;
+        }
+        LyricsListenBtn.Content = "stop listening";
+        LyricsNote.Text = "the speech model is listening…";
+        try
+        {
+            var source = track.IsLocal ? track.Location : Player.From(track).Url;
+            var lrc = await Halcyon.Services.SpeechLyrics.TranscribeAsync(source, model, (ms, text) => Dispatcher.BeginInvoke(() =>
+            {
+                lines.Add($"[{ms / 60000:00}:{ms / 1000 % 60:00}.{ms % 1000 / 10:00}]{text}");
+                Show();
+            }), cancel.Token);
+            if (lrc == null) { if (P.Current?.Track == track) LyricsNote.Text = "the speech model heard no words in this song"; return; }
+            Lyrics.Save(track, lrc);
+            if (P.Current?.Track == track) ReloadLyrics();
+        }
+        catch (OperationCanceledException) { if (P.Current?.Track == track) ReloadLyrics(); }
+        catch (Exception ex) { if (!quiet || P.Current?.Track == track) LyricsNote.Text = "the speech model couldn't listen: " + ex.Message; }
+        finally
+        {
+            if (_listening == cancel) { _listening = null; _listeningTo = null; }
+            if (P.Current?.Track == track) LyricsListenBtn.Content = "listen";
+        }
+    }
+
+    async void LyricsListen_Click(object sender, RoutedEventArgs e)
+    {
+        if (P.Current?.Track is not { } track) return;
+        if (_listening != null && _listeningTo == track) { _listening.Cancel(); return; }
+        await ListenAsync(track, quiet: false);
     }
 
     readonly HashSet<long> _lyricsAsked = new();

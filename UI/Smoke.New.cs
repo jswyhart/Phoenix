@@ -852,6 +852,52 @@ public static partial class Smoke
             Check("tabs of your own are set up under servers → streaming, not display", holder.Name == "PanelWeb", holder.Name);
         }
 
+        // lyrics written by the speech model, on this computer (the self-test brings the tiny model in PHOENIX_MODELS)
+        {
+            var sv = App.Win.Page<SettingsView>("settings");
+            sv.ShowCategory("software", "Translation");
+            await Task.Delay(300);
+            var gpus = ((ComboBox)sv.FindName("SpeechGpuBox")).Items.OfType<ComboBoxItem>().Select(i => (string)i.Content).ToList();
+            Check("settings lists where the speech model can run: automatic, each graphics card, the processor",
+                gpus.Count >= 2 && gpus[0] == "automatic" && gpus[^1] == "the processor only", string.Join(" | ", gpus));
+            var tiny = SpeechLyrics.Find("tiny")!;
+            if (!SpeechLyrics.Have(tiny)) Check("the speech model writes lyrics (no tiny model to test with)", false, SpeechLyrics.ModelsDir);
+            else
+            {
+                var wav = Path.Combine(Path.GetTempPath(), $"phoenix-speech-{Guid.NewGuid():N}.wav");
+                var t = new Thread(() =>
+                {
+                    dynamic voice = Activator.CreateInstance(Type.GetTypeFromProgID("SAPI.SpVoice")!)!;
+                    dynamic file = Activator.CreateInstance(Type.GetTypeFromProgID("SAPI.SpFileStream")!)!;
+                    file.Open(wav, 3, false);
+                    voice.AudioOutputStream = file;
+                    voice.Speak("The quick brown fox jumps over the lazy dog. Hello from the lyrics test.");
+                    file.Close();
+                });
+                t.SetApartmentState(ApartmentState.STA);
+                t.Start();
+                t.Join();
+                var heard = new List<string>();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                string? lrc = null; string? error = null;
+                try { lrc = await SpeechLyrics.TranscribeAsync(wav, tiny, (_, text) => { lock (heard) heard.Add(text); }, CancellationToken.None); }
+                catch (Exception ex) { error = ex.Message; }
+                var parsed = lrc == null ? null : Lyrics.Parse(lrc, "x");
+                Check("the speech model writes timed lyrics, line by line as it hears them",
+                    lrc != null && lrc.StartsWith(SpeechLyrics.Mark) && lrc.Contains("brown fox", StringComparison.OrdinalIgnoreCase) && heard.Count >= 1 && parsed is { Synced: true },
+                    error ?? $"{sw.ElapsedMilliseconds} ms on {SpeechLyrics.RanOn}: {lrc?.Replace('\n', ' ')}");
+                var song = App.Lib.Tracks.First(x => x.IsLocal);
+                var had = Lyrics.HasStored(song);
+                if (!had && lrc != null)
+                {
+                    Lyrics.Save(song, lrc);
+                    Check("lyrics the speech model wrote say so", Lyrics.For(song)?.Source.Contains("speech model") == true, Lyrics.For(song)?.Source);
+                    Lyrics.Remove(song);
+                }
+                try { File.Delete(wav); } catch { }
+            }
+        }
+
         // running on in the notification area: off by default; on, closing the window only hides it
         {
             var win = App.Win;

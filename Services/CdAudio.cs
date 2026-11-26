@@ -12,12 +12,25 @@ public record CdTrack(int Number, int StartLba, int Sectors)
     public long DurationMs => Sectors * 1000L / 75;
 }
 
-/// <summary>Audio CD support: reading tracks off a disc (raw CDDA via the Windows CD-ROM driver), encoding, and burning (IMAPI2).</summary>
+/// <summary>
+/// Disc support: reading tracks off an audio CD (raw CDDA via the Windows CD-ROM driver), encoding them, and burning
+/// (IMAPI2) audio CDs, MP3 discs and data discs.
+/// </summary>
 public static class CdAudio
 {
     public const int SectorBytes = 2352;                 // one CD audio frame: 1/75 s of 44.1 kHz 16-bit stereo
     public static readonly WaveFormat CdFormat = new(44100, 16, 2);
-    public static readonly string[] Formats = { "MP3 (320 kbps)", "AAC / M4A (256 kbps)", "WMA (192 kbps)", "WAV (lossless)" };
+    /// <summary>The rip formats. Settings keep the position here, so new ones go on the end; <see cref="FormatOrder"/> is the order shown.</summary>
+    public static readonly string[] Formats =
+    {
+        "MP3 (320 kbps)", "AAC / M4A (256 kbps)", "WMA (192 kbps)", "WAV (lossless, uncompressed)", "FLAC (lossless)",
+        "MP3 (256 kbps)", "MP3 (192 kbps)", "MP3 (128 kbps)", "AAC / M4A (192 kbps)", "AAC / M4A (128 kbps)", "WMA (128 kbps)",
+    };
+    public static readonly int[] FormatOrder = { 0, 5, 6, 7, 1, 8, 9, 2, 10, 4, 3 };
+    static readonly Guid FlacSubtype = new("0000F1AC-0000-0010-8000-00AA00389B71");
+
+    /// <summary>The three kinds of disc Phoenix burns (settings → burn, and the burn list).</summary>
+    public static readonly string[] DiscKinds = { "audio CD", "MP3 CD", "data disc" };
 
     public static List<string> Drives() =>
         DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.CDRom).Select(d => d.Name.TrimEnd('\\')).ToList();
@@ -90,20 +103,74 @@ public static class CdAudio
 
     // ---------- encoding ----------
 
-    public static string Extension(int format) => format switch { 0 => ".mp3", 1 => ".m4a", 2 => ".wma", _ => ".wav" };
+    public static string Extension(int format) => format switch { 0 or 5 or 6 or 7 => ".mp3", 1 or 8 or 9 => ".m4a", 2 or 10 => ".wma", 4 => ".flac", _ => ".wav" };
 
     /// <summary>Encodes a WAV file to the chosen format using the encoders built into Windows.</summary>
     public static void Encode(string wavPath, string outPath, int format)
     {
-        if (format >= 3) { File.Copy(wavPath, outPath, true); return; }
+        if (format == 3 || format < 0 || format >= Formats.Length) { File.Copy(wavPath, outPath, true); return; }
         MediaFoundationApi.Startup();
         using var reader = new WaveFileReader(wavPath);
         switch (format)
         {
             case 0: MediaFoundationEncoder.EncodeToMp3(reader, outPath, 320000); break;
+            case 5: MediaFoundationEncoder.EncodeToMp3(reader, outPath, 256000); break;
+            case 6: MediaFoundationEncoder.EncodeToMp3(reader, outPath, 192000); break;
+            case 7: MediaFoundationEncoder.EncodeToMp3(reader, outPath, 128000); break;
             case 1: MediaFoundationEncoder.EncodeToAac(reader, outPath, 256000); break;
+            case 8: MediaFoundationEncoder.EncodeToAac(reader, outPath, 192000); break;
+            case 9: MediaFoundationEncoder.EncodeToAac(reader, outPath, 128000); break;
+            case 10: MediaFoundationEncoder.EncodeToWma(reader, outPath, 128000); break;
+            case 4:
+            {
+                // the FLAC encoder built into Windows 10 and later; it wants the exact PCM layout of the source
+                var type = MediaFoundationEncoder.GetOutputMediaTypes(FlacSubtype)
+                    .FirstOrDefault(t => t.SampleRate == reader.WaveFormat.SampleRate && t.ChannelCount == reader.WaveFormat.Channels && t.BitsPerSample == reader.WaveFormat.BitsPerSample)
+                    ?? throw new NotSupportedException("This version of Windows has no FLAC encoder.");
+                using var enc = new MediaFoundationEncoder(type);
+                enc.Encode(outPath, reader);
+                break;
+            }
             default: MediaFoundationEncoder.EncodeToWma(reader, outPath, 192000); break;
         }
+    }
+
+    /// <summary>Any playable file or stream URL as 16 kHz mono samples, for the speech model that writes lyrics.</summary>
+    public static float[] DecodeForSpeech(string source, CancellationToken cancel)
+    {
+        MediaFoundationApi.Startup();
+        using var reader = new MediaFoundationReader(source);
+        using var resampler = new MediaFoundationResampler(reader, WaveFormat.CreateIeeeFloatWaveFormat(16000, 1)) { ResamplerQuality = 60 };
+        var samples = new List<float>((int)Math.Min(int.MaxValue / 8, reader.TotalTime.TotalSeconds * 16000 + 16000));
+        var buffer = new byte[16000 * 4];
+        int read;
+        while ((read = resampler.Read(buffer.AsSpan())) > 0)
+        {
+            cancel.ThrowIfCancellationRequested();
+            for (var i = 0; i + 3 < read; i += 4) samples.Add(BitConverter.ToSingle(buffer, i));
+        }
+        return samples.ToArray();
+    }
+
+    /// <summary>Converts any playable file or stream URL to an MP3 (for MP3 discs).</summary>
+    public static void ToMp3(string source, string outPath, int bitrate, CancellationToken cancel)
+    {
+        MediaFoundationApi.Startup();
+        var wav = outPath + ".wav";
+        try
+        {
+            using (var reader = new MediaFoundationReader(source))
+            using (var resampler = new MediaFoundationResampler(reader, CdFormat) { ResamplerQuality = 60 })
+            using (var writer = new WaveFileWriter(wav, CdFormat))
+            {
+                var buffer = new byte[SectorBytes * 64];
+                int read;
+                while ((read = resampler.Read(buffer.AsSpan())) > 0) { cancel.ThrowIfCancellationRequested(); writer.Write(buffer, 0, read); }
+            }
+            using var pcm = new WaveFileReader(wav);
+            MediaFoundationEncoder.EncodeToMp3(pcm, outPath, bitrate);
+        }
+        finally { try { File.Delete(wav); } catch { } }
     }
 
     // ---------- burning ----------
@@ -128,6 +195,117 @@ public static class CdAudio
         if (pad > 0) output.Write(new byte[pad], 0, pad);
     }
 
+    /// <summary>One song for an MP3 or data disc.</summary>
+    public record DiscFile(string Source, bool IsLocal, string Title, string Artist, string Album, int Number, long DurationMs, long Bytes);
+
+    /// <summary>Bytes a CD-R holds as a data disc (700 MB).</summary>
+    public const long CdBytes = 703_119_360;
+
+    /// <summary>
+    /// Lays the songs out in a folder ready to burn as an MP3 CD (everything as MP3) or a data disc (files as they are;
+    /// songs on a server become MP3s). Files are numbered in burn list order, so players that sort by name play them in
+    /// that order, and a playlist (.m3u) lists them too.
+    /// </summary>
+    public static void StageFiles(IReadOnlyList<DiscFile> songs, string folder, bool mp3Only, int bitrate, Action<int> preparing, CancellationToken cancel)
+    {
+        Directory.CreateDirectory(folder);
+        var names = new List<string>();
+        for (var i = 0; i < songs.Count; i++)
+        {
+            cancel.ThrowIfCancellationRequested();
+            preparing(i);
+            var s = songs[i];
+            var ext = s.IsLocal ? Path.GetExtension(s.Source).ToLowerInvariant() : "";
+            var copy = s.IsLocal && (ext == ".mp3" || !mp3Only) && File.Exists(s.Source);
+            var name = DiscName($"{i + 1:00} {s.Artist} - {s.Title}") + (copy ? ext : ".mp3");
+            var target = Path.Combine(folder, name);
+            if (copy) File.Copy(s.Source, target, true);
+            else
+            {
+                ToMp3(s.Source, target, bitrate, cancel);
+                using var tf = TagLib.File.Create(target);
+                tf.Tag.Title = s.Title;
+                if (s.Artist != "") tf.Tag.Performers = new[] { s.Artist };
+                if (s.Album != "") tf.Tag.Album = s.Album;
+                if (s.Number > 0) tf.Tag.Track = (uint)s.Number;
+                tf.Save();
+            }
+            names.Add(name);
+        }
+        File.WriteAllLines(Path.Combine(folder, "playlist.m3u"), names, new System.Text.UTF8Encoding(false));
+    }
+
+    /// <summary>A file name that suits the disc's file system (Joliet allows 64 characters; some players are fussy).</summary>
+    public static string DiscName(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars().Concat(new[] { ';', '*', '?' })) name = name.Replace(c, '_');
+        name = name.Trim().TrimEnd('.');
+        return name.Length > 59 ? name[..59].TrimEnd() : name;
+    }
+
+    /// <summary>Builds the disc image (ISO 9660 and Joliet) of a folder; returns its size in bytes. Needs an STA thread.</summary>
+    public static long ImageSize(string folder, string label)
+    {
+        dynamic image = Create("IMAPI2FS.MsftFileSystemImage");
+        image.FileSystemsToCreate = 3;   // ISO 9660 + Joliet: every CD player, car stereo and computer reads it
+        image.FreeMediaBlocks = 0;       // no disc to measure against: as large as it needs to be
+        image.VolumeName = VolumeLabel(label);
+        image.Root.AddTree(folder, false);
+        dynamic result = image.CreateResultImage();
+        return (long)(int)result.TotalBlocks * (int)result.BlockSize;
+    }
+
+    static string VolumeLabel(string label)
+    {
+        var s = new string(label.ToUpperInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
+        return s.Length == 0 ? "PHOENIX" : s.Length > 16 ? s[..16] : s;
+    }
+
+    static dynamic Create(string progId) =>
+        Activator.CreateInstance(Type.GetTypeFromProgID(progId) ?? throw new NotSupportedException("Disc burning (IMAPI2) is not available on this PC."))!;
+
+    static dynamic FindRecorder(string drive)
+    {
+        dynamic master = Create("IMAPI2.MsftDiscMaster2");
+        for (var i = 0; i < (int)master.Count; i++)
+        {
+            dynamic r = Create("IMAPI2.MsftDiscRecorder2");
+            r.InitializeDiscRecorder((string)master[i]);
+            foreach (object path in (object[])r.VolumePathNames)
+                if (((string)path).TrimEnd('\\').Equals(drive, StringComparison.OrdinalIgnoreCase)) return r;
+        }
+        throw new IOException($"Drive {drive} is not a disc recorder.");
+    }
+
+    /// <summary>
+    /// Burns a folder to a blank disc (CD-R/RW, DVD±R/RW or BD-R) as a data disc any computer, car stereo or MP3 CD
+    /// player can read. Must be called from an STA thread; blocks until the disc is finished.
+    /// </summary>
+    public static void BurnData(string drive, string folder, string label, Action<string> status)
+    {
+        var recorder = FindRecorder(drive);
+        dynamic format = Create("IMAPI2.MsftDiscFormat2Data");
+        format.ClientName = "Phoenix";
+        format.Recorder = recorder;
+        if (!(bool)format.IsCurrentMediaSupported(recorder) || !(bool)format.MediaHeuristicallyBlank)
+            throw new IOException("Put a blank recordable disc (CD-R, CD-RW, DVD±R or BD-R) in the drive.");
+        format.ForceMediaToBeClosed = true;
+        status("building the disc…");
+        dynamic image = Create("IMAPI2FS.MsftFileSystemImage");
+        image.ChooseImageDefaults(recorder);
+        image.FileSystemsToCreate = 3;
+        image.VolumeName = VolumeLabel(label);
+        image.Root.AddTree(folder, false);
+        dynamic result = image.CreateResultImage();
+        var bytes = (long)(int)result.TotalBlocks * (int)result.BlockSize;
+        var room = (long)(int)format.FreeSectorsOnMedia * 2048;
+        if (room > 0 && bytes > room) throw new IOException($"The songs need {bytes / 1_000_000} MB but the disc holds {room / 1_000_000} MB.");
+        status("burning…");
+        format.Write(result.ImageStream);
+        status("finishing disc…");
+        try { recorder.EjectMedia(); } catch { }
+    }
+
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
     static extern void SHCreateStreamOnFileEx(string file, uint mode, uint attributes, bool create, IStream? template, out IStream stream);
 
@@ -137,19 +315,7 @@ public static class CdAudio
     /// </summary>
     public static void Burn(string drive, IReadOnlyList<string> rawFiles, Action<string> status)
     {
-        static dynamic Create(string progId) =>
-            Activator.CreateInstance(Type.GetTypeFromProgID(progId) ?? throw new NotSupportedException("Disc burning (IMAPI2) is not available on this PC."))!;
-
-        dynamic master = Create("IMAPI2.MsftDiscMaster2");
-        dynamic? recorder = null;
-        for (var i = 0; i < (int)master.Count; i++)
-        {
-            dynamic r = Create("IMAPI2.MsftDiscRecorder2");
-            r.InitializeDiscRecorder((string)master[i]);
-            foreach (object path in (object[])r.VolumePathNames)
-                if (((string)path).TrimEnd('\\').Equals(drive, StringComparison.OrdinalIgnoreCase)) recorder = r;
-        }
-        if (recorder == null) throw new IOException($"Drive {drive} is not a disc recorder.");
+        var recorder = FindRecorder(drive);
 
         dynamic format = Create("IMAPI2.MsftDiscFormat2TrackAtOnce");
         format.ClientName = "Phoenix";
