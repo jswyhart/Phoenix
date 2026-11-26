@@ -124,7 +124,8 @@ public static partial class Api
             sleepOn = P.SleepOn,
             sleepAtEnd = P.SleepAtEnd,
             canSpeed = P.CanSpeed,
-            speed = P.Speed
+            speed = P.Speed,
+            castName = P.Cast?.Name
         };
     }
 

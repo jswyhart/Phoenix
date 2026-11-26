@@ -140,7 +140,7 @@ public class Player
         }
     }
 
-    public double Volume { get => _vol; set { _vol = value; _me.Volume = (float)(_vol * _fade); App.Settings.Volume = value; } }
+    public double Volume { get => _vol; set { _vol = value; _me.Volume = (float)(_vol * _fade); App.Settings.Volume = value; if (_onCast) _ = Quiet(Cast!.SetVolumeAsync(value)); } }
 
     // ---------- sleep timer ----------
 
@@ -185,7 +185,7 @@ public class Player
     // ---------- playback speed ----------
 
     /// <summary>Speed can be changed for anything but radio, when the engine can do it.</summary>
-    public bool CanSpeed => Current is { Station: null } && _me is ISpeedEngine;
+    public bool CanSpeed => Current is { Station: null } && _me is ISpeedEngine && !_onCast;
 
     static string? SpeedKey(PlayItem? i) => i?.Episode is { } e ? "podcast:" + e.PodcastId : i?.Book is { } b ? "book:" + b.Id : null;
 
@@ -210,10 +210,11 @@ public class Player
     {
         if (Current is { Track: not null } c) Listening.Left(c, PositionMs, false);
     }
-    public long PositionMs => Current == null ? 0 : _offset + _me.PositionMs;
+    public long PositionMs => Current == null ? 0 : _onCast && Cast != null ? (long)(Cast.Position * 1000) : _offset + _me.PositionMs;
 
     // A transcoded stream doesn't know its real length, so trust the library's duration for those.
-    public long DurationMs => Current is { SeekUrl: not null, DurationMs: > 0 } c ? c.DurationMs
+    public long DurationMs => _onCast && Cast is { Duration: > 0 } cast ? (long)(cast.Duration * 1000)
+        : Current is { SeekUrl: not null, DurationMs: > 0 } c ? c.DurationMs
         : _me.DurationMs > 0 ? _me.DurationMs : Current?.DurationMs ?? 0;
 
     public void Seek(long ms)
@@ -221,6 +222,7 @@ public class Player
         var cur = Current;
         if (cur == null) return;
         if (ms < 0) ms = 0;
+        if (_onCast) { _ = Quiet(Cast!.SeekAsync(ms / 1000.0)); return; }
         if (cur.SeekUrl == null) { _me.SeekTo(ms); StateChanged?.Invoke(); return; }
         // Not seekable in place: ask the server for a new stream that begins at the target time.
         if (cur.DurationMs > 0 && ms > cur.DurationMs - 2000) ms = Math.Max(0, cur.DurationMs - 2000);
@@ -239,6 +241,73 @@ public class Player
         _order.Remove(first);
         _order.Insert(0, first);
     }
+
+    // ---------- casting to another device ----------
+
+    bool _onCast;   // the current item is playing on another device
+
+    /// <summary>The speaker or TV everything is being played on, if any.</summary>
+    public ICastDevice? Cast { get; private set; }
+    public bool OnCast => _onCast;
+
+    /// <summary>Sends playback to a device on the network; what is playing carries on there from the same place.</summary>
+    public void StartCast(ICastDevice device)
+    {
+        StopCast(resumeHere: false);
+        Cast = device;
+        device.Ended += () => App.Ui(() =>
+        {
+            if (!_onCast || !ReferenceEquals(Cast, device)) return;
+            if (Current is { Track: not null } c) Listening.Left(c, PositionMs, true);
+            Next(auto: true);
+        });
+        device.Failed += msg => App.Ui(() => Error?.Invoke($"{device.Name}: {msg}"));
+        device.Changed += () => App.Ui(() => { if (_onCast && ReferenceEquals(Cast, device) && IsPlaying != device.Playing && device.Loaded) { IsPlaying = device.Playing; StateChanged?.Invoke(); } });
+        if (Current != null) PlayAt(_index, PositionMs);
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>Brings playback back to this computer (paused, at the same place).</summary>
+    public void StopCast(bool resumeHere = true)
+    {
+        var device = Cast;
+        if (device == null) return;
+        var at = PositionMs;
+        var was = _onCast;
+        Cast = null;
+        _onCast = false;
+        _ = device.StopAsync().ContinueWith(_ => device.Dispose());
+        if (was && resumeHere && Current != null)
+        {
+            PlayAt(_index, at);
+            if (IsPlaying) Toggle();
+        }
+        StateChanged?.Invoke();
+    }
+
+    async Task StartOnCast(PlayItem item, long startMs, int gen)
+    {
+        var device = Cast;
+        if (device == null) return;
+        try
+        {
+            if (item.Resolve != null) item.Url = await item.Resolve();
+            if (gen != _gen) return;
+            await device.LoadAsync(item, startMs / 1000.0);
+            if (!ReferenceEquals(Current, item) || !ReferenceEquals(Cast, device)) return;
+            _failStreak = 0;
+            await device.SetVolumeAsync(_me.Volume);
+            if (!IsPlaying) await device.PauseAsync();
+            StateChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            if (!ReferenceEquals(Current, item)) return;
+            Error?.Invoke($"couldn't play on {device.Name}: {ex.Message}");
+        }
+    }
+
+    static async Task Quiet(Task t) { try { await t; } catch { } }
 
     // ---------- smart dj ----------
 
@@ -302,7 +371,10 @@ public class Player
         QueueChanged?.Invoke();
     }
 
-    public void PlayAt(int index)
+    public void PlayAt(int index) => PlayAt(index, -1);
+
+    /// <summary>Plays an item of the queue, from <paramref name="startMs"/> if it is given (moving to or from a cast device).</summary>
+    public void PlayAt(int index, long startMs)
     {
         if (index < 0 || index >= Queue.Count) return;
         LeaveCurrent();
@@ -317,6 +389,7 @@ public class Player
             if (book.Part == item.BookPart && !book.Finished) _resumeMs = book.PositionMs;
             else { book.Part = item.BookPart; book.PositionMs = 0; }
         }
+        if (startMs >= 0) _resumeMs = startMs;
         _offset = 0;
         _triedFallback = false;
         IsPlaying = true;
@@ -329,6 +402,16 @@ public class Player
         RefillDj();
         CurrentChanged?.Invoke();
         StateChanged?.Invoke();
+        if (Cast != null && CastMedia.Can(item))
+        {
+            // playing on another device: this computer stays quiet
+            _me.Stop();
+            _onCast = true;
+            _ = StartOnCast(item, _resumeMs, gen);
+            _resumeMs = 0;
+            return;
+        }
+        if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
         _ = StartAsync(item, gen);
     }
 
@@ -354,7 +437,8 @@ public class Player
     public void Toggle()
     {
         if (Current == null) return;
-        if (IsPlaying) _me.Pause(); else _me.Play();
+        if (_onCast) _ = Quiet(IsPlaying ? Cast!.PauseAsync() : Cast!.PlayAsync());
+        else if (IsPlaying) _me.Pause(); else _me.Play();
         IsPlaying = !IsPlaying;
         if (!IsPlaying) SaveEpisodePosition();
         StateChanged?.Invoke();
@@ -372,7 +456,7 @@ public class Player
     void Advance(bool auto)
     {
         if (Queue.Count == 0) return;
-        if (auto && Repeat == 2) { if (Current != null) Current.Logged = false; Seek(0); _me.Play(); return; }
+        if (auto && Repeat == 2) { if (_onCast) { PlayAt(_index); return; } if (Current != null) Current.Logged = false; Seek(0); _me.Play(); return; }
         var pos = _order.IndexOf(_index);
         if (pos + 1 < _order.Count) PlayAt(_order[pos + 1]);
         else if (Repeat == 1 || !auto) { BuildOrder(_shuffle ? new Random().Next(Queue.Count) : 0); PlayAt(_order[0]); }
@@ -394,6 +478,7 @@ public class Player
         SaveEpisodePosition();
         _gen++;
         _me.Stop();
+        if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
         if (Current != null) Current.IsCurrent = false;
         _index = -1;
         _offset = 0;

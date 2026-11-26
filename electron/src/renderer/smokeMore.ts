@@ -230,6 +230,19 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   await runPodcastDownloads(check, shot, settle, until);
   await runMini(check, until, songs);
   await runThemes(check, shot, settle, until);
+  await runCast(check);
+}
+
+// ---------- playing on another device (a pretend DLNA speaker on this machine) ----------
+
+async function runCast(check: Check) {
+  const r = await call<any>("smoke.cast");
+  if (r.skipped) { check("casting to a pretend speaker (skipped: no local port could be opened)", true); return; }
+  check("a DLNA device's description is read: its name and where its controls are", r.describedName === "Pretend Speaker" && r.transport === r.expectedTransport, `${r.describedName}: ${r.transport}`);
+  check("playing on a cast device: the song is loaded there with its name, it can fetch the file from this computer, and this computer falls silent",
+    r.loaded && r.fetched === r.size && r.metaHasTitle && r.castName === "Pretend Speaker" && r.volume !== "", `${r.fetched} of ${r.size} bytes, volume ${r.volume}, loaded ${r.loaded}, named ${r.metaHasTitle}, on ${r.castName}`);
+  check("the buttons work the device, and when a song ends there the next one in the queue is sent", r.paused && r.movedOn, `song ${r.index + 1} now`);
+  check("stopping the cast brings the same song back to this computer, paused", r.back);
 }
 
 // ---------- themes ----------

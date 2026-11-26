@@ -49,7 +49,7 @@ export interface PlayerState {
     isStation: boolean; stationUrl: string | null; isEpisode: boolean; artist: string;
   };
   index: number; playing: boolean; shuffle: boolean; repeat: number; volume: number; muted: boolean; pos: number; dur: number;
-  sleep: string; sleepOn: boolean; sleepAtEnd: boolean; canSpeed: boolean; speed: number;
+  sleep: string; sleepOn: boolean; sleepAtEnd: boolean; canSpeed: boolean; speed: number; castName: string | null;
 }
 export interface TabsState { tabs: { key: string; on: boolean }[]; custom: { id: string; name: string; page: string }[] }
 export interface QueueItem { title: string; subtitle: string; dur: number }

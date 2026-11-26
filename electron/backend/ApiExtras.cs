@@ -27,6 +27,8 @@ public static partial class Api
         RegisterPlayback();
         RegisterPodcastSync();
         RegisterThemes();
+        RegisterCast();
+        RegisterSmokeCast();
         Updates.Register();
     }
 

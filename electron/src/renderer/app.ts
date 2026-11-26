@@ -16,6 +16,7 @@ import { mixviewPage, MixviewPage } from "./mixview";
 import { menuHooks } from "./songs";
 import { installDialogs } from "./dialogs";
 import { installTools } from "./tools";
+import { chooseCastDevice } from "./cast";
 import { loadDisplay } from "./settingsDisplay";
 import { applyTheme, loadTheme, ThemeShape } from "./themes";
 import { musicPage } from "./music";
@@ -188,7 +189,7 @@ async function start() {
   seek.onCommit = v => { if (usingRemote()) R().seek(v / 1000); else void call("player.seek", { ms: Math.round(v) }); };
   const shuffleBtn = iconBtn("shuffle", "Shuffle", () => { if (usingRemote()) R().shuffle(); else void call("player.shuffle"); });
   // the "more" button: sleep timer, playback speed, listening stats (lit while the timer or a speed is on)
-  const moreBtn = iconBtn("more", "Sleep timer, playback speed", () => menuAt(moreMenu(), moreBtn));
+  const moreBtn = iconBtn("more", "Sleep timer, playback speed, play on another device", () => menuAt(moreMenu(), moreBtn));
   function moreMenu(): MenuEntry[] {
     const s = shell.player;
     const left = s.sleep.replace("sleep: ", "").replace("sleep ", "");
@@ -203,6 +204,13 @@ async function start() {
         label: r === 1 ? "1× (normal)" : `${r}×`, checked: Math.abs(s.speed - r) < 0.01, action: () => call("player.speed", { value: r }),
       })) },
       "-",
+      s.castName ? { label: `Stop playing on ${s.castName}`, action: () => call("cast.stop") } : null,
+      { label: s.castName ? "Play on a different device…" : "Play on another device…", action: () => void chooseCastDevice() },
+      "-",
+      { label: "Mixview for this album", disabled: s.current?.trackId == null, action: async () => {
+        const key = s.current?.trackId != null ? await call<string | null>("track.albumKey", { id: s.current.trackId }) : null;
+        if (key) menuHooks.mixview(key, s.current?.artist ?? "");
+      } },
       { label: "Listening stats", action: () => navigate("stats") },
     ];
   }
@@ -298,9 +306,9 @@ async function start() {
   /** What the "more" button has switched on, in words, as its tooltip; the button is lit while anything is. */
   function paintMore(sleep: string) {
     const s = shell.player;
-    const mode = [sleep, s.canSpeed && Math.abs(s.speed - 1) > 0.01 ? `${s.speed}× speed` : ""].filter(x => x).join("  ·  ");
+    const mode = [s.castName ? "playing on " + s.castName : "", sleep, s.canSpeed && Math.abs(s.speed - 1) > 0.01 ? `${s.speed}× speed` : ""].filter(x => x).join("  ·  ");
     moreBtn.classList.toggle("on", mode !== "");
-    moreBtn.title = mode || "Sleep timer, playback speed";
+    moreBtn.title = mode || "Sleep timer, playback speed, play on another device";
   }
 
   // ---------- the system's media controls (macOS Now Playing, Linux MPRIS, media keys) ----------

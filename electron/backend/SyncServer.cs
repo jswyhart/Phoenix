@@ -52,15 +52,21 @@ public class SyncServer
             if (App.Settings.SyncCode == "") { App.Settings.SyncCode = NewCode(); if (!Program.SmokeMode) App.Settings.Save(); }
             var address = loopbackOnly ? IPAddress.Loopback : IPAddress.Any;
             _cts = new CancellationTokenSource();
-            // a port the system picks is free for TCP but may be one it keeps back for UDP: then try another
-            for (var attempt = 0; ; attempt++)
+            // a port the system picks is free for TCP but may be one it keeps back for UDP: then try another (the
+            // ones tried are held until one works, or the system would hand the same one back)
+            var tried = new List<TcpListener>();
+            try
             {
-                _tcp = new TcpListener(address, port);
-                _tcp.Start();
-                Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
-                try { _udp = new UdpClient(new IPEndPoint(address, Port)); break; }
-                catch (SocketException) when (port == 0 && attempt < 20) { _tcp.Stop(); }
+                for (var attempt = 0; ; attempt++)
+                {
+                    _tcp = new TcpListener(address, port);
+                    _tcp.Start();
+                    Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
+                    try { _udp = new UdpClient(new IPEndPoint(address, Port)); break; }
+                    catch (SocketException) when (port == 0 && attempt < 40) { tried.Add(_tcp); }
+                }
             }
+            finally { foreach (var t in tried) t.Stop(); }
             LastError = null;
             _ = AcceptLoopAsync(_tcp, _cts.Token);
             _ = DiscoveryLoopAsync(_udp, Port, _cts.Token);
