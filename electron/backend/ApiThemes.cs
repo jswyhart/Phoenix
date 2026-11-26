@@ -67,7 +67,7 @@ public static partial class Api
     static string ThemesFolder => Path.Combine(AppPaths.DataDir, "themes");
     static string ThemeFileOf(string id) => Path.Combine(ThemesFolder, id + ".json");
     static bool IsHex(string? hex) => hex != null && hex.Trim().TrimStart('#') is var h && h.Length is 3 or 4 or 6 or 8 && h.All(Uri.IsHexDigit);
-    static bool BuiltInTheme(string id) => id is "light" or "dark";
+    static bool BuiltInTheme(string id) => id is "light" or "dark" or "system";
 
     static ThemeFile? ReadTheme(string file)
     {
@@ -87,6 +87,8 @@ public static partial class Api
     static ThemeFile FindTheme(string? id)
     {
         if (string.Equals(id, "dark", StringComparison.OrdinalIgnoreCase)) return new ThemeFile { Id = "dark", Name = "dark", Base = "dark" };
+        // follows the system's light or dark setting: the window picks which (it knows the system's choice)
+        if (string.Equals(id, "system", StringComparison.OrdinalIgnoreCase)) return new ThemeFile { Id = "system", Name = "system", Base = "system" };
         if (string.IsNullOrWhiteSpace(id) || string.Equals(id, "light", StringComparison.OrdinalIgnoreCase) || !File.Exists(ThemeFileOf(id)) || ReadTheme(ThemeFileOf(id)) is not { } t)
             return new ThemeFile { Id = "light", Name = "light", Base = "light" };
         return t;
@@ -143,7 +145,7 @@ public static partial class Api
         WatchThemes();
         Rpc.On("themes.list", _ =>
         {
-            var list = new List<ThemeFile> { FindTheme("light"), FindTheme("dark") };
+            var list = new List<ThemeFile> { FindTheme("light"), FindTheme("dark"), FindTheme("system") };
             try { if (Directory.Exists(ThemesFolder)) list.AddRange(Directory.GetFiles(ThemesFolder, "*.json").Select(ReadTheme).OfType<ThemeFile>().Where(t => !BuiltInTheme(t.Id)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)); }
             catch { }
             return new { current = FindTheme(S.Theme).Id, themes = list.Select(t => new { id = t.Id, name = t.Name, @base = t.Base }), folder = ThemesFolder };

@@ -26,11 +26,30 @@ const VARS: Record<string, string> = {
 
 export let currentTheme: ThemeShape | null = null;
 
-/** Draws the window in a theme. */
+const systemDark = matchMedia("(prefers-color-scheme: dark)");
+let following = false;
+
+/** Draws the window in a theme. "system" draws light or dark as the operating system is set, and keeps following it. */
 export function applyTheme(t: ThemeShape) {
+  if (t.id === "system") {
+    following = true;
+    void host.themeBase("system", "").catch(() => {});
+    void call<ThemeShape>("themes.get", { id: systemDark.matches ? "dark" : "light" }).then(base => { if (following) draw({ ...base, id: "system", name: "system", builtIn: true }); });
+    return;
+  }
+  following = false;
+  draw(t);
+}
+
+systemDark.addEventListener("change", () => { if (following && currentTheme?.id === "system") applyTheme(currentTheme); });
+
+function draw(t: ThemeShape) {
   currentTheme = t;
   const root = document.documentElement;
   root.dataset.theme = t.base === "dark" ? "dark" : "light";
+  const bg = t.colours.Bg.replace(/^#/, "");
+  // a system theme leaves the system's own choice in charge of the title bar
+  if (!following) void host.themeBase(t.base, "#" + (bg.length === 8 ? bg.slice(2) : bg)).catch(() => {});
   for (const [key, v] of Object.entries(VARS)) root.style.setProperty(v, cssColour(t.colours[key]));
   root.style.setProperty("--grad", `linear-gradient(90deg, ${cssColour(t.colours.AccentStart)}, ${cssColour(t.colours.AccentEnd)})`);
   const font = (f: string) => (f.trim() ? `"${f.trim().replace(/"/g, "")}"` : `"Selawik"`);
@@ -76,6 +95,8 @@ let designing = false;
 
 /** Changes a theme's colours and fonts, or makes a new theme from it. Shows each change at once. */
 export async function designTheme(id: string): Promise<ThemeShape | null> {
+  // "system" is light or dark as the system is set: a new theme starts from whichever is showing
+  if (id === "system") id = systemDark.matches ? "dark" : "light";
   const [start, keys] = await Promise.all([call<ThemeShape>("themes.get", { id }), call<ThemeKey[]>("themes.keys")]);
   const before = currentTheme;
   let own: Record<string, string> = { ...start.own }, base = start.base;

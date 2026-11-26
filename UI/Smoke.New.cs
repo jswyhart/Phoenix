@@ -826,6 +826,11 @@ public static partial class Smoke
         if (imported != null) Themes.Delete(imported.Id);
         App.ApplyTheme(id);   // gone: falls back to light
         Check("a theme whose file is gone falls back to light", Themes.Current.Id == "light" && Brush("Bg") == Colors.White && !Themes.All().Any(t => t.Id == id));
+        Themes.Apply(Themes.Find("system"));
+        Check("a system theme is built in, and is light or dark as Windows is set for apps",
+            string.Join(",", Themes.All().Take(3).Select(t => t.Id)) == "light,dark,system" && Themes.Current.Id == "system" && Themes.Current.IsDark == Themes.SystemIsDark && Themes.Current.BuiltIn,
+            $"Windows dark: {Themes.SystemIsDark}, drawn {Themes.Current.Base}");
+        Themes.Apply(Themes.Light);
         try { File.Delete(export); File.Delete(notTheme); } catch { }
         S.Theme = wasTheme;
         App.ApplyTheme(wasTheme);

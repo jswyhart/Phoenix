@@ -28,7 +28,7 @@ public sealed class Theme
 
     /// <summary>"light", "dark", or the theme file's name without ".json".</summary>
     [JsonIgnore] public string Id { get; set; } = "";
-    [JsonIgnore] public bool BuiltIn => Id is "light" or "dark";
+    [JsonIgnore] public bool BuiltIn => Id is "light" or "dark" or "system";
     [JsonIgnore] public bool IsDark => string.Equals(Base, "dark", StringComparison.OrdinalIgnoreCase);
     [JsonIgnore] public string TextFontName => string.IsNullOrWhiteSpace(TextFont) ? Themes.DefaultTextFont : TextFont.Trim();
     [JsonIgnore] public string HeadFontName => string.IsNullOrWhiteSpace(HeadFont) ? Themes.DefaultHeadFont : HeadFont.Trim();
@@ -131,6 +131,39 @@ public static class Themes
 
     public static Theme Light => new() { Id = "light", Name = "light", Base = "light" };
     public static Theme Dark => new() { Id = "dark", Name = "dark", Base = "dark" };
+    /// <summary>Light or dark as Windows is set for apps, following it when that changes.</summary>
+    public static Theme System => new() { Id = "system", Name = "system", Base = SystemIsDark ? "dark" : "light" };
+
+    /// <summary>Windows is set to dark for apps (settings → personalisation → colours).</summary>
+    public static bool SystemIsDark
+    {
+        get
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
+            }
+            catch { return false; }
+        }
+    }
+
+    static bool _following;
+
+    /// <summary>Windows switching between light and dark redraws Phoenix when the system theme is chosen.</summary>
+    static void FollowSystem()
+    {
+        if (_following) return;
+        _following = true;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, e) =>
+        {
+            if (e.Category != Microsoft.Win32.UserPreferenceCategory.General) return;
+            Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                if (Current.Id == "system" && Current.IsDark != SystemIsDark) Apply(System);
+            });
+        };
+    }
 
     /// <summary>The theme showing now (in the designer, the one being designed).</summary>
     public static Theme Current { get; private set; } = Light;
@@ -167,7 +200,7 @@ public static class Themes
     /// <summary>The built-in themes, then yours by name.</summary>
     public static List<Theme> All()
     {
-        var list = new List<Theme> { Light, Dark };
+        var list = new List<Theme> { Light, Dark, System };
         try
         {
             if (Directory.Exists(Folder))
@@ -181,6 +214,7 @@ public static class Themes
     public static Theme Find(string? id)
     {
         if (string.Equals(id, "dark", StringComparison.OrdinalIgnoreCase)) return Dark;
+        if (string.Equals(id, "system", StringComparison.OrdinalIgnoreCase)) return System;
         if (string.IsNullOrWhiteSpace(id) || string.Equals(id, "light", StringComparison.OrdinalIgnoreCase)) return Light;
         return File.Exists(FileOf(id)) && Read(FileOf(id)) is { } t ? t : Light;
     }
@@ -190,7 +224,7 @@ public static class Themes
     {
         var bad = Path.GetInvalidFileNameChars();
         var stem = new string(name.Trim().Select(ch => bad.Contains(ch) ? '-' : ch).ToArray()).Trim(' ', '.', '-');
-        if (stem == "" || stem.Equals("light", StringComparison.OrdinalIgnoreCase) || stem.Equals("dark", StringComparison.OrdinalIgnoreCase)) stem = "my " + (stem == "" ? "theme" : stem);
+        if (stem == "" || stem.Equals("light", StringComparison.OrdinalIgnoreCase) || stem.Equals("dark", StringComparison.OrdinalIgnoreCase) || stem.Equals("system", StringComparison.OrdinalIgnoreCase)) stem = "my " + (stem == "" ? "theme" : stem);
         if (stem.Length > 60) stem = stem[..60];
         var id = stem;
         for (var n = 2; File.Exists(FileOf(id)) && !string.Equals(id, keep, StringComparison.OrdinalIgnoreCase); n++) id = $"{stem} {n}";
@@ -224,13 +258,14 @@ public static class Themes
 
     public static void Delete(string id)
     {
-        if (id is "light" or "dark") return;
+        if (id is "light" or "dark" or "system") return;
         try { File.Delete(FileOf(id)); } catch { }
     }
 
     /// <summary>Shows a theme (and keeps watching its file, so editing it by hand shows at once).</summary>
     public static void Apply(Theme t)
     {
+        if (t.Id == "system") FollowSystem();
         Current = t;
         var res = Application.Current.Resources;
         foreach (var k in Keys)

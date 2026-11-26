@@ -10,7 +10,7 @@ import type { StatsPage } from "./stats";
 import { sleep } from "./ui";
 import type { VideosPage } from "./videos";
 import { remote, WebServicePage } from "./web";
-import { applyTheme, designTheme, problems, ThemeShape } from "./themes";
+import { applyTheme, currentTheme, designTheme, problems, ThemeShape } from "./themes";
 import type { CarePage } from "./care";
 import { albumMenu } from "./songs";
 import { cleanUp, fromFileName, tagEditor, titleCase } from "./tools";
@@ -250,12 +250,14 @@ async function runCast(check: Check) {
 async function runThemes(check: Check, shot: Shot, settle: Settle, until: Until) {
   const v = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   let list = await call<{ themes: { id: string; name: string }[] }>("themes.list");
-  check("light and dark are built in", list.themes.slice(0, 2).map(t => t.id).join() === "light,dark", list.themes.map(t => t.id).join());
+  check("light, dark and system are built in", list.themes.slice(0, 3).map(t => t.id).join() === "light,dark,system", list.themes.map(t => t.id).join());
   const made = await call<ThemeShape>("themes.save", { id: "", asNew: true, name: "Ocean", base: "dark", own: { Accent: "#3399FF", Bg: "#001122", Hover: "#40FFFFFF" }, textFont: "", headFont: "" });
   applyTheme(made);
   await settle(200);
   check("a theme of your own is saved and drawn", made.id === "Ocean" && v("--accent") === "#3399FF" && v("--bg") === "#001122" && v("--hover") === "rgba(255, 255, 255, 0.251)" && document.documentElement.dataset.theme === "dark",
     `${v("--accent")} ${v("--bg")} ${v("--hover")}`);
+  const darkBar = await until(() => matchMedia("(prefers-color-scheme: dark)").matches, 3000);
+  check("a dark theme makes the system draw a dark title bar", darkBar);
   check("colours the theme leaves out come from its base", made.colours.Fg === "#F2F2F2" && !("Fg" in made.own), made.colours.Fg);
   shell.navigate("music");
   await shot("42-theme-ocean");
@@ -273,7 +275,7 @@ async function runThemes(check: Check, shot: Shot, settle: Settle, until: Until)
   settings.showCategory("software", "Display");
   await settle(400);
   const box = [...document.querySelectorAll<HTMLSelectElement>("select.box")].find(s => [...s.options].some(o => o.value === "Ocean 2"));
-  check("settings: display lists your themes", !!box && box.value === "Ocean 2" && box.options.length === 4, box ? [...box.options].map(o => o.value).join(",") : "none");
+  check("settings: display lists your themes", !!box && box.value === "Ocean 2" && box.options.length === 5, box ? [...box.options].map(o => o.value).join(",") : "none");
   const designing = designTheme("Ocean 2");
   await settle(400);
   check("the designer shows every colour to change", document.querySelectorAll(".themekeys input[type=color]").length === 20);
@@ -283,8 +285,15 @@ async function runThemes(check: Check, shot: Shot, settle: Settle, until: Until)
   await call("themes.delete", { id: "Ocean 2" });
   applyTheme(await call<ThemeShape>("themes.delete", { id: "Ocean" }));
   list = await call("themes.list");
-  check("deleting a theme goes back to its base", list.themes.length === 2 && document.documentElement.dataset.theme === "dark", list.themes.map(t => t.id).join());
+  check("deleting a theme goes back to its base", list.themes.length === 3 && document.documentElement.dataset.theme === "dark", list.themes.map(t => t.id).join());
+  // "system" follows the system's own setting, and the title bar is left to the system
+  applyTheme(await call<ThemeShape>("themes.use", { id: "system" }));
+  await settle(400);
+  const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
+  check("the system theme draws light or dark as the system is set", (document.documentElement.dataset.theme === "dark") === sysDark && currentTheme?.id === "system", `system dark: ${sysDark}, drawn ${document.documentElement.dataset.theme}`);
   applyTheme(await call<ThemeShape>("themes.use", { id: "light" }));
+  const lightBar = await until(() => !matchMedia("(prefers-color-scheme: dark)").matches, 3000);
+  check("and a light theme a light one", lightBar);
   settings.showCategory("software");
 }
 

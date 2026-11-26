@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("phoenix", {
   quit: (): Promise<void> => ipcRenderer.invoke("phoenix:quit"),
   /** Opens (true) or closes (false) the mini player. */
   mini: (on: boolean): Promise<void> => ipcRenderer.invoke("phoenix:mini", on),
+  /** Tells the system whether the theme is light or dark, so the title bar it draws matches. */
+  themeBase: (base: string, background: string): Promise<void> => ipcRenderer.invoke("phoenix:themeBase", base, background),
   miniState: (): Promise<unknown> => ipcRenderer.invoke("phoenix:miniState"),
   videoSocket: (): Promise<string> => ipcRenderer.invoke("phoenix:videoSocket"),
   /** Self-test only (started with --smoke): where to write results; null otherwise. */

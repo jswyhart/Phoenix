@@ -1,7 +1,7 @@
 // Phoenix for macOS and Linux: the Electron main process. It opens the window, starts the .NET helper that owns the
 // library and the VLC engine, passes the page's requests to it over stdin/stdout, and serves the page and its pictures
 // through the private phoenix:// scheme. The page itself has no Node access (see preload.ts).
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, session, shell } from "electron";
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
@@ -391,6 +391,11 @@ else {
     });
     handle("phoenix:quit", async () => { if (!smokeDir) await quit(0); });
     handle("phoenix:mini", (on: unknown) => showMini(!!on));
+    // the title bar the system draws (and its menus) follow the theme's base, not the system's own setting
+    handle("phoenix:themeBase", (base: unknown, background: unknown) => {
+      nativeTheme.themeSource = base === "dark" ? "dark" : base === "system" ? "system" : "light";
+      if (typeof background === "string" && /^#[0-9a-f]{6}$/i.test(background)) { win?.setBackgroundColor(background); mini?.setBackgroundColor(background); }
+    });
     // self-test: whether the mini player is open, and what it shows
     handle("phoenix:miniState", async () => mini ? { open: true, visible: mini.isVisible(), onTop: mini.isAlwaysOnTop(), text: String(await mini.webContents.executeJavaScript("document.body.innerText")) } : { open: false });
     handle("phoenix:trash", async (file: unknown) => {
