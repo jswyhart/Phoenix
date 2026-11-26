@@ -5,8 +5,8 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
-1.0.2 (not released yet)
-------------------------
+1.0.2 — 2026-11-26
+------------------
 
 New
 - Auto equalizer (settings → playback, on Windows, Mac/Linux and Android): each song is measured once
