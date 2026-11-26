@@ -20,6 +20,8 @@ public static partial class Api
         RegisterListening();
         RegisterBackup();
         RegisterWeb();
+        RegisterCare();
+        RegisterMetadata();
         Updates.Register();
     }
 

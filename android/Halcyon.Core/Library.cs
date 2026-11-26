@@ -404,7 +404,7 @@ public partial class Library
     }
 
     /// <summary>Applies a Discogs release to an album. Returns the number of files whose tags could not be written.</summary>
-    public async Task<int> ApplyReleaseAsync(Album album, DiscogsRelease rel, bool albumInfo, bool titles, bool cover)
+    public async Task<int> ApplyReleaseAsync(Album album, DiscogsRelease rel, bool albumInfo, bool titles, bool cover, byte[]? coverBytes = null)
     {
         var tracks = album.Tracks.ToList();
         var oldArtist = album.Artist;
@@ -434,7 +434,8 @@ public partial class Library
         {
             try
             {
-                bytes = await App.Discogs.GetBytesAsync(rel.CoverUrl);
+                // any source: a web address (Discogs needs its token), or a picture in the album's folder
+                bytes = coverBytes ?? await Halcyon.Services.Metadata.GetBytesAsync(rel.CoverUrl);
                 var path = ArtCachePath(album.Source, tracks[0].AlbumArtist, tracks[0].Album);
                 await File.WriteAllBytesAsync(path, bytes);
                 App.ArtInvalidate(path);

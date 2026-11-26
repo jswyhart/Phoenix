@@ -23,6 +23,8 @@ export const shell = {
   showNow: (_show: boolean) => {},
   /** Play / pause: Phoenix's own player, or the streaming page being listened to. */
   toggle: () => {},
+  /** AcoustID is set up (a key and fpcalc): songs can be identified by their sound. */
+  canIdentify: false,
   nowOpen: () => false,
   /** The video drawing surface (self-test and measurement). */
   video: null as unknown as import("./video").VideoView,

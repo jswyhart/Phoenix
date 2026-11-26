@@ -10,6 +10,8 @@ import type { StatsPage } from "./stats";
 import { sleep } from "./ui";
 import type { VideosPage } from "./videos";
 import { remote, WebServicePage } from "./web";
+import type { CarePage } from "./care";
+import { albumMenu } from "./songs";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
 type Shot = (name: string) => Promise<void>;
@@ -216,6 +218,66 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   settings.showCategory("software");
 
   await runStreaming(check, shot, settle, until);
+  await runCare(check, shot, settle, songs);
+}
+
+// ---------- library care and metadata ----------
+
+async function runCare(check: Check, shot: Shot, settle: Settle, songs: Song[]) {
+  const made = await call<{ copy: string; tracks: number }>("smoke.copySong", { id: songs[0].id });
+  check("a second copy of a song is scanned in", made.tracks === 13, `${made.tracks} songs`);
+  shell.navigate("care");
+  const care = shell.get<CarePage>("care");
+  await care.show("dups");
+  await settle(300);
+  const g = care.groups();
+  check("the duplicate finder finds the copy by name and length", g.length === 1 && g[0].tracks.length === 2 && g[0].why.startsWith("same artist, title and length"), g.map(x => `${x.tracks.length} × ${x.tracks[0].title}: ${x.why}`).join("; "));
+  check("library care lights settings and lists the copies with a choice of which to keep", document.querySelector(".topnav.on")?.textContent === "SETTINGS" && document.querySelectorAll(".dupgroup input[type=radio]").length === 2);
+  await shot("32-care-duplicates");
+  const copyId = g[0].tracks.find(t => t.path === made.copy)!.id;
+  const original = g[0].tracks.find(t => t.path !== made.copy)!.id;
+  await call("rate", { ids: [copyId], rating: 1 });
+  const r = await call<{ files: string[] }>("care.resolve", { group: 0, keep: original });
+  const after = await call<{ tracks: number }>("smoke.state").then((x: any) => x.counts);
+  const liked = (await call<{ songs: Song[] }>("music.view", { mode: "songs" })).songs.find(x => x.id === original);
+  check("keeping one copy takes the other out and passes on its like", after.tracks === 12 && r.files.length === 1 && r.files[0] === made.copy && liked?.rating === 1, `${after.tracks} songs, rating ${liked?.rating}`);
+
+  // the copy's file is still there and not in the library; scan it in again, then take its file away
+  await call("smoke.copySong", { id: songs[0].id });
+  await call("smoke.deleteFile", { path: made.copy });
+  await care.show("missing");
+  await settle(300);
+  check("the missing-file finder lists the song whose file has gone", care.missing().length === 1 && care.missing()[0].path === made.copy, care.missing().map(t => t.path).join(", "));
+  await shot("33-care-missing");
+  await call("care.removeMissing", { ids: [] });
+  await care.show("missing");
+  const counts = await call<any>("smoke.state").then(x => x.counts);
+  check("missing songs can be taken out of the library", care.missing().length === 0 && counts.tracks === 12, `${counts.tracks} songs`);
+
+  // metadata sources
+  shell.navigate("settings");
+  const settings = shell.get<SettingsPage>("settings");
+  settings.showCategory("software", "Metadata");
+  await settle(400);
+  let m = settings.meta.state()!;
+  check("settings: metadata lists every source with its weight", !!m && m.sources.length === 8 && document.querySelectorAll(".metasource").length === 8 && m.order[0] === "Pictures in the album's folder",
+    m ? `${m.sources.length} sources; ${m.order.join(" → ")}` : "none");
+  m = await call("meta.setSource", { id: "deezer", weight: 10 });
+  check("a higher weight asks a source sooner", m.order.indexOf("Deezer") < m.order.indexOf("MusicBrainz + Cover Art Archive"), m.order.join(" → "));
+  m = await call("meta.setSource", { id: "deezer", weight: 5, enabled: false });
+  check("a source switched off is not asked", !m.order.includes("Deezer"), m.order.join(" → "));
+  await call("meta.setSource", { id: "deezer", enabled: true });
+  check("sources that need a key say so", m.sources.filter(s => s.keyHelp && !s.ready).map(s => s.id).sort().join() === "discogs,fanart,lastfm,theaudiodb", m.sources.filter(s => !s.ready).map(s => s.id).join());
+  await shot("34-settings-metadata");
+  const key = (await call<{ albums: { key: string }[] }>("music.view", { mode: "albums" })).albums[0].key;
+  await call("meta.tie", { key, source: "itunes" });
+  const tied = await call<{ tied: string }>("meta.album", { key });
+  check("an album can be tied to one source", tied.tied === "itunes");
+  await call("meta.tie", { key, source: "" });
+  const menu = await albumMenu(key);
+  const labels = menu.filter((x): x is { label: string } => !!x && typeof x === "object").map(x => x.label);
+  check("the album menu offers find album info, its info source, the tag editor and Mixview", ["Find album info…", "Info source", "Tag editor…", "Mixview", "Start Smart DJ"].every(l => labels.includes(l)), labels.join(", "));
+  settings.showCategory("software");
 }
 
 // ---------- streaming services and tabs of your own ----------

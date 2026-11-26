@@ -1,6 +1,7 @@
 // The window: header navigation, the page in the middle, the now-playing layer, and the transport bar.
 import { call, clock, host, Init, on, PlayerState, time } from "./api";
 import { booksPage } from "./books";
+import { carePage } from "./care";
 import { installDialogs } from "./dialogs";
 import { musicPage } from "./music";
 import { NowPlaying } from "./nowplaying";
@@ -20,7 +21,7 @@ import { art, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Sli
 
 const makers: Record<string, () => Page> = {
   quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
-  books: booksPage, playlists: playlistsPage, radio: radioPage, phone: phonePage, search: searchPage, settings: settingsPage, stats: statsPage,
+  books: booksPage, playlists: playlistsPage, radio: radioPage, phone: phonePage, search: searchPage, settings: settingsPage, stats: statsPage, care: carePage,
 };
 
 async function start() {
@@ -31,6 +32,7 @@ async function start() {
   shell.queue = init.queue;
   shell.tabs = init.tabs;
   await loadWeb();
+  void call<{ canIdentify: boolean }>("meta.state").then(m => { shell.canIdentify = m.canIdentify; });
   const root = document.getElementById("root")!;
 
   // ---------- header ----------
@@ -118,7 +120,7 @@ async function start() {
     p.shown?.();
     top.get("quickplay")!.classList.toggle("on", page === "quickplay" || page === "stats");
     top.get("collection")!.classList.toggle("on", isColl || page === "search" || page === "phone");
-    top.get("settings")!.classList.toggle("on", page === "settings");
+    top.get("settings")!.classList.toggle("on", page === "settings" || page === "care");
     subNav.classList.toggle("hidden", !isColl);
     sub.forEach((el, key) => el.classList.toggle("on", key === lit));
     backBtn.disabled = back.length === 0;

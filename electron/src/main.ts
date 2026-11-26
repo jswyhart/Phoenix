@@ -364,6 +364,10 @@ else {
       return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0];
     });
     handle("phoenix:quit", async () => { if (!smokeDir) await quit(0); });
+    handle("phoenix:trash", async (file: unknown) => {
+      if (typeof file !== "string" || !path.isAbsolute(file) || !fs.existsSync(file)) return false;
+      try { await shell.trashItem(file); return true; } catch { return false; }
+    });
     handle("phoenix:relaunch", async () => {
       if (smokeDir) return;
       app.relaunch();

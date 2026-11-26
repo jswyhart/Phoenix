@@ -59,6 +59,16 @@ public static partial class Api
             File.WriteAllText(file, html);
             return new Uri(file).AbsoluteUri;
         });
+        // a second copy of a song (for the duplicate finder), and taking a file away (for the missing-file finder)
+        Rpc.On("smoke.copySong", async p =>
+        {
+            var t = Lib.ById[p.Long("id")];
+            var copy = Path.Combine(Path.GetDirectoryName(t.SourceId)!, "copy of " + Path.GetFileName(t.SourceId));
+            File.Copy(t.SourceId, copy, true);
+            await App.RefreshCollectionAsync();
+            return new { copy, tracks = Lib.Tracks.Count };
+        });
+        Rpc.On("smoke.deleteFile", p => { File.Delete(p.Str("path")); return !File.Exists(p.Str("path")); });
         Rpc.On("smoke.settings", _ => new { views = S.Views, tabsOff = S.TabsOff, speeds = S.Speeds, stations = Lib.Stations.Count });
         // a large uncompressed clip for measuring how fast frames reach the window (about 6 MB a frame at 1080p)
         Rpc.On("smoke.bigVideo", async p =>

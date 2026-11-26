@@ -1,7 +1,8 @@
-// Edit song / album info, and "Find album info on Discogs".
+// Edit song / album info, "Find album info" (from any metadata source, as on Windows), and identifying a song by its sound.
 import { call } from "./api";
 import { menuHooks } from "./songs";
-import { art, dialogButtons, h, message, openDialog, pill, setArt, VList } from "./ui";
+import { shell } from "./shell";
+import { art, confirm, dialogButtons, h, message, openDialog, pill, setArt, VList } from "./ui";
 
 /** Edits one song, or the shared fields of several songs / a whole album. Blank shared fields are left unchanged. */
 async function editSongs(ids: number[], album: boolean) {
@@ -25,21 +26,32 @@ async function editSongs(ids: number[], album: boolean) {
   (single ? title : artist).focus();
 }
 
-interface Result { id: number; title: string; details: string; thumb: string }
-interface Release { id: number; title: string; artist: string; cover: string; meta: string; tracks: string[] }
+interface Result { index: number; title: string; details: string; thumb: string; fit: number }
+interface Release { id: string; title: string; artist: string; cover: string; meta: string; tracks: string[] }
+interface MetaSource { id: string; name: string; ready: boolean; enabled: boolean; keyHelp: string | null }
 
-/** Finds an album on Discogs and applies its details, track names and cover. */
-async function discogs(key: string) {
-  const album = await call<{ key: string; artist: string; title: string; source: string; tracks: string[]; hasToken: boolean } | null>("discogs.album", { key });
+/** Finds an album in one of the metadata sources and applies its details, track names and cover. */
+async function findAlbumInfo(key: string) {
+  const album = await call<{ key: string; artist: string; title: string; source: string; tracks: string[]; tied: string; sources: MetaSource[] } | null>("meta.album", { key });
   if (!album) return;
-  const d = openDialog(940, 620);
+  const d = openDialog(940, 640);
   let release: Release | null = null, chosen: Result | null = null;
+  const offered = album.sources.filter(s => s.enabled || s.id === album.tied);
+  let source = (offered.find(s => s.id === album.tied && s.ready) ?? offered.find(s => s.ready && s.id !== "folder") ?? offered.find(s => s.ready) ?? offered[0])?.id ?? "musicbrainz";
+  const sourceBox = h("select.box", ...offered.map(s => h("option", { value: s.id, disabled: !s.ready }, s.ready ? s.name : s.name + " (needs its key)")));
+  sourceBox.value = source;
+  sourceBox.onchange = () => { source = sourceBox.value; compareCap.textContent = `YOUR SONGS  →  ${sourceName().toUpperCase()} TRACK NAMES`; chkTie.box.checked = source === album.tied; void search(); };
+  const sourceName = () => offered.find(s => s.id === source)?.name ?? source;
   const artist = h("input", { type: "text", value: album.artist }), albumBox = h("input", { type: "text", value: album.title });
   const resultCap = h("div.cap", "RELEASES"), status = h("div.statusline");
   const relTitle = h("div", { style: { fontSize: "20px", fontWeight: "300", maxHeight: "56px", overflow: "hidden" } }), relArtist = h("div", { style: { fontSize: "14px" } }), relMeta = h("div.note");
   const cover = art(null, 300);
   const check = (label: string) => { const box = h("input", { type: "checkbox", checked: true }); return { box, el: h("label.check", { style: { marginRight: "18px" } }, box, label) }; };
   const chkAlbum = check("album title, artist, year, genre"), chkTitles = check("song titles"), chkCover = check("cover art");
+  const chkTie = check("always use this source for this album");
+  chkTie.box.checked = source === album.tied;
+  chkTie.el.title = "Automatic fill-in will then ask only this source about this album";
+  const compareCap = h("div.cap", `YOUR SONGS  →  ${sourceName().toUpperCase()} TRACK NAMES`);
   const results = new VList<Result>({
     rowHeight: 60,
     render: r => h("div", h("div.thumb", { style: { width: "48px", height: "48px", marginRight: "12px" } }, art(r.thumb, 100)),
@@ -56,17 +68,18 @@ async function discogs(key: string) {
   applyBtn.disabled = true;
   d.onEnter = search;
   d.body.append(
-    h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr auto", columnGap: "10px", alignItems: "end", marginBottom: "14px", flex: "none" } },
-      h("div", h("div.label", "ARTIST"), artist), h("div", h("div.label", "ALBUM"), albumBox), searchBtn),
+    h("div.h2", "find album info"),
+    h("div", { style: { display: "grid", gridTemplateColumns: "230px 1fr 1fr auto", columnGap: "10px", alignItems: "end", marginBottom: "14px", flex: "none" } },
+      h("div", h("div.label", "SOURCE"), sourceBox), h("div", h("div.label", "ARTIST"), artist), h("div", h("div.label", "ALBUM"), albumBox), searchBtn),
     h("div", { style: { flex: "1 1 0", minHeight: "0", display: "grid", gridTemplateColumns: "1fr 1.15fr", columnGap: "18px" } },
       h("div.pane", resultCap, results.el),
       h("div.pane",
         h("div", { style: { display: "flex", marginBottom: "12px", flex: "none" } },
           h("div.thumb", { style: { width: "120px", height: "120px", marginRight: "14px" } }, cover),
           h("div", { style: { alignSelf: "center", minWidth: "0" } }, relTitle, relArtist, relMeta)),
-        h("div.cap", "YOUR SONGS  →  DISCOGS TRACK NAMES"), compare.el)),
+        compareCap, compare.el)),
     h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "14px", flex: "none" } },
-      h("div", h("div", { style: { display: "flex" } }, chkAlbum.el, chkTitles.el, chkCover.el), status),
+      h("div", h("div", { style: { display: "flex" } }, chkAlbum.el, chkTitles.el, chkCover.el), h("div", { style: { display: "flex", marginTop: "6px" } }, chkTie.el), status),
       h("div", { style: { display: "flex", flex: "none" } }, applyBtn, closeBtn)));
 
   function showTracks(rel: Release | null) {
@@ -83,9 +96,9 @@ async function discogs(key: string) {
 
   async function search() {
     searchBtn.disabled = true;
-    status.textContent = "searching Discogs…";
+    status.textContent = `searching ${sourceName()}…`;
     try {
-      const list = await call<Result[]>("discogs.search", { artist: artist.value, album: albumBox.value });
+      const list = await call<Result[]>("meta.search", { source, key, artist: artist.value, title: albumBox.value });
       results.setItems(list);
       resultCap.textContent = `RELEASES  ${list.length}`;
       status.textContent = list.length === 0 ? "No releases found. Try a shorter album or artist name." : "Pick the release that matches your copy.";
@@ -98,7 +111,7 @@ async function discogs(key: string) {
     chosen = r;
     applyBtn.disabled = true;
     try {
-      const rel = await call<Release>("discogs.release", { id: r.id });
+      const rel = await call<Release>("meta.release", { source, index: r.index });
       if (chosen !== r) return;   // selection moved on while loading
       release = rel;
       relTitle.textContent = rel.title;
@@ -115,7 +128,7 @@ async function discogs(key: string) {
     applyBtn.disabled = true;
     status.textContent = "applying…";
     try {
-      const failed = await call<number>("discogs.apply", { key, id: release.id, albumInfo: chkAlbum.box.checked, titles: chkTitles.box.checked, cover: chkCover.box.checked });
+      const failed = await call<number>("meta.apply", { key, source, id: release.id, albumInfo: chkAlbum.box.checked, titles: chkTitles.box.checked, cover: chkCover.box.checked, tie: chkTie.box.checked });
       d.close();
       if (failed > 0) await message(`Saved in Phoenix, but ${failed} file(s) couldn't be updated (in use or read-only).`);
     } catch (e: any) { status.textContent = String(e.message ?? e); applyBtn.disabled = false; }
@@ -123,11 +136,31 @@ async function discogs(key: string) {
 
   showTracks(null);
   if (album.source !== "local") status.textContent = `This album comes from ${album.source}: changes are kept in Phoenix and survive the next sync; the server itself is not changed.`;
-  if (!album.hasToken) status.textContent = "Add your Discogs personal access token in settings first.";
+  if (!offered.some(s => s.id === source && s.ready)) status.textContent = "Switch on a source in settings → metadata first.";
   else void search();
+}
+
+/** Listens to a song and asks AcoustID what it is; offers to use what it finds. */
+async function identify(id: number, title: string) {
+  shell.setStatus(`listening to “${title}”…`);
+  try {
+    const found = await call<{ title: string; artist: string; album: string; score: number } | null>("meta.identify", { id });
+    shell.setStatus("");
+    if (!found) { await message("AcoustID does not know this recording."); return; }
+    const sure = Math.round(found.score * 100);
+    if (!(await confirm(`This sounds like:\n\n${found.title}\n${found.artist}${found.album ? "\n" + found.album : ""}\n\n(${sure}% sure)\n\nUse these details for the song?`, "use them"))) return;
+    const info = await call<any>("tracks.info", { ids: [id] });
+    const failed = await call<number>("tracks.save", {
+      ids: [id], album: false, title: found.title, trackNo: info.trackNo, artist: found.artist || info.artist,
+      albumName: info.album && info.album !== "Unknown Album" ? info.album : found.album, albumArtist: info.albumArtist && info.albumArtist !== info.artist ? info.albumArtist : found.artist || info.albumArtist,
+      genre: info.genre, year: info.year,
+    });
+    shell.setStatus(failed > 0 ? "saved in Phoenix, but the file could not be updated" : `now “${found.title}” by ${found.artist}`);
+  } catch (e: any) { shell.setStatus("couldn't identify the song: " + (e.message ?? e)); }
 }
 
 export function installDialogs() {
   menuHooks.editSongs = (ids, album) => void editSongs(ids, album);
-  menuHooks.discogs = key => void discogs(key);
+  menuHooks.discogs = key => void findAlbumInfo(key);
+  menuHooks.identify = (id, title) => void identify(id, title);
 }

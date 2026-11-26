@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("phoenix", {
   openFile: (title: string, filters: unknown): Promise<string | null> => ipcRenderer.invoke("phoenix:openFile", title, filters),
   /** Closes Phoenix and starts it again (after choosing a backup to restore, or to finish an update). */
   relaunch: (): Promise<void> => ipcRenderer.invoke("phoenix:relaunch"),
+  /** Moves a file to the Trash / Recycle Bin; false if it couldn't be. */
+  trash: (path: string): Promise<boolean> => ipcRenderer.invoke("phoenix:trash", path),
   /** Closes Phoenix (an update or going back is put in place once it has closed). */
   quit: (): Promise<void> => ipcRenderer.invoke("phoenix:quit"),
   videoSocket: (): Promise<string> => ipcRenderer.invoke("phoenix:videoSocket"),

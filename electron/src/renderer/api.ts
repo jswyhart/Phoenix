@@ -12,6 +12,7 @@ export interface Host {
   openFile(title: string, filters: { name: string; extensions: string[] }[]): Promise<string | null>;
   relaunch(): Promise<void>;
   quit(): Promise<void>;
+  trash(path: string): Promise<boolean>;
   setFullscreen(on: boolean): Promise<void>;
   videoSocket(): Promise<string>;
   smoke: string | null;

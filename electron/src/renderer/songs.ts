@@ -82,7 +82,27 @@ export const menuHooks = {
   addToPhone: (_ids: () => Promise<number[]> | number[]): MenuEntry => null,
   editSongs: (_ids: number[], _album: boolean): void => {},
   discogs: (_albumKey: string): void => {},
+  identify: (_id: number, _title: string): void => {},
+  tagEditor: (_ids: number[] | (() => Promise<number[]>)): void => {},
+  editTags: (_ids: number[], _what: string): void => {},
+  mixview: (_albumKey: string | null, _artist: string): void => {},
+  smartDj: (_ids: number[]): void => {},
 };
+
+/** The "Info source" submenu: which metadata source an album uses when missing info is filled in. */
+async function infoSource(key: string): Promise<MenuEntry> {
+  const a = await call<{ tied: string; sources: { id: string; name: string; ready: boolean; enabled: boolean }[] } | null>("meta.album", { key });
+  if (!a) return null;
+  const tie = (id: string) => call("meta.tie", { key, source: id });
+  return { label: "Info source", sub: [
+    { label: "Automatic (by weight)", checked: a.tied === "", action: () => tie("") },
+    "-",
+    // only the sources switched on in settings → metadata are offered (plus the one this album is tied to)
+    ...a.sources.filter(s => s.enabled || s.id === a.tied).map(s => ({ label: s.ready ? s.name : s.name + " (needs its key)", disabled: !s.ready, checked: a.tied === s.id, action: () => tie(s.id) })),
+    "-",
+    { label: "Never fill in automatically", checked: a.tied === "none", action: () => tie("none") },
+  ] };
+}
 
 /** The menu for one or more chosen songs. With one song, "Play" starts it and carries on down <context>. */
 export function songMenu(songs: Song[], context: Song[] | null): MenuEntry[] {
@@ -90,6 +110,7 @@ export function songMenu(songs: Song[], context: Song[] | null): MenuEntry[] {
   return [
     { label: "Play", action: () => (context && songs.length === 1 ? call("play.tracks", { ids: context.map(s => s.id), start: ids[0] }) : call("play.tracks", { ids })) },
     { label: "Add to now playing", action: () => call("queue.tracks", { ids }) },
+    { label: "Start Smart DJ", action: () => menuHooks.smartDj([ids[0]]) },
     menuHooks.addToPlaylist(() => ids),
     menuHooks.addToPhone(() => ids),
     "-",
@@ -99,23 +120,33 @@ export function songMenu(songs: Song[], context: Song[] | null): MenuEntry[] {
       { label: "Clear rating", action: () => call("rate", { ids, rating: 0 }) },
     ] },
     { label: songs.length === 1 ? "Edit song info…" : `Edit info for ${songs.length} songs…`, action: () => menuHooks.editSongs(ids, false) },
-    { label: "Find album info on Discogs…", action: async () => { const key = await call<string | null>("track.albumKey", { id: ids[0] }); if (key) menuHooks.discogs(key); } },
+    { label: songs.length === 1 ? "Edit tags…" : `Edit tags for ${songs.length} songs…`, action: () => menuHooks.editTags(ids, songs.length === 1 ? `“${songs[0].title}”` : `${songs.length} songs`) },
+    { label: "Tag editor…", action: () => menuHooks.tagEditor(ids) },
+    { label: "Find album info…", action: async () => { const key = await call<string | null>("track.albumKey", { id: ids[0] }); if (key) menuHooks.discogs(key); } },
+    { label: "Mixview", action: async () => { const key = await call<string | null>("track.albumKey", { id: ids[0] }); menuHooks.mixview(key, songs[0].artist); } },
+    songs.length === 1 && songs[0].local && shell.canIdentify ? { label: "Identify by sound…", action: () => menuHooks.identify(ids[0], songs[0].title) } : null,
     songs.length === 1 && songs[0].local ? { label: revealLabel, action: async () => { const p = await call<string | null>("track.path", { id: ids[0] }); if (p) void host.reveal(p); } } : null,
   ];
 }
 
 export async function albumMenu(key: string): Promise<MenuEntry[]> {
-  const a = await call<{ key: string; title: string; pinned: boolean; ids: number[] } | null>("album.info", { key });
+  const a = await call<{ key: string; title: string; artist: string; pinned: boolean; ids: number[] } | null>("album.info", { key });
   if (!a) return [];
+  const source = await infoSource(key);
   return [
     { label: "Play album", action: () => call("play.album", { key }) },
     { label: "Add to now playing", action: () => call("queue.album", { key }) },
+    { label: "Start Smart DJ", disabled: a.ids.length === 0, action: () => menuHooks.smartDj(a.ids) },
     menuHooks.addToPlaylist(() => a.ids),
     menuHooks.addToPhone(() => a.ids),
     { label: a.pinned ? "Unpin from quickplay" : "Pin to quickplay", action: () => call("pin.toggle", { kind: "album", key, title: a.title }) },
+    { label: "Mixview", action: () => menuHooks.mixview(key, a.artist) },
     "-",
-    { label: "Find album info on Discogs…", action: () => menuHooks.discogs(key) },
+    { label: "Find album info…", action: () => menuHooks.discogs(key) },
+    source,
     { label: "Edit album info…", action: () => menuHooks.editSongs(a.ids, true) },
+    { label: "Tag editor…", action: () => menuHooks.tagEditor(a.ids) },
+    { label: "Edit tags for all songs…", action: () => menuHooks.editTags(a.ids, `“${a.title}” (${a.ids.length} songs)`) },
   ];
 }
 
@@ -125,9 +156,13 @@ export async function artistMenu(artist: string): Promise<MenuEntry[]> {
     { label: "Play all", action: () => call("play.tracks", { ids }) },
     { label: "Shuffle", action: () => call("play.tracks", { ids, shuffle: true }) },
     { label: "Play smart mix", action: () => call("artist.smartMix", { artist }) },
+    { label: "Start Smart DJ", disabled: ids.length === 0, action: () => menuHooks.smartDj(ids) },
     { label: "Add to now playing", action: () => call("queue.tracks", { ids }) },
     menuHooks.addToPlaylist(() => ids),
     menuHooks.addToPhone(() => ids),
     { label: pinned ? "Unpin from quickplay" : "Pin to quickplay", action: () => call("pin.toggle", { kind: "artist", key: artist, title: artist }) },
+    { label: "Mixview", action: () => menuHooks.mixview(null, artist) },
+    "-",
+    { label: "Tag editor…", disabled: ids.length === 0, action: () => menuHooks.tagEditor(ids) },
   ];
 }

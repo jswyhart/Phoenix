@@ -63,6 +63,21 @@ public class Settings
     /// <summary>Where each streaming service is shown: "tab" (a collection tab of its own), a collection ("videos"), or a tab of your own ("tab:&lt;id&gt;").</summary>
     public Dictionary<string, string> ServicePlaces { get; set; } = new();
     public List<CustomTab> CustomTabs { get; set; } = new();
+    /// <summary>Which metadata sources are on, and their weights (desktop).</summary>
+    public List<Halcyon.Services.MetaSourceSetting> MetaSources { get; set; } = new();
+    /// <summary>Album key -> the source it is tied to ("none" = never).</summary>
+    public Dictionary<string, string> AlbumSources { get; set; } = new();
+    public string FpcalcPath { get; set; } = "";          // Chromaprint's fpcalc, for identifying songs by sound
+    public bool LyricsAuto { get; set; }                  // look lyrics up online when a song has none
+    public bool ShowLyrics { get; set; }                  // now playing's side shows lyrics instead of the queue
+    public bool QuickplayPlays { get; set; }              // clicking an album in quickplay plays it (off: opens the album)
+    public bool Backdrops { get; set; }                   // artist photos behind now playing (the artist's name is sent to find them)
+    public bool Levelling { get; set; }                   // play every song at about the same loudness
+    public bool LevelByAlbum { get; set; }                // keep an album's loud and quiet songs as they are to each other
+    public bool EqEnabled { get; set; }
+    public string EqPreset { get; set; } = "flat";
+    public double[] EqGains { get; set; } = new double[10];
+    public double Crossfade { get; set; }                 // seconds songs overlap; 0 = back to back
     /// <summary>"podcast:&lt;id&gt;" or "book:&lt;id&gt;" -> playback speed.</summary>
     public Dictionary<string, double> Speeds { get; set; } = new();
     public bool ScrobbleLastFm { get; set; }

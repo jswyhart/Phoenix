@@ -6,6 +6,7 @@ import { computer, PhoneState } from "./phone";
 import { h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 import { customTabsSection, streamingPanel } from "./settingsWeb";
+import { metadataPanel } from "./settingsMeta";
 
 let measure: CanvasRenderingContext2D | null = null;
 
@@ -42,7 +43,7 @@ export function fitPath(path: string, width: number, font = '14px "Selawik"'): s
 
 export interface SettingsPage extends Page {
   showCategory(pivot: string, category?: string): void; shown_(): string; refreshFolders(): Promise<void>;
-  updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>;
+  updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>; meta: ReturnType<typeof metadataPanel>;
 }
 
 const GROUPS: Record<string, string[]> = {
@@ -107,11 +108,6 @@ export function settingsPage(): SettingsPage {
     rescanBtn.disabled = false;
   }
 
-  // ---- metadata ----
-  const discogs = input("personal access token", true);
-  const discogsStatus = status();
-  const writeTags = h("input", { type: "checkbox", checked: S.writeTags });
-  writeTags.onchange = async () => { S = shell.settings = await call<SettingsState>("settings.set", { writeTags: writeTags.checked }); };
 
   // ---- display ----
   const light = h("input", { type: "radio", name: "theme", checked: S.theme !== "dark" });
@@ -193,7 +189,6 @@ export function settingsPage(): SettingsPage {
     if (idle(plexStatus.textContent)) plexStatus.textContent = st.plex;
     if (scanStatus.textContent !== "" ) scanStatus.textContent = st.collection;
     if (!plexToken.value && S.hasPlexToken) plexToken.placeholder = "(saved)";
-    if (S.hasDiscogsToken) discogs.placeholder = "(saved — paste a new one to replace it)";
   }
 
   // ---- phone sync ----
@@ -216,23 +211,16 @@ export function settingsPage(): SettingsPage {
 
   // ---- the panels ----
   const listening = listeningPanel(), storage = storagePanel(), updates = updatesPanel(), tabsBox = tabsSection(), viz = visualizerSection();
-  const streaming = streamingPanel(), ownTabs = customTabsSection();
-  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, viz], Streaming: [streaming] };
+  const streaming = streamingPanel(), ownTabs = customTabsSection(), meta = metadataPanel();
+  const extra: Record<string, { shown: () => void | Promise<void> }[]> = { Listening: [listening], Storage: [storage], Updates: [updates], Display: [tabsBox, ownTabs, viz], Streaming: [streaming], Metadata: [meta] };
   const panels: Record<string, HTMLElement> = {
     Collection: h("div", h("div.h2", "collection"),
       note("Phoenix watches these folders, and any servers you connect, for music, videos, pictures and books. Everything is checked for changes each time Phoenix starts. Files stay where they are."),
       folders("music", "MUSIC FOLDERS", 84), folders("video", "VIDEO FOLDERS", 64), folders("picture", "PICTURE FOLDERS", 64), folders("book", "BOOK FOLDERS (AUDIOBOOKS, EBOOKS AND COMICS)", 64),
-      h("div", { style: { marginTop: "16px" } }, rescanBtn), scanStatus),
-    Metadata: h("div", h("div.h2", "metadata"),
-      note("Album details, track names and cover art come from the Discogs database. Create a personal access token at discogs.com → Settings → Developers and paste it here."),
-      field("DISCOGS PERSONAL ACCESS TOKEN", discogs),
-      h("label.check", { style: { margin: "4px 0" } }, writeTags, "write edited song info into the music files"),
-      h("div", { style: { marginTop: "8px" } }, pill("SAVE TOKEN", async () => {
-        if (discogs.value.trim() === "" && S.hasDiscogsToken && discogs.placeholder.startsWith("(saved")) { discogsStatus.textContent = "the saved token was kept"; return; }
-        discogsStatus.textContent = await call<string>("discogs.saveToken", { token: discogs.value });
-        discogs.value = "";
-        await refreshStatus();
-      }), pill("REMOVE TOKEN", async () => { discogsStatus.textContent = await call<string>("discogs.saveToken", { token: "" }); discogs.placeholder = "personal access token"; await refreshStatus(); })), discogsStatus),
+      h("div", { style: { marginTop: "16px", display: "flex", flexWrap: "wrap", rowGap: "6px" } }, rescanBtn,
+        (() => { const b = pill("FIND DUPLICATES AND MISSING FILES", () => shell.navigate("care")); b.title = "The same song stored twice, and songs whose files have gone"; return b; })()),
+      scanStatus),
+    Metadata: meta.el,
     Display: h("div", h("div.h2", "display"), h("div.label", "BACKGROUND"),
       row(h("label.check", { style: { marginRight: "18px" } }, light, "light"), h("label.check", dark, "dark")), tabsBox.el, ownTabs.el, viz.el),
     Streaming: streaming.el,
@@ -301,5 +289,5 @@ export function settingsPage(): SettingsPage {
   showCategory("software");
   paintFolders();
   void refreshStatus();
-  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening };
+  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening, meta };
 }
