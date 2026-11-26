@@ -245,10 +245,24 @@
                         <TextBlock Text="keep it" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="80"/>
                         <ComboBox x:Name="AutoEqStoreBox" Width="440" SelectionChanged="AutoEqStore_Changed"/>
                     </StackPanel>
+                    <CheckBox x:Name="AutoEqAiBox" Content="Recognise each song's style with AI, for a target that suits it" Margin="24,12,0,0" Click="AutoEqAi_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="48,2,0,0" Text="Google's YAMNet sound-recognition model listens to three short stretches of each song and tells electronic, hip hop, rock, pop, acoustic, jazz and classical apart, and singing or speech, so each is evened out towards a balance that suits it. It runs on the graphics card (any AMD, Intel or NVIDIA graphics), on this computer only. The model (15 MB) is downloaded once; songs measured before are listened to again."/>
+                    <StackPanel Orientation="Horizontal" Margin="48,6,0,0">
+                        <Button x:Name="AutoEqAiDownloadBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD THE MODEL" Click="AutoEqAiDownload_Click"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="24,12,0,0">
                         <Button x:Name="AutoEqScanBtn" Style="{StaticResource PillBtn}" Content="MEASURE ALL SONGS NOW" Click="AutoEqScan_Click"/>
                     </StackPanel>
                     <TextBlock x:Name="AutoEqStatus" Style="{StaticResource Status}" Margin="24,6,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource Label}" Text="HEADPHONES AND SPEAKERS" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="HeadphoneBox" Content="Correct for my headphones or speakers" Margin="0,4,0,0" Click="Headphone_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="From the AutoEq project: measurements of thousands of headphones, earbuds and speakers, each with a correction towards a neutral sound. Find yours by name; its correction goes on top of everything else. The list and the profile come from AutoEq's page on GitHub."/>
+                    <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
+                        <TextBox x:Name="HeadphoneSearch" Width="320" KeyDown="HeadphoneSearch_KeyDown" ToolTip="For example: sony wf-1000xm5, hd 600, airpods pro"/>
+                        <Button Style="{StaticResource PillBtn}" Content="FIND" Click="HeadphoneFind_Click" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <ListBox x:Name="HeadphoneList" Margin="24,6,0,0" MaxHeight="200" Width="520" HorizontalAlignment="Left" Visibility="Collapsed" SelectionChanged="HeadphoneList_Changed"/>
+                    <TextBlock x:Name="HeadphoneStatus" Style="{StaticResource Status}" Margin="24,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelPodcasts" Visibility="Collapsed">

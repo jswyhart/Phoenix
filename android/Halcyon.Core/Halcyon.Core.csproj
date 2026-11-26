@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="SharpCompress" Version="0.50.9" />
   </ItemGroup>
@@ -18,6 +19,8 @@
   <ItemGroup>
     <!-- shared with the Windows app as they are -->
     <Compile Include="..\..\Services\AutoEq.cs" Link="AutoEq.cs" />
+    <Compile Include="..\..\Services\AutoEqAi.cs" Link="AutoEqAi.cs" />
+    <Compile Include="..\..\Services\HeadphoneEq.cs" Link="HeadphoneEq.cs" />
   </ItemGroup>
 
 </Project>

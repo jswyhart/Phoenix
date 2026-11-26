@@ -795,6 +795,47 @@ Section("the auto equalizer");
     Check(Math.Abs(combined[1] - (1 + AutoEq.Gains(even, "bass")[1])) < 0.01, "the auto equalizer goes on top of your own equalizer");
     App.Settings.AutoEq = false; App.Settings.EqEnabled = false;
     try { Directory.Delete(dir, true); } catch { }
+
+    // the AI part: styles shift the target
+    var electronic = AutoEq.Gains(balanced, "accuracy", new Dictionary<string, double> { ["electronic"] = 0.8 });
+    var classical = AutoEq.Gains(balanced, "accuracy", new Dictionary<string, double> { ["classical"] = 0.8 });
+    Check(electronic[1] > balancedAcc[1] + 0.5 && classical[1] < balancedAcc[1] - 0.3, $"a song recognised as electronic gets more low end than one recognised as classical: {electronic[1]} vs {classical[1]}");
+    var withStyles = AutoEq.Format(even, new Dictionary<string, double> { ["rock"] = 0.42, ["vocal"] = 0.2 });
+    Check(AutoEq.Parse(withStyles) is { Length: 10 } && AutoEq.ParseStyles(withStyles) is { } st && Math.Abs(st["rock"] - 0.42) < 0.001 && AutoEq.ParseStyles(AutoEq.Format(even)) == null,
+        "the styles the AI heard are kept with the measurement");
+
+    // headphones: AutoEq's ten-band profiles
+    var (phones, preamp) = HeadphoneEq.Parse("Preamp: -4.1 dB\nFilter 1: ON PK Fc 31 Hz Gain 3.9 dB Q 1.41\nFilter 2: ON PK Fc 62 Hz Gain 1.5 dB Q 1.41\nFilter 3: ON PK Fc 125 Hz Gain -2.7 dB Q 1.41\n" +
+        "Filter 4: ON PK Fc 250 Hz Gain -1.6 dB Q 1.41\nFilter 5: ON PK Fc 500 Hz Gain -0.4 dB Q 1.41\nFilter 6: ON PK Fc 1000 Hz Gain 1.0 dB Q 1.41\nFilter 7: ON PK Fc 2000 Hz Gain 0.1 dB Q 1.41\n" +
+        "Filter 8: ON PK Fc 4000 Hz Gain 1.5 dB Q 1.41\nFilter 9: ON PK Fc 8000 Hz Gain 2.1 dB Q 1.41\nFilter 10: ON PK Fc 16000 Hz Gain -9.3 dB Q 1.41");
+    Check(preamp == -4.1 && phones[0] == 3.9 && phones[9] == -9.3, "a headphone profile's ten bands are read");
+    App.Settings.HeadphoneOn = true; App.Settings.HeadphoneGains = phones;
+    var phonesOnly = AutoEq.Combine(App.Settings, null)!;
+    Check(phonesOnly[9] == -9.3, "the headphone correction goes on the equalizer by itself too");
+    App.Settings.HeadphoneOn = false; App.Settings.HeadphoneGains = Array.Empty<double>();
+
+    if (Environment.GetEnvironmentVariable("PHOENIX_NET_TESTS") == "1")
+    {
+        var found = await HeadphoneEq.SearchAsync("sony wf-1000xm3");
+        var profile = found.Count > 0 ? await HeadphoneEq.FetchAsync(found[0]) : default;
+        Check(found.Count > 0 && found[0].Name.StartsWith("Sony WF-1000XM3") && profile.Gains?.Length == 10, $"AutoEq's list is searched and a profile fetched: {found.FirstOrDefault()?.Label} {string.Join(",", profile.Gains ?? Array.Empty<double>())}");
+        if (!AutoEqAi.Have) await AutoEqAi.DownloadAsync(_ => { }, CancellationToken.None);
+        var sample = Environment.GetEnvironmentVariable("PHOENIX_SPEECH_SAMPLE") ?? "";
+        if (File.Exists(sample))
+        {
+            using var reader = new System.IO.BinaryReader(File.OpenRead(sample));
+            var bytes = File.ReadAllBytes(sample);
+            // a 16-bit WAV: find "data", read the samples
+            var at = 12; var rate = BitConverter.ToInt32(bytes, 24); var channels = BitConverter.ToInt16(bytes, 22);
+            while (at + 8 < bytes.Length && System.Text.Encoding.ASCII.GetString(bytes, at, 4) != "data") at += 8 + BitConverter.ToInt32(bytes, at + 4);
+            var n = (bytes.Length - at - 8) / 2 / channels;
+            var mono = new float[n];
+            for (var i = 0; i < n; i++) mono[i] = BitConverter.ToInt16(bytes, at + 8 + i * 2 * channels) / 32768f;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var heard = AutoEqAi.Recognise(mono, rate);
+            Check(heard != null && heard.GetValueOrDefault("speech") > 0.3, $"YAMNet recognises speech in a spoken clip, on {AutoEqAi.RanOn} in {watch.ElapsedMilliseconds} ms: {AutoEqAi.Describe(heard)} ({(heard == null ? "" : AutoEqAi.Format(heard))})");
+        }
+    }
 }
 
 Console.WriteLine();

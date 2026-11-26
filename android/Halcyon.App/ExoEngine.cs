@@ -61,11 +61,13 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerLi
         var s = App.Settings;
         try
         {
-            var own = s.EqEnabled ? EqPresets.Current(s) : null;
-            var auto = s.AutoEq && App.Player.Current?.Track is { } t && Halcyon.Services.AutoEq.LevelsFor(t) is { } l ? Halcyon.Services.AutoEq.Gains(l, s.AutoEqProfile) : null;
-            if (own == null && auto == null) { if (_eq != null) _eq.SetEnabled(false); return; }
+            // your own bands (from the preset), the auto equalizer's for this song, and your headphones' correction
+            var saved = s.EqGains;
+            if (s.EqEnabled) s.EqGains = EqPresets.Current(s).ToArray();
+            var gains = Halcyon.Services.AutoEq.Combine(s, App.Player.Current?.Track);
+            s.EqGains = saved;
+            if (gains == null) { if (_eq != null) _eq.SetEnabled(false); return; }
             _eq ??= new AFx.Equalizer(0, _player.AudioSessionId);
-            var gains = own == null ? auto! : auto == null ? own : own.Zip(auto, (a, b) => Math.Clamp(a + b, -12, 12)).ToArray();
             var range = _eq.GetBandLevelRange()!;   // millibels
             for (short b = 0; b < _eq.NumberOfBands; b++)
             {

@@ -103,6 +103,11 @@ public class Settings
     public bool AutoEq { get; set; }                       // the auto equalizer: each song's own adjustment, from a scan
     public string AutoEqProfile { get; set; } = "accuracy"; // accuracy | clarity | bass
     public string AutoEqStore { get; set; } = "phoenix";    // where measurements are kept: phoenix | tags | folder
+    public bool AutoEqAi { get; set; }                      // the AI part: recognise each song's style (YAMNet) for a target that suits it
+    public bool HeadphoneOn { get; set; }                   // correct for your headphones or speakers (AutoEq profile)
+    public string HeadphoneName { get; set; } = "";
+    public string HeadphoneSource { get; set; } = "";
+    public double[] HeadphoneGains { get; set; } = Array.Empty<double>();
     public double Crossfade { get; set; }                 // seconds songs overlap; 0 = back to back
     /// <summary>"podcast:&lt;id&gt;" or "book:&lt;id&gt;" -> playback speed.</summary>
     public Dictionary<string, double> Speeds { get; set; } = new();

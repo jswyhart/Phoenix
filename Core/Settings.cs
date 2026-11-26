@@ -46,6 +46,11 @@ public class Settings
     public bool AutoEq { get; set; }                       // the auto equalizer: each song's own adjustment, from a scan
     public string AutoEqProfile { get; set; } = "accuracy"; // accuracy | clarity | bass
     public string AutoEqStore { get; set; } = "phoenix";    // where measurements are kept: phoenix | tags | folder
+    public bool AutoEqAi { get; set; }                      // the AI part: recognise each song's style (YAMNet) for a target that suits it
+    public bool HeadphoneOn { get; set; }                   // correct for your headphones or speakers (AutoEq profile)
+    public string HeadphoneName { get; set; } = "";
+    public string HeadphoneSource { get; set; } = "";
+    public double[] HeadphoneGains { get; set; } = Array.Empty<double>();
     public bool PodcastAutoRefresh { get; set; } = true;   // look for new episodes at start and every hour
     public int PodcastKeep { get; set; }            // download this many newest unplayed episodes per series; 0 = none
     public string PodcastFolder { get; set; } = ""; // where downloads go; blank = "podcasts" in the app's data folder

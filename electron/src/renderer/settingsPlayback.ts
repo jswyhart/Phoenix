@@ -1,5 +1,5 @@
 // settings → playback, as on Windows: crossfade, volume levelling and the equalizer.
-import { call, on } from "./api";
+import { call, host, on } from "./api";
 import { h, pill } from "./ui";
 
 interface Playback {
@@ -9,8 +9,11 @@ interface Playback {
 }
 interface AutoEqState {
   on: boolean; profile: string; store: string; profiles: { id: string; name: string; about: string }[]; stores: { id: string; name: string }[];
-  nowGains: number[] | null; nowMeasured: boolean; playing: boolean; scanning: boolean; status: string;
+  nowGains: number[] | null; nowMeasured: boolean; playing: boolean; scanning: boolean; status: string; nowStyles: string;
+  ai: boolean; aiHave: boolean; aiDownloading: boolean; aiRanOn: string; aiMb: number;
+  headphoneOn: boolean; headphoneName: string; headphoneSource: string; headphoneGains: number[];
 }
+interface Headphones { name: string; path: string; source: string; label: string }
 
 export function playbackPanel() {
   let P: Playback | null = null;
@@ -41,6 +44,28 @@ export function playbackPanel() {
   autoStore.onchange = () => void set({ autoEqStore: autoStore.value });
   const autoStatus = h("div.statusline", { style: { marginLeft: "24px" } });
   const autoScan = pill("MEASURE ALL SONGS NOW", async () => paintAuto(await call<AutoEqState>("autoeq.scan")));
+  const aiOn = check("Recognise each song's style with AI, for a target that suits it", "autoEqAi", true);
+  const aiDownload = pill("DOWNLOAD THE MODEL", async () => paintAuto(await call<AutoEqState>("autoeq.aiDownload")));
+  // headphones and speakers
+  const phonesOn = check("Correct for my headphones or speakers", "headphoneOn");
+  const phonesSearch = h("input.phonesearch", { type: "text", placeholder: "for example: sony wf-1000xm5, hd 600, airpods pro", spellcheck: false, style: { width: "320px" } });
+  const phonesList = h("div.phoneslist", { style: { margin: "6px 0 0 24px", maxHeight: "200px", overflowY: "auto", width: "520px" } });
+  const phonesStatus = h("div.statusline", { style: { marginLeft: "24px" } });
+  const findPhones = async () => {
+    phonesStatus.textContent = "looking…";
+    try {
+      const found = await call<Headphones[]>("headphones.search", { q: phonesSearch.value });
+      phonesList.replaceChildren(...found.map(m => h("div.phonesrow", { style: { padding: "5px 8px", cursor: "pointer" }, onclick: async () => {
+        phonesStatus.textContent = `fetching ${m.name}…`;
+        try { const a = await call<AutoEqState>("headphones.use", m); phonesList.replaceChildren(); if (P) P.autoEq = a; paintAuto(a); }
+        catch (e: any) { phonesStatus.textContent = "couldn't fetch that profile: " + String(e.message ?? e); }
+      } }, m.label)));
+      phonesStatus.textContent = found.length === 0 ? "AutoEq has nothing by that name; try fewer words" : "choose yours (the same model measured by different people sounds a little different)";
+    } catch (e: any) { phonesStatus.textContent = "couldn't reach AutoEq: " + String(e.message ?? e); }
+  };
+  phonesSearch.addEventListener("keydown", e => { if (e.key === "Enter") void findPhones(); });
+  const findBtn = pill("FIND", () => void findPhones());
+  findBtn.style.marginLeft = "10px";
   const autoRow = (label: string, box: HTMLElement) => h("div", { style: { display: "flex", alignItems: "center", margin: "8px 0 0 24px" } },
     h("span", { style: { width: "80px", flex: "none", color: "var(--fg-dim)" } }, label), box);
   const bandName = (f: number) => f >= 1000 ? `${f / 1000}k` : String(f);
@@ -52,11 +77,19 @@ export function playbackPanel() {
     }
     autoProfile.value = a.profile;
     autoStore.value = a.store;
-    autoProfile.disabled = autoStore.disabled = !a.on;
+    autoProfile.disabled = autoStore.disabled = aiOn.box.disabled = !a.on;
+    aiOn.box.checked = a.ai;
+    aiDownload.style.display = a.ai && !a.aiHave ? "" : "none";
+    aiDownload.textContent = a.aiDownloading ? "STOP" : `DOWNLOAD THE MODEL (${a.aiMb} MB)`;
+    phonesOn.box.checked = a.headphoneOn;
+    phonesOn.box.disabled = a.headphoneName === "";
+    if (!phonesList.childElementCount)
+      phonesStatus.textContent = a.headphoneName === "" ? "no headphones chosen yet"
+        : `${a.headphoneName} (measured by ${a.headphoneSource}): ` + a.headphoneGains.map((g, i) => `${bandName(P?.bands[i] ?? 0)} ${g > 0 ? "+" : ""}${g}`).join("  ");
     autoScan.textContent = a.scanning ? "STOP" : "MEASURE ALL SONGS NOW";
     autoStatus.textContent = a.scanning || a.status ? a.status
       : !a.on || !a.playing ? ""
-      : a.nowGains ? "now playing: " + a.nowGains.map((g, i) => `${bandName(P?.bands[i] ?? 0)} ${g > 0 ? "+" : ""}${g}`).join("  ")
+      : a.nowGains ? `now playing${a.nowStyles ? ` (${a.nowStyles})` : ""}: ` + a.nowGains.map((g, i) => `${bandName(P?.bands[i] ?? 0)} ${g > 0 ? "+" : ""}${g}`).join("  ")
       : "the song playing hasn't been measured yet";
   }
   on("autoeq", (a: AutoEqState) => { if (P) { P.autoEq = a; paintAuto(a); } });
@@ -107,6 +140,12 @@ export function playbackPanel() {
     h("div.label", { style: { margin: "22px 0 3px 0" } }, "AUTO EQUALIZER"), autoOn.el,
     h("div.note", { style: { margin: "2px 0 0 24px" } }, "Each song is measured once (how much of its sound falls in each band) and the equalizer is set for it as it plays, on top of your own equalizer when that is on. Songs are measured the first time they play, or all at once below."),
     autoRow("sound", autoProfile), autoRow("keep it", autoStore),
-    h("div", { style: { margin: "12px 0 0 24px" } }, autoScan), autoStatus);
+    h("div", { style: { margin: "6px 0 0 0" } }, aiOn.el),
+    h("div.note", { style: { margin: "2px 0 0 48px" } }, `Google's YAMNet sound-recognition model listens to three short stretches of each song and tells electronic, hip hop, rock, pop, acoustic, jazz and classical apart, and singing or speech, so each is evened out towards a balance that suits it. It runs on ${host.platform === "mac" ? "the Mac's graphics and neural engine (Core ML)" : "the processor"}, on this computer only. The model (15 MB) is downloaded once; songs measured before are listened to again.`),
+    h("div", { style: { margin: "6px 0 0 48px" } }, aiDownload),
+    h("div", { style: { margin: "12px 0 0 24px" } }, autoScan), autoStatus,
+    h("div.label", { style: { margin: "22px 0 3px 0" } }, "HEADPHONES AND SPEAKERS"), phonesOn.el,
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, "From the AutoEq project: measurements of thousands of headphones, earbuds and speakers, each with a correction towards a neutral sound. Find yours by name; its correction goes on top of everything else. The list and the profile come from AutoEq's page on GitHub."),
+    h("div", { style: { display: "flex", alignItems: "center", margin: "8px 0 0 24px" } }, phonesSearch, findBtn), phonesList, phonesStatus);
   return { el, shown: async () => paint(await call<Playback>("playback.state")), state: () => P };
 }

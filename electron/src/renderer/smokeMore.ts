@@ -476,7 +476,16 @@ async function runPlayback(check: Check, shot: Shot, settle: Settle, until: Unti
     await until(async () => !!(await call<{ autoEq: Auto }>("playback.state")).autoEq.nowGains, 4000);
     auto = (await call<{ autoEq: Auto }>("playback.state")).autoEq;
     check("the song playing gets the bass sound's adjustment", !!auto.nowGains && auto.nowGains.length === 10 && auto.nowGains[1] > 0, (auto.nowGains ?? []).join(","));
+    // headphones: found by name in AutoEq's list and put on the equalizer
+    try {
+      const phones = await call<{ name: string; path: string; source: string }[]>("headphones.search", { q: "sony wf-1000xm3" });
+      const used = phones.length ? await call<{ headphoneOn: boolean; headphoneGains: number[] }>("headphones.use", phones[0]) : null;
+      check("headphone correction: found by name in AutoEq's list and put on the equalizer", !!used && used.headphoneOn && used.headphoneGains.length === 10 && used.headphoneGains[9] < -3, used ? used.headphoneGains.join(",") : "none found");
+    } catch (e: any) { check("headphone correction: found by name in AutoEq's list and put on the equalizer", false, String(e.message ?? e)); }
+    settings.showCategory("software", "Playback");
+    await settle(400);
     await shot("45-auto-equalizer");
+    await call("playback.set", { headphoneOn: false });
     await call("player.stop");
     await call("playback.set", { autoEq: false, autoEqStore: "phoenix", autoEqProfile: "accuracy" });
   }

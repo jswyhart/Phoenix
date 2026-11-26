@@ -322,3 +322,5 @@ body.minibody { -webkit-app-region: drag; background: var(--bg-alt); }
 /* a name's translation, beside it */
 .trside { color: var(--fg-faint); }
 .now .info .title .trside { font-size: 0.55em; }
+
+.phoneslist .phonesrow:hover { background: var(--hover); }

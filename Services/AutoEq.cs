@@ -122,14 +122,21 @@ public static class AutoEq
     static readonly double[] Target = { -6, 0, 0, -1, -2, -3, -4.5, -6, -8, -14 };
 
     /// <summary>The ten band gains (dB) for a measured song and the sound chosen.</summary>
-    public static double[] Gains(double[] levels, string profile)
+    public static double[] Gains(double[] levels, string profile, IReadOnlyDictionary<string, double>? styles = null)
     {
+        // the target: a well-balanced mix, shifted for the song's style when the AI recognised it
+        var target = Target.ToArray();
+        if (styles is { Count: > 0 })
+        {
+            var styleShift = AutoEqAi.TargetShift(styles);
+            for (var b = 0; b < Bands.Length; b++) target[b] += styleShift[b];
+        }
         // line the song up with the target through the middle bands, then see where it strays
         double mid = 0, midT = 0;
-        for (var b = 2; b <= 7; b++) { mid += levels[b]; midT += Target[b]; }
+        for (var b = 2; b <= 7; b++) { mid += levels[b]; midT += target[b]; }
         var shift = (midT - mid) / 6;
         var off = new double[Bands.Length];
-        for (var b = 0; b < Bands.Length; b++) off[b] = Target[b] - (levels[b] + shift);   // > 0: the song is short of this band
+        for (var b = 0; b < Bands.Length; b++) off[b] = target[b] - (levels[b] + shift);   // > 0: the song is short of this band
 
         // sound accuracy: half way back to the target, smoothed so no band jumps away from its neighbours
         var accuracy = new double[Bands.Length];
@@ -186,11 +193,19 @@ public static class AutoEq
     public static double[]? Combine(Settings s, Track? t)
     {
         var manual = s.EqEnabled && s.EqGains.Length == Bands.Length ? s.EqGains : null;
-        var auto = s.AutoEq && t != null && LevelsFor(t) is { } l ? Gains(l, s.AutoEqProfile) : null;
-        if (auto == null) return manual;
-        if (manual == null) return auto;
-        return manual.Zip(auto, (a, b) => Math.Clamp(a + b, -12, 12)).ToArray();
+        var auto = s.AutoEq && t != null ? GainsFor(t, s) : null;
+        var phones = s.HeadphoneOn && s.HeadphoneGains.Length == Bands.Length ? s.HeadphoneGains : null;
+        if (manual == null && auto == null && phones == null) return null;
+        var g = new double[Bands.Length];
+        foreach (var part in new[] { manual, auto, phones })
+            if (part != null) for (var b = 0; b < g.Length; b++) g[b] += part[b];
+        for (var b = 0; b < g.Length; b++) g[b] = Math.Clamp(g[b], -12, 12);
+        return g;
     }
+
+    /// <summary>The auto equalizer's gains for a measured song (with its styles when the AI part is on). Null if not measured.</summary>
+    public static double[]? GainsFor(Track t, Settings s) =>
+        LevelsFor(t) is { } l ? Gains(l, s.AutoEqProfile, s.AutoEqAi ? StylesFor(t) : null) : null;
 
     // ---------- where measurements are kept ----------
 
@@ -223,12 +238,20 @@ public static class AutoEq
         }
     }
 
-    public static string Format(double[] levels) => "v1;" + string.Join(",", levels.Select(x => x.ToString("0.0", CultureInfo.InvariantCulture)));
+    public static string Format(double[] levels, IReadOnlyDictionary<string, double>? styles = null) =>
+        "v1;" + string.Join(",", levels.Select(x => x.ToString("0.0", CultureInfo.InvariantCulture))) + (styles != null ? ";ai=" + AutoEqAi.Format(styles) : "");
+
+    /// <summary>The styles the AI recognised, from a measurement's text (empty when it listened and heard none of them).</summary>
+    public static Dictionary<string, double>? ParseStyles(string? text)
+    {
+        var at = text?.IndexOf(";ai=", StringComparison.Ordinal) ?? -1;
+        return at < 0 ? null : AutoEqAi.Parse(text![(at + 4)..].Split(';')[0]);
+    }
 
     public static double[]? Parse(string? text)
     {
         if (text == null || !text.StartsWith("v1;")) return null;
-        var parts = text[3..].Split(',');
+        var parts = text[3..].Split(';')[0].Split(',');
         if (parts.Length != Bands.Length) return null;
         var v = new double[Bands.Length];
         for (var i = 0; i < v.Length; i++)
@@ -236,27 +259,35 @@ public static class AutoEq
         return v;
     }
 
-    static readonly Dictionary<string, double[]?> Cache = new();
+    static readonly Dictionary<string, string?> Cache = new();
 
-    /// <summary>A song's measurement, wherever it was kept (Phoenix's library, its tags, or its album folder's file).</summary>
-    public static double[]? LevelsFor(Track t)
+    /// <summary>A song's measurement as kept (Phoenix's library, its tags, or its album folder's file), as text.</summary>
+    static string? TextFor(Track t)
     {
         var key = Key(t);
         lock (Gate) if (Cache.TryGetValue(key, out var hit)) return hit;
-        double[]? found = null;
-        if (Library().TryGetValue(key, out var kept)) found = Parse(kept);
+        string? found = null;
+        if (Library().TryGetValue(key, out var kept) && Parse(kept) != null) found = kept;
         if (found == null && t.IsLocal && File.Exists(t.Location))
-            found = Parse(ReadTag(t.Location)) ?? Parse(ReadFolder(t.Location));
+            found = ReadTag(t.Location) is { } tag && Parse(tag) != null ? tag : ReadFolder(t.Location) is { } folder && Parse(folder) != null ? folder : null;
         lock (Gate) Cache[key] = found;
         return found;
     }
 
-    public static bool IsMeasured(Track t) => LevelsFor(t) != null;
+    /// <summary>How loud each band of a song is, wherever it was kept; null when it hasn't been measured.</summary>
+    public static double[]? LevelsFor(Track t) => Parse(TextFor(t));
+
+    /// <summary>The styles the AI recognised in a song; null when it hasn't listened to it.</summary>
+    public static Dictionary<string, double>? StylesFor(Track t) => ParseStyles(TextFor(t));
+
+    /// <summary>Measured, and recognised too when the AI part is on.</summary>
+    public static bool IsMeasured(Track t) =>
+        TextFor(t) is { } text && Parse(text) != null && (!App.Settings.AutoEqAi || !AutoEqAi.Have || ParseStyles(text) != null);
 
     /// <summary>Keeps a measurement where settings say.</summary>
-    public static void Remember(Track t, double[] levels, string store)
+    public static void Remember(Track t, double[] levels, string store, IReadOnlyDictionary<string, double>? styles = null)
     {
-        var text = Format(levels);
+        var text = Format(levels, styles);
         var kept = false;
         if (t.IsLocal && File.Exists(t.Location))
         {
@@ -267,7 +298,7 @@ public static class AutoEq
         {
             // Phoenix's library is the fallback for songs whose tags can't be written, and for songs on a server
             if (!kept || store == "phoenix") { Library()[Key(t)] = text; }
-            Cache[Key(t)] = levels;
+            Cache[Key(t)] = text;
         }
         if (!kept || store == "phoenix") SaveLibrary();
     }
@@ -368,13 +399,17 @@ public static class AutoEq
         await One.WaitAsync(cancel);
         try
         {
-            var levels = await Task.Run(() =>
+            var ai = App.Settings.AutoEqAi && AutoEqAi.Have;
+            var (levels, styles) = await Task.Run(() =>
             {
                 var (samples, rate) = decode(t.Location, cancel);
-                return Measure(samples, rate);
+                var l = Measure(samples, rate);
+                // the AI part: what kind of music it is (empty when it heard none of the styles)
+                var st = l != null && ai ? AutoEqAi.Recognise(samples, rate) ?? new Dictionary<string, double>() : null;
+                return (l, st);
             }, cancel);
             if (levels == null) return false;
-            Remember(t, levels, store);
+            Remember(t, levels, store, styles);
             Measured?.Invoke(t);
             return true;
         }

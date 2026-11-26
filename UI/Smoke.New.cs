@@ -986,6 +986,31 @@ public static partial class Smoke
             await Task.Delay(500);
             var gains = AutoEq.Combine(App.Settings, App.Player.Current?.Track);
             Check("the song playing gets the bass sound's adjustment, and the engine's equalizer is on", gains != null && gains[1] > 0 && App.Player.EqualizerOnForTest, gains == null ? "none" : string.Join(",", gains));
+            // the AI part (the model is in PHOENIX_MODELS for the self-test): the noise song is listened to again, on the graphics card
+            if (AutoEqAi.Have)
+            {
+                App.Settings.AutoEqAi = true;
+                var relisten = !AutoEq.IsMeasured(noise);
+                var aiWatch = System.Diagnostics.Stopwatch.StartNew();
+                var (_, again) = await AutoEq.ScanAsync(new[] { noise }, "folder", null, CancellationToken.None);
+                Check("with the AI part on, songs are listened to again and what it heard is kept", relisten && again == 1 && AutoEq.StylesFor(noise) != null && AutoEq.IsMeasured(noise),
+                    $"{aiWatch.ElapsedMilliseconds} ms on {AutoEqAi.RanOn}: {AutoEqAi.Describe(AutoEq.StylesFor(noise))}");
+                Check("the AI part runs on the graphics card", AutoEqAi.RanOn.Contains("DirectML"), AutoEqAi.RanOn);
+                App.Settings.AutoEqAi = false;
+            }
+            else Check("the AI part (no model to test with)", false, AutoEqAi.ModelsDir);
+            // headphones: found in AutoEq's list, the profile fetched and put on the equalizer
+            try
+            {
+                var phones = (await HeadphoneEq.SearchAsync("sony wf-1000xm3")).FirstOrDefault();
+                if (phones != null) await sv.UseHeadphones(phones);
+                var withPhones = AutoEq.Combine(App.Settings, null);
+                Check("headphone correction: found by name in AutoEq's list and put on the equalizer", phones != null && App.Settings.HeadphoneOn && withPhones is { Length: 10 } && withPhones[9] < -3,
+                    $"{phones?.Label}: {(withPhones == null ? "none" : string.Join(",", withPhones))}");
+            }
+            catch (Exception ex) { Check("headphone correction: found by name in AutoEq's list and put on the equalizer", false, ex.Message); }
+            await Shot("auto-equalizer");
+            (App.Settings.HeadphoneOn, App.Settings.HeadphoneName, App.Settings.HeadphoneGains) = (false, "", Array.Empty<double>());
             var combos = ((System.Windows.Controls.ComboBox)sv.FindName("AutoEqProfileBox")).Items.Count + ((System.Windows.Controls.ComboBox)sv.FindName("AutoEqStoreBox")).Items.Count;
             Check("settings → playback offers the three sounds and three places to keep it", combos == 6);
             App.Player.Stop();

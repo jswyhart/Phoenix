@@ -16,6 +16,13 @@ New
   songs, less on bass-heavy ones). Measurements are kept in Phoenix's library, in each song's tags
   (so they travel with the file, also to your phone) or in a phoenix-eq.xml file in each album
   folder. Songs are measured the first time they play, or all at once.
+- Auto equalizer, AI part: Google's YAMNet sound-recognition model recognises each song's style
+  (electronic, hip hop, rock, pop, acoustic, jazz, classical; singing or speech) so it's evened
+  out towards a balance that suits it. It runs on the graphics card on Windows (DirectML, any AMD,
+  Intel or NVIDIA graphics), Core ML on Macs, NNAPI on Android and the processor on Linux. The
+  model (15 MB) is downloaded the first time it's turned on.
+- Headphones and speakers: pick yours from the AutoEq project's measurements of thousands of
+  models, and its correction goes on top of everything else the equalizer does.
 - Android: tabs, links and tile rows wrap onto another line instead of scrolling sideways.
 - Background picture: settings → display can put a picture of your own behind the window, showing
   through the theme's background as much as you choose (5–90%). Phoenix keeps its own copy in the

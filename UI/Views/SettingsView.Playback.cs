@@ -55,6 +55,8 @@ public partial class SettingsView
         AutoEqBox.IsChecked = s.AutoEq;
         AutoEqProfileBox.SelectedIndex = Math.Max(0, Array.FindIndex(AutoEq.Profiles, p => p.Id == s.AutoEqProfile));
         AutoEqStoreBox.SelectedIndex = Math.Max(0, Array.FindIndex(AutoEq.Stores, x => x.Id == s.AutoEqStore));
+        AutoEqAiBox.IsChecked = s.AutoEqAi;
+        HeadphoneBox.IsChecked = s.HeadphoneOn;
         _loadingPlayback = false;
         ShowPlaybackState();
     }
@@ -67,11 +69,15 @@ public partial class SettingsView
         EqBands.IsEnabled = EqPreset.IsEnabled = EqResetBtn.IsEnabled = s.EqEnabled && s.AudioEngine;
         EqBands.Opacity = EqBands.IsEnabled ? 1 : 0.4;
         CrossfadeSlider.IsEnabled = EqOn.IsEnabled = AutoEqBox.IsEnabled = s.AudioEngine;
-        AutoEqProfileBox.IsEnabled = AutoEqStoreBox.IsEnabled = s.AutoEq && s.AudioEngine;
+        AutoEqProfileBox.IsEnabled = AutoEqStoreBox.IsEnabled = AutoEqAiBox.IsEnabled = s.AutoEq && s.AudioEngine;
+        AutoEqAiDownloadBtn.Visibility = s.AutoEqAi && !AutoEqAi.Have ? Visibility.Visible : Visibility.Collapsed;
+        AutoEqAiDownloadBtn.Content = _aiDownload != null ? "STOP" : $"DOWNLOAD THE MODEL ({AutoEqAi.Megabytes} MB)";
+        HeadphoneStatus.Text = s.HeadphoneName == "" ? "no headphones chosen yet"
+            : $"{s.HeadphoneName} (measured by {s.HeadphoneSource}): {string.Join("  ", s.HeadphoneGains.Select((g, i) => $"{(AutoEq.Bands[i] >= 1000 ? $"{AutoEq.Bands[i] / 1000:0.#}k" : $"{AutoEq.Bands[i]:0}")} {g:+0.#;-0.#;0}"))}";
         AutoEqScanBtn.Content = _autoEqScan != null ? "STOP" : "MEASURE ALL SONGS NOW";
         if (_autoEqScan == null && App.Player.Current?.Track is { } now)
-            AutoEqStatus.Text = !s.AutoEq ? "" : AutoEq.LevelsFor(now) is { } l
-                ? $"now playing: {string.Join("  ", AutoEq.Gains(l, s.AutoEqProfile).Select((g, i) => $"{(AutoEq.Bands[i] >= 1000 ? $"{AutoEq.Bands[i] / 1000:0.#}k" : $"{AutoEq.Bands[i]:0}")} {g:+0.#;-0.#;0}"))}"
+            AutoEqStatus.Text = !s.AutoEq ? "" : AutoEq.GainsFor(now, s) is { } g
+                ? $"now playing{(s.AutoEqAi && AutoEqAi.Describe(AutoEq.StylesFor(now)) is { Length: > 0 } heard ? $" ({heard})" : "")}: {string.Join("  ", g.Select((x, i) => $"{(AutoEq.Bands[i] >= 1000 ? $"{AutoEq.Bands[i] / 1000:0.#}k" : $"{AutoEq.Bands[i]:0}")} {x:+0.#;-0.#;0}"))}"
                 : "the song playing hasn't been measured yet";
     }
 
@@ -90,7 +96,79 @@ public partial class SettingsView
         ShowPlaybackState();
     }
 
-    CancellationTokenSource? _autoEqScan;
+    CancellationTokenSource? _autoEqScan, _aiDownload;
+
+    void AutoEqAi_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.AutoEqAi = AutoEqAiBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Player.ApplyEqualizer();
+        ShowPlaybackState();
+    }
+
+    async void AutoEqAiDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aiDownload != null) { _aiDownload.Cancel(); return; }
+        _aiDownload = new CancellationTokenSource();
+        ShowPlaybackState();
+        try
+        {
+            await AutoEqAi.DownloadAsync(p => Dispatcher.BeginInvoke(() => AutoEqStatus.Text = $"downloading the model: {p:P0}"), _aiDownload.Token);
+            AutoEqStatus.Text = "the model is here: choose MEASURE ALL SONGS NOW to listen to your songs, or they are listened to as they play";
+        }
+        catch (OperationCanceledException) { AutoEqStatus.Text = ""; }
+        catch (Exception ex) { AutoEqStatus.Text = "couldn't download the model: " + ex.Message; }
+        _aiDownload = null;
+        ShowPlaybackState();
+    }
+
+    void Headphone_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.HeadphoneOn = HeadphoneBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Player.ApplyEqualizer();
+        ShowPlaybackState();
+    }
+
+    void HeadphoneSearch_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) HeadphoneFind_Click(sender, e);
+    }
+
+    async void HeadphoneFind_Click(object sender, RoutedEventArgs e)
+    {
+        HeadphoneStatus.Text = "looking…";
+        try
+        {
+            var found = await HeadphoneEq.SearchAsync(HeadphoneSearch.Text);
+            HeadphoneList.ItemsSource = found;
+            HeadphoneList.DisplayMemberPath = nameof(HeadphoneEq.Model.Label);
+            HeadphoneList.Visibility = found.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            HeadphoneStatus.Text = found.Count == 0 ? "AutoEq has nothing by that name; try fewer words" : "choose yours (the same model measured by different people sounds a little different)";
+        }
+        catch (Exception ex) { HeadphoneStatus.Text = "couldn't reach AutoEq: " + ex.Message; }
+    }
+
+    async void HeadphoneList_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (HeadphoneList.SelectedItem is not HeadphoneEq.Model m) return;
+        HeadphoneStatus.Text = $"fetching {m.Name}…";
+        try { await UseHeadphones(m); }
+        catch (Exception ex) { HeadphoneStatus.Text = "couldn't fetch that profile: " + ex.Message; }
+    }
+
+    /// <summary>Uses a model's correction (also for the self-test).</summary>
+    public async Task UseHeadphones(HeadphoneEq.Model m)
+    {
+        var (gains, _) = await HeadphoneEq.FetchAsync(m);
+        var s = App.Settings;
+        (s.HeadphoneName, s.HeadphoneSource, s.HeadphoneGains, s.HeadphoneOn) = (m.Name, m.Source, gains, true);
+        if (!App.SmokeMode) s.Save();
+        HeadphoneBox.IsChecked = true;
+        HeadphoneList.Visibility = Visibility.Collapsed;
+        App.Player.ApplyEqualizer();
+        ShowPlaybackState();
+    }
 
     void AutoEq_Click(object sender, RoutedEventArgs e)
     {

@@ -57,21 +57,23 @@ public static partial class Api
         e.SetEqualizer(AutoEq.Combine(S, P.Current?.Track));
     }
 
-    static CancellationTokenSource? _autoEqScan;
+    static CancellationTokenSource? _autoEqScan, _aiDownload;
     static string _autoEqStatus = "";
 
     static object AutoEqState()
     {
         var now = P.Current?.Track;
-        var levels = now != null ? AutoEq.LevelsFor(now) : null;
+        var gains = now != null ? AutoEq.GainsFor(now, S) : null;
         return new
         {
             on = S.AutoEq, profile = S.AutoEqProfile, store = S.AutoEqStore,
             profiles = AutoEq.Profiles.Select(x => new { id = x.Id, name = x.Name, about = x.About }),
             stores = AutoEq.Stores.Select(x => new { id = x.Id, name = x.Name }),
-            nowGains = levels != null ? AutoEq.Gains(levels, S.AutoEqProfile) : null,
-            nowMeasured = levels != null, playing = now != null,
+            nowGains = gains, nowMeasured = gains != null, playing = now != null,
+            nowStyles = now != null && S.AutoEqAi ? AutoEqAi.Describe(AutoEq.StylesFor(now)) : "",
             scanning = _autoEqScan != null, status = _autoEqStatus,
+            ai = S.AutoEqAi, aiHave = AutoEqAi.Have, aiDownloading = _aiDownload != null, aiRanOn = AutoEqAi.RanOn, aiMb = AutoEqAi.Megabytes,
+            headphoneOn = S.HeadphoneOn, headphoneName = S.HeadphoneName, headphoneSource = S.HeadphoneSource, headphoneGains = S.HeadphoneGains,
         };
     }
 
@@ -115,6 +117,39 @@ public static partial class Api
             var levels = AutoEq.LevelsFor(noise);
             if (levels != null && Lib.ById.GetValueOrDefault(p.Long("id")) is { } song) AutoEq.Remember(song, levels, "phoenix");
             return new { gains = levels != null ? AutoEq.Gains(levels, "accuracy") : null, kept = measured == 1 && File.Exists(Path.Combine(dir, AutoEq.FolderFile)) };
+        });
+
+        // the AI part's model, downloaded on demand
+        Rpc.On("autoeq.aiDownload", downloadParams =>
+        {
+            if (_aiDownload != null) { _aiDownload.Cancel(); return AutoEqState(); }
+            _aiDownload = new CancellationTokenSource();
+            var cancel = _aiDownload.Token;
+            void Tell(string s) => MainLoop.Post(() => { _autoEqStatus = s; Rpc.Emit("autoeq", AutoEqState()); });
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await AutoEqAi.DownloadAsync(f => Tell($"downloading the model: {Math.Round(f * 100)}%"), cancel);
+                    MainLoop.Post(() => _aiDownload = null);
+                    Tell("the model is here: choose MEASURE ALL SONGS NOW to listen to your songs, or they are listened to as they play");
+                }
+                catch (OperationCanceledException) { MainLoop.Post(() => _aiDownload = null); Tell(""); }
+                catch (Exception ex) { MainLoop.Post(() => _aiDownload = null); Tell("couldn't download the model: " + ex.Message); }
+            });
+            return AutoEqState();
+        });
+
+        // headphones and speakers: AutoEq's list, and a profile put on the equalizer
+        Rpc.On("headphones.search", async p => (await HeadphoneEq.SearchAsync(p.Str("q"))).Select(m => new { name = m.Name, path = m.Path, source = m.Source, label = m.Label }));
+        Rpc.On("headphones.use", async p =>
+        {
+            var m = new HeadphoneEq.Model(p.Str("name"), p.Str("path"), p.Str("source"));
+            var (gains, _) = await HeadphoneEq.FetchAsync(m);
+            (S.HeadphoneName, S.HeadphoneSource, S.HeadphoneGains, S.HeadphoneOn) = (m.Name, m.Source, gains, true);
+            Save();
+            ApplyPlayback();
+            return AutoEqState();
         });
 
         Rpc.On("autoeq.scan", scanParams =>
@@ -165,6 +200,8 @@ public static partial class Api
             if (p.Has("autoEq")) { S.AutoEq = p.Bool("autoEq"); AutoEq.EnsureMeasured(S, P.Current?.Track); }
             if (p.Has("autoEqProfile") && AutoEq.Profiles.Any(x => x.Id == p.Str("autoEqProfile"))) S.AutoEqProfile = p.Str("autoEqProfile");
             if (p.Has("autoEqStore") && AutoEq.Stores.Any(x => x.Id == p.Str("autoEqStore"))) S.AutoEqStore = p.Str("autoEqStore");
+            if (p.Has("autoEqAi")) S.AutoEqAi = p.Bool("autoEqAi");
+            if (p.Has("headphoneOn")) S.HeadphoneOn = p.Bool("headphoneOn") && S.HeadphoneGains.Length == AutoEq.Bands.Length;
             Save();
             ApplyPlayback();
             return PlaybackState();

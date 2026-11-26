@@ -32,7 +32,8 @@ public static class SettingsScreen
     };
 
     static string _group = "software";
-    static CancellationTokenSource? _autoEqScan;
+    static CancellationTokenSource? _autoEqScan, _aiDownload;
+    static string _aiStatus = "";
     static string _autoEqStatus = "measures with the phone's own decoders, one song at a time";
 
     public static Page Build(MainActivity a)
@@ -287,6 +288,75 @@ public static class SettingsScreen
                     }
                 });
             }
+            if (S.AutoEq)
+            {
+                var have = Halcyon.Services.AutoEqAi.Have;
+                rows.Add(new Row
+                {
+                    Title = "recognise each song's style with AI", Trail = S.AutoEqAi ? "on" : "off",
+                    Sub = !S.AutoEqAi ? "YAMNet tells electronic, hip hop, rock, pop, acoustic, jazz and classical apart, so each gets a balance that suits it"
+                        : _aiDownload != null ? _aiStatus
+                        : have ? "runs on the phone's AI accelerator where it has one; songs measured before are listened to again"
+                        : $"tap to download the model ({Halcyon.Services.AutoEqAi.Megabytes} MB)",
+                    Click = () =>
+                    {
+                        if (S.AutoEqAi && !have && _aiDownload == null)
+                        {
+                            // the model, downloaded once
+                            _aiDownload = new CancellationTokenSource();
+                            var cancel = _aiDownload.Token;
+                            _ = Task.Run(async () =>
+                            {
+                                try { await Halcyon.Services.AutoEqAi.DownloadAsync(f => HalcyonApp.Main.Post(() => { _aiStatus = $"downloading the model: {f:P0}"; page.Reload(); }), cancel); }
+                                catch (Exception ex) { _aiStatus = "couldn't download the model: " + ex.Message; }
+                                _aiDownload = null;
+                                HalcyonApp.Main.Post(page.Reload);
+                            });
+                            page.Reload();
+                            return;
+                        }
+                        S.AutoEqAi = !S.AutoEqAi;
+                        S.Save();
+                        engine.ApplyEqualizer();
+                        page.Reload();
+                    }
+                });
+            }
+            rows.Add(Row.Caption("HEADPHONES AND SPEAKERS"));
+            rows.Add(new Row
+            {
+                Title = "correct for my headphones", Trail = S.HeadphoneOn ? "on" : "off",
+                Sub = S.HeadphoneName == "" ? "find yours by name in the AutoEq project's measurements" : $"{S.HeadphoneName} (measured by {S.HeadphoneSource})",
+                Click = () =>
+                {
+                    if (S.HeadphoneName == "") { FindHeadphones(); return; }
+                    S.HeadphoneOn = !S.HeadphoneOn; S.Save(); engine.ApplyEqualizer(); page.Reload();
+                }
+            });
+            rows.Add(new Row { Title = "find my headphones or speakers…", Sub = "for example: sony wf-1000xm5, hd 600, airpods pro", Click = FindHeadphones });
+
+            void FindHeadphones() => Ui.Ask(a, "Headphones or speakers", "name", "", async q =>
+            {
+                try
+                {
+                    var found = await Halcyon.Services.HeadphoneEq.SearchAsync(q);
+                    if (found.Count == 0) { Ui.Toast(a, "AutoEq has nothing by that name; try fewer words"); return; }
+                    Ui.Menu(a, "Choose yours", found.Select(m => (m.Label, (Action)(async () =>
+                    {
+                        try
+                        {
+                            var (gains, _) = await Halcyon.Services.HeadphoneEq.FetchAsync(m);
+                            (S.HeadphoneName, S.HeadphoneSource, S.HeadphoneGains, S.HeadphoneOn) = (m.Name, m.Source, gains, true);
+                            S.Save();
+                            engine.ApplyEqualizer();
+                            page.Reload();
+                        }
+                        catch (Exception ex) { Ui.Toast(a, "couldn't fetch that profile: " + ex.Message); }
+                    }))).ToArray());
+                }
+                catch (Exception ex) { Ui.Toast(a, "couldn't reach AutoEq: " + ex.Message); }
+            });
+
             rows.Add(Row.Caption("VOLUME LEVELLING"));
             rows.Add(new Row
             {
