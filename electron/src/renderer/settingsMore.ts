@@ -163,9 +163,7 @@ export function storagePanel() {
     try {
       const r = await call<{ adopted: boolean; failed: number }>("storage.move", { folder });
       moveStatus.textContent = r.failed ? `${r.failed} file(s) couldn't be copied (a sign-in may need doing again)` : "";
-      if (await confirm((r.adopted ? "That folder already holds a Phoenix library: Phoenix will use it." : "Everything has been copied.") + "
-
-Phoenix closes and starts again from the new folder.", "start again")) await host.relaunch();
+      if (await confirm((r.adopted ? "That folder already holds a Phoenix library: Phoenix will use it." : "Everything has been copied.") + "\n\nPhoenix closes and starts again from the new folder.", "start again")) await host.relaunch();
     } catch (e: any) { moveStatus.textContent = String(e.message ?? e); }
   }
   on("storage.progress", (t: string) => { moveStatus.textContent = t; });
