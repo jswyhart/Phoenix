@@ -43,6 +43,9 @@ public class Settings
     public bool EqEnabled { get; set; }
     public string EqPreset { get; set; } = "flat";  // a name from AudioEngine.Presets, or "custom"
     public double[] EqGains { get; set; } = new double[10];
+    public bool AutoEq { get; set; }                       // the auto equalizer: each song's own adjustment, from a scan
+    public string AutoEqProfile { get; set; } = "accuracy"; // accuracy | clarity | bass
+    public string AutoEqStore { get; set; } = "phoenix";    // where measurements are kept: phoenix | tags | folder
     public bool PodcastAutoRefresh { get; set; } = true;   // look for new episodes at start and every hour
     public int PodcastKeep { get; set; }            // download this many newest unplayed episodes per series; 0 = none
     public string PodcastFolder { get; set; } = ""; // where downloads go; blank = "podcasts" in the app's data folder

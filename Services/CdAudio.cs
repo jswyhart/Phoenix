@@ -136,13 +136,16 @@ public static class CdAudio
     }
 
     /// <summary>Any playable file or stream URL as 16 kHz mono samples, for the speech model that writes lyrics.</summary>
-    public static float[] DecodeForSpeech(string source, CancellationToken cancel)
+    public static float[] DecodeForSpeech(string source, CancellationToken cancel) => DecodeMono(source, 16000, cancel);
+
+    /// <summary>Any playable file or stream URL as mono samples at the given rate (the speech model, the auto equalizer).</summary>
+    public static float[] DecodeMono(string source, int rate, CancellationToken cancel)
     {
         MediaFoundationApi.Startup();
         using var reader = new MediaFoundationReader(source);
-        using var resampler = new MediaFoundationResampler(reader, WaveFormat.CreateIeeeFloatWaveFormat(16000, 1)) { ResamplerQuality = 60 };
-        var samples = new List<float>((int)Math.Min(int.MaxValue / 8, reader.TotalTime.TotalSeconds * 16000 + 16000));
-        var buffer = new byte[16000 * 4];
+        using var resampler = new MediaFoundationResampler(reader, WaveFormat.CreateIeeeFloatWaveFormat(rate, 1)) { ResamplerQuality = 60 };
+        var samples = new List<float>((int)Math.Min(int.MaxValue / 8, reader.TotalTime.TotalSeconds * rate + rate));
+        var buffer = new byte[rate * 4];
         int read;
         while ((read = resampler.Read(buffer.AsSpan())) > 0)
         {

@@ -147,8 +147,13 @@ public class Player
         if (_engine == null) return;
         _engine.Crossfade = Math.Clamp(App.Settings.Crossfade, 0, 12);
         _engine.RefreshGains();
-        _engine.SetEqualizer(App.Settings.EqEnabled ? App.Settings.EqGains : null);
+        // your own equalizer plus the auto equalizer's adjustment for the song playing
+        _engine.SetEqualizer(Halcyon.Services.AutoEq.Combine(App.Settings, Current?.Track));
     }
+
+    /// <summary>Sets the equalizer for the song playing (your own, plus the auto equalizer's adjustment for it).</summary>
+    public void ApplyEqualizer() => _engine?.SetEqualizer(Halcyon.Services.AutoEq.Combine(App.Settings, Current?.Track));
+    public bool EqualizerOnForTest => _engine?.EqualizerOn == true;
 
     async Task StartOnEngine(PlayItem item, long startMs = 0)
     {

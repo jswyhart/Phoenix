@@ -32,6 +32,8 @@ public static class SettingsScreen
     };
 
     static string _group = "software";
+    static CancellationTokenSource? _autoEqScan;
+    static string _autoEqStatus = "measures with the phone's own decoders, one song at a time";
 
     public static Page Build(MainActivity a)
     {
@@ -237,6 +239,53 @@ public static class SettingsScreen
                         .Select(n => ((n == S.EqPreset ? "●  " : "○  ") + n, (Action)(() => { S.EqPreset = n; S.Save(); engine.ApplyEqualizer(); page.Reload(); }))).ToArray())
                 });
                 rows.Add(new Row { Title = "adjust the bands…", Sub = "31 Hz to 16 kHz; changing one makes the preset “custom”", Click = () => EqualizerDialog.Show(a, page.Reload) });
+            }
+            rows.Add(Row.Caption("AUTO EQUALIZER"));
+            rows.Add(new Row
+            {
+                Title = "adjust each song by itself", Trail = S.AutoEq ? "on" : "off",
+                Sub = "each song is measured once and the equalizer is set for it as it plays, on top of your own",
+                Click = () => { S.AutoEq = !S.AutoEq; S.Save(); engine.ApplyEqualizer(); Halcyon.Services.AutoEq.EnsureMeasured(S, App.Player.Current?.Track); page.Reload(); }
+            });
+            if (S.AutoEq)
+            {
+                var profile = Halcyon.Services.AutoEq.Profiles.FirstOrDefault(x => x.Id == S.AutoEqProfile) ?? Halcyon.Services.AutoEq.Profiles[0];
+                rows.Add(new Row
+                {
+                    Title = "sound", Trail = profile.Name, Sub = profile.About,
+                    Click = () => Ui.Menu(a, "Sound", Halcyon.Services.AutoEq.Profiles.Select(x => ((x.Id == S.AutoEqProfile ? "●  " : "○  ") + $"{x.Name}: {x.About}",
+                        (Action)(() => { S.AutoEqProfile = x.Id; S.Save(); engine.ApplyEqualizer(); page.Reload(); }))).ToArray())
+                });
+                var store = Halcyon.Services.AutoEq.Stores.FirstOrDefault(x => x.Id == S.AutoEqStore) ?? Halcyon.Services.AutoEq.Stores[0];
+                rows.Add(new Row
+                {
+                    Title = "keep measurements", Sub = store.Name,
+                    Click = () => Ui.Menu(a, "Keep measurements", Halcyon.Services.AutoEq.Stores.Select(x => ((x.Id == S.AutoEqStore ? "●  " : "○  ") + x.Name,
+                        (Action)(() => { S.AutoEqStore = x.Id; S.Save(); page.Reload(); }))).ToArray())
+                });
+                rows.Add(new Row
+                {
+                    Title = _autoEqScan != null ? "stop measuring" : "measure all songs now", Sub = _autoEqStatus,
+                    Click = () =>
+                    {
+                        if (_autoEqScan != null) { _autoEqScan.Cancel(); return; }
+                        _autoEqScan = new CancellationTokenSource();
+                        var cancel = _autoEqScan.Token;
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var (done, measured) = await Halcyon.Services.AutoEq.ScanAsync(App.Lib.Tracks.ToList(), S.AutoEqStore,
+                                    (d, total, m) => HalcyonApp.Main.Post(() => { _autoEqStatus = $"measuring {d + 1} of {total}  ·  {m} measured"; page.Reload(); }), cancel);
+                                _autoEqStatus = done == 0 ? "every song is measured already" : $"measured {measured} of {done} songs";
+                            }
+                            catch (OperationCanceledException) { _autoEqStatus = "stopped; the songs measured so far are kept"; }
+                            _autoEqScan = null;
+                            HalcyonApp.Main.Post(() => { engine.ApplyEqualizer(); page.Reload(); });
+                        });
+                        page.Reload();
+                    }
+                });
             }
             rows.Add(Row.Caption("VOLUME LEVELLING"));
             rows.Add(new Row

@@ -9,6 +9,14 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 ------------------------
 
 New
+- Auto equalizer (settings → playback, on Windows, Mac/Linux and Android): each song is measured once
+  (how much of its sound falls in each of the ten bands) and the equalizer is set for it as it
+  plays, on top of your own equalizer. Three sounds: sound accuracy (an even tonal balance),
+  clarity (voices and detail forward, muddiness trimmed) and bass (a fuller low end, more on thin
+  songs, less on bass-heavy ones). Measurements are kept in Phoenix's library, in each song's tags
+  (so they travel with the file, also to your phone) or in a phoenix-eq.xml file in each album
+  folder. Songs are measured the first time they play, or all at once.
+- Android: tabs, links and tile rows wrap onto another line instead of scrolling sideways.
 - Background picture: settings → display can put a picture of your own behind the window, showing
   through the theme's background as much as you choose (5–90%). Phoenix keeps its own copy in the
   data folder.
@@ -45,6 +53,7 @@ Changed
 - The installers and packages carry only their own platform's speech-model libraries.
 
 Fixed
+- Android: setting titles that were cut off on narrow screens are shorter.
 - Mac/Linux: asking for generated lyrics a song doesn't have no longer reports an error.
 
 

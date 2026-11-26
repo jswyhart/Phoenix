@@ -36,6 +36,8 @@ public partial class SettingsView
             _bandValues.Add(value);
         }
         EqPreset.ItemsSource = AudioEngine.Presets.Select(p => p.Name).Append("custom").ToList();
+        AutoEqProfileBox.ItemsSource = AutoEq.Profiles.Select(p => $"{p.Name}: {p.About}").ToList();
+        AutoEqStoreBox.ItemsSource = AutoEq.Stores.Select(x => x.Name).ToList();
         PodcastKeep.ItemsSource = KeepChoices.Select(n => PodcastSync.KeepText(n) + (n > 0 ? " of each series" : "")).ToList();
     }
 
@@ -50,6 +52,9 @@ public partial class SettingsView
         if (s.EqGains.Length != _bands.Count) s.EqGains = new double[_bands.Count];
         for (var i = 0; i < _bands.Count; i++) _bands[i].Value = Math.Clamp(s.EqGains[i], -12, 12);
         EqPreset.SelectedItem = ((System.Collections.IEnumerable)EqPreset.ItemsSource).Cast<string>().Contains(s.EqPreset) ? s.EqPreset : "custom";
+        AutoEqBox.IsChecked = s.AutoEq;
+        AutoEqProfileBox.SelectedIndex = Math.Max(0, Array.FindIndex(AutoEq.Profiles, p => p.Id == s.AutoEqProfile));
+        AutoEqStoreBox.SelectedIndex = Math.Max(0, Array.FindIndex(AutoEq.Stores, x => x.Id == s.AutoEqStore));
         _loadingPlayback = false;
         ShowPlaybackState();
     }
@@ -61,7 +66,13 @@ public partial class SettingsView
         for (var i = 0; i < _bands.Count; i++) _bandValues[i].Text = (_bands[i].Value > 0 ? "+" : "") + _bands[i].Value.ToString("0.#");
         EqBands.IsEnabled = EqPreset.IsEnabled = EqResetBtn.IsEnabled = s.EqEnabled && s.AudioEngine;
         EqBands.Opacity = EqBands.IsEnabled ? 1 : 0.4;
-        CrossfadeSlider.IsEnabled = EqOn.IsEnabled = s.AudioEngine;
+        CrossfadeSlider.IsEnabled = EqOn.IsEnabled = AutoEqBox.IsEnabled = s.AudioEngine;
+        AutoEqProfileBox.IsEnabled = AutoEqStoreBox.IsEnabled = s.AutoEq && s.AudioEngine;
+        AutoEqScanBtn.Content = _autoEqScan != null ? "STOP" : "MEASURE ALL SONGS NOW";
+        if (_autoEqScan == null && App.Player.Current?.Track is { } now)
+            AutoEqStatus.Text = !s.AutoEq ? "" : AutoEq.LevelsFor(now) is { } l
+                ? $"now playing: {string.Join("  ", AutoEq.Gains(l, s.AutoEqProfile).Select((g, i) => $"{(AutoEq.Bands[i] >= 1000 ? $"{AutoEq.Bands[i] / 1000:0.#}k" : $"{AutoEq.Bands[i]:0}")} {g:+0.#;-0.#;0}"))}"
+                : "the song playing hasn't been measured yet";
     }
 
     void Engine_Click(object sender, RoutedEventArgs e)
@@ -78,6 +89,60 @@ public partial class SettingsView
         App.Player.ApplyAudioSettings();
         ShowPlaybackState();
     }
+
+    CancellationTokenSource? _autoEqScan;
+
+    void AutoEq_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.AutoEq = AutoEqBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Player.ApplyEqualizer();
+        AutoEq.EnsureMeasured(App.Settings, App.Player.Current?.Track);
+        ShowPlaybackState();
+    }
+
+    void AutoEqProfile_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingPlayback || AutoEqProfileBox.SelectedIndex < 0) return;
+        App.Settings.AutoEqProfile = AutoEq.Profiles[AutoEqProfileBox.SelectedIndex].Id;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Player.ApplyEqualizer();
+        ShowPlaybackState();
+    }
+
+    void AutoEqStore_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingPlayback || AutoEqStoreBox.SelectedIndex < 0) return;
+        App.Settings.AutoEqStore = AutoEq.Stores[AutoEqStoreBox.SelectedIndex].Id;
+        if (!App.SmokeMode) App.Settings.Save();
+    }
+
+    /// <summary>Measures every song in the collection that hasn't been yet, one at a time; it can be stopped.</summary>
+    async void AutoEqScan_Click(object sender, RoutedEventArgs e)
+    {
+        if (_autoEqScan != null) { _autoEqScan.Cancel(); return; }
+        _autoEqScan = new CancellationTokenSource();
+        ShowPlaybackState();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var songs = App.Lib.Tracks.ToList();
+            var (done, measured) = await AutoEq.ScanAsync(songs, App.Settings.AutoEqStore,
+                (d, total, m) => Dispatcher.BeginInvoke(() => AutoEqStatus.Text = total == 0 ? "every song is measured already" : $"measuring {d + 1} of {total}   ({m} measured so far)"),
+                _autoEqScan.Token);
+            AutoEqStatus.Text = done == 0 ? "every song is measured already" : $"measured {measured} of {done} songs in {watch.Elapsed.TotalSeconds:0} s";
+        }
+        catch (OperationCanceledException) { AutoEqStatus.Text = "stopped; the songs measured so far are kept"; }
+        finally
+        {
+            _autoEqScan = null;
+            App.Player.ApplyEqualizer();
+            AutoEqScanBtn.Content = "MEASURE ALL SONGS NOW";
+        }
+    }
+
+    /// <summary>For the self-test: measure everything and wait.</summary>
+    public Task<(int Done, int Measured)> MeasureAllForTest() => AutoEq.ScanAsync(App.Lib.Tracks.ToList(), App.Settings.AutoEqStore, null, CancellationToken.None);
 
     void Eq_Click(object sender, RoutedEventArgs e)
     {

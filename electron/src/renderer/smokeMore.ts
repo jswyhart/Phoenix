@@ -455,6 +455,31 @@ async function runPlayback(check: Check, shot: Shot, settle: Settle, until: Unti
   check("and plays on", (await call<PlayerState>("player.state")).pos > 200);
   await call("player.stop");
   await call("playback.set", { crossfade: 0 });
+
+  // the auto equalizer: measure the songs (kept in their album folder's file), and the song playing gets its adjustment
+  {
+    type Auto = { on: boolean; nowGains: number[] | null; scanning: boolean; status: string };
+    await call("playback.set", { autoEq: true, autoEqProfile: "bass", autoEqStore: "folder" });
+    settings.showCategory("software", "Playback");
+    await settle(400);
+    check("settings → playback has the auto equalizer with its three sounds and three places to keep it",
+      (document.querySelector<HTMLSelectElement>("select.autoeqprofile")?.options.length ?? 0) === 3 && (document.querySelector<HTMLSelectElement>("select.autoeqstore")?.options.length ?? 0) === 3);
+    let auto = await call<Auto>("autoeq.scan");
+    const started = Date.now();
+    await until(async () => !(auto = (await call<{ autoEq: Auto }>("playback.state")).autoEq).scanning, 60000);
+    check("measuring all the songs", /measured \d+ of \d+ songs|every song is measured/.test(auto.status), `${auto.status} (${Date.now() - started} ms)`);
+    // the sample songs are silent: a song of noise is measured instead, and its measurement given to the first song
+    const noise = await call<{ gains: number[] | null; kept: boolean }>("smoke.autoEqNoise", { dir: host.smoke, id: songs[0].id });
+    check("measuring hears the balance: bright white noise gets its treble turned down, kept in its album folder's file",
+      !!noise.gains && noise.gains[8] < -1 && noise.gains[9] < -1 && noise.kept, (noise.gains ?? []).join(","));
+    await call("play.tracks", { ids: [songs[0].id] });
+    await until(async () => !!(await call<{ autoEq: Auto }>("playback.state")).autoEq.nowGains, 4000);
+    auto = (await call<{ autoEq: Auto }>("playback.state")).autoEq;
+    check("the song playing gets the bass sound's adjustment", !!auto.nowGains && auto.nowGains.length === 10 && auto.nowGains[1] > 0, (auto.nowGains ?? []).join(","));
+    await shot("45-auto-equalizer");
+    await call("player.stop");
+    await call("playback.set", { autoEq: false, autoEqStore: "phoenix", autoEqProfile: "accuracy" });
+  }
   settings.showCategory("software");
 }
 

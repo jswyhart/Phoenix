@@ -65,9 +65,17 @@ public partial class App : Application
         Lib.Load();
         Translator.Attach(Lib.Db);
         Halcyon.Services.SpeechLyrics.Decode = Halcyon.Services.CdAudio.DecodeForSpeech;
+        Halcyon.Services.AutoEq.Decode = (file, cancel) => (Halcyon.Services.CdAudio.DecodeMono(file, 44100, cancel), 44100);
         Halcyon.Services.SpeechLyrics.GpuChoice = Settings.LyricsGpu;
         if (!SmokeMode) Storage.CleanUpOld();   // the library opened from here, so copies left in a folder it was moved from can go
         Player = new Player();
+        // the auto equalizer follows the song playing, and measures a song the first time it plays if it hasn't been yet
+        Player.CurrentChanged += () =>
+        {
+            Player.ApplyEqualizer();
+            Halcyon.Services.AutoEq.EnsureMeasured(Settings, Player.Current?.Track);
+        };
+        Halcyon.Services.AutoEq.Measured += t => Current.Dispatcher.BeginInvoke(() => { if (Player.Current?.Track == t) Player.ApplyEqualizer(); });
         Discogs = new DiscogsClient();
         Jellyfin = new JellyfinClient();
         Plex = new PlexClient();

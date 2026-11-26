@@ -234,6 +234,21 @@
                         <Button x:Name="EqResetBtn" Style="{StaticResource PillBtn}" Content="RESET" Margin="10,0,0,0" Click="EqReset_Click"/>
                     </StackPanel>
                     <StackPanel x:Name="EqBands" Orientation="Horizontal" Margin="-6,14,0,0" HorizontalAlignment="Left"/>
+                    <TextBlock Style="{StaticResource Label}" Text="AUTO EQUALIZER" Margin="0,22,0,3"/>
+                    <CheckBox x:Name="AutoEqBox" Content="Adjust the sound of each song by itself" Margin="0,4,0,0" Click="AutoEq_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Each song is measured once (how much of its sound falls in each band) and the equalizer is set for it as it plays, on top of your own equalizer when that is on. Songs are measured the first time they play, or all at once below."/>
+                    <StackPanel Orientation="Horizontal" Margin="24,10,0,0">
+                        <TextBlock Text="sound" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="80"/>
+                        <ComboBox x:Name="AutoEqProfileBox" Width="440" SelectionChanged="AutoEqProfile_Changed"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
+                        <TextBlock Text="keep it" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="80"/>
+                        <ComboBox x:Name="AutoEqStoreBox" Width="440" SelectionChanged="AutoEqStore_Changed"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="24,12,0,0">
+                        <Button x:Name="AutoEqScanBtn" Style="{StaticResource PillBtn}" Content="MEASURE ALL SONGS NOW" Click="AutoEqScan_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AutoEqStatus" Style="{StaticResource Status}" Margin="24,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelPodcasts" Visibility="Collapsed">

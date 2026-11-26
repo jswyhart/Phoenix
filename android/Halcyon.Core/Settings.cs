@@ -100,6 +100,9 @@ public class Settings
     public bool EqEnabled { get; set; }
     public string EqPreset { get; set; } = "flat";
     public double[] EqGains { get; set; } = new double[10];
+    public bool AutoEq { get; set; }                       // the auto equalizer: each song's own adjustment, from a scan
+    public string AutoEqProfile { get; set; } = "accuracy"; // accuracy | clarity | bass
+    public string AutoEqStore { get; set; } = "phoenix";    // where measurements are kept: phoenix | tags | folder
     public double Crossfade { get; set; }                 // seconds songs overlap; 0 = back to back
     /// <summary>"podcast:&lt;id&gt;" or "book:&lt;id&gt;" -> playback speed.</summary>
     public Dictionary<string, double> Speeds { get; set; } = new();

@@ -952,6 +952,47 @@ public static partial class Smoke
             win.ApplyNowPanel();
         }
 
+        // the auto equalizer: every song measured (kept in its album folder's file), the song playing gets its adjustment
+        {
+            var sv = App.Win.Page<SettingsView>("settings");
+            sv.ShowCategory("software", "Playback");
+            await Task.Delay(300);
+            var (was, wasStore, wasProfile) = (App.Settings.AutoEq, App.Settings.AutoEqStore, App.Settings.AutoEqProfile);
+            App.Settings.AutoEq = true; App.Settings.AutoEqStore = "folder"; App.Settings.AutoEqProfile = "bass";
+            // the sample songs are silent, so measuring them finds nothing: a song of noise is made to measure
+            var (done, _) = await sv.MeasureAllForTest();
+            var noiseDir = Path.Combine(_dir, "autoeq", "Noise Album");
+            Directory.CreateDirectory(noiseDir);
+            var noiseFile = Path.Combine(noiseDir, "01 Noise.wav");
+            using (var w = new NAudio.Wave.WaveFileWriter(noiseFile, new NAudio.Wave.WaveFormat(44100, 16, 2)))
+            {
+                var rnd = new Random(3);
+                var buf = new byte[44100 * 4 * 6];
+                for (var i = 0; i < buf.Length / 2; i++) { var v = (short)(rnd.Next(-8000, 8000)); buf[i * 2] = (byte)v; buf[i * 2 + 1] = (byte)(v >> 8); }
+                w.Write(buf, 0, buf.Length);
+            }
+            var noise = new Track { Source = "local", SourceId = noiseFile, Location = noiseFile, Title = "Noise" };
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var (_, measured) = await AutoEq.ScanAsync(new[] { noise }, "folder", null, CancellationToken.None);
+            var folderFile = Path.Combine(noiseDir, AutoEq.FolderFile);
+            Check("the auto equalizer measures songs (all of them at once too), kept in the album folder's file", done == App.Lib.Tracks.Count(t => t.IsLocal) && measured == 1 && File.Exists(folderFile)
+                && AutoEq.LevelsFor(new Track { Source = "local", SourceId = "again", Location = noiseFile }) != null, $"{watch.ElapsedMilliseconds} ms for a 6-second song");
+            // white noise has far more treble than a balanced mix: sound accuracy turns it down
+            var noiseGains = AutoEq.Gains(AutoEq.LevelsFor(noise)!, "accuracy");
+            Check("measuring hears the balance: bright white noise gets its treble turned down", noiseGains[8] < -1 && noiseGains[9] < -1, string.Join(",", noiseGains));
+            var song = App.Lib.Tracks.First(t => t.IsLocal);
+            AutoEq.Remember(song, AutoEq.LevelsFor(noise)!, "phoenix");
+            App.Player.Play(new[] { Player.From(song) }, 0);
+            await Task.Delay(500);
+            var gains = AutoEq.Combine(App.Settings, App.Player.Current?.Track);
+            Check("the song playing gets the bass sound's adjustment, and the engine's equalizer is on", gains != null && gains[1] > 0 && App.Player.EqualizerOnForTest, gains == null ? "none" : string.Join(",", gains));
+            var combos = ((System.Windows.Controls.ComboBox)sv.FindName("AutoEqProfileBox")).Items.Count + ((System.Windows.Controls.ComboBox)sv.FindName("AutoEqStoreBox")).Items.Count;
+            Check("settings → playback offers the three sounds and three places to keep it", combos == 6);
+            App.Player.Stop();
+            (App.Settings.AutoEq, App.Settings.AutoEqStore, App.Settings.AutoEqProfile) = (was, wasStore, wasProfile);
+            App.Player.ApplyEqualizer();
+        }
+
         // nothing playing: the player bar's middle is empty
         {
             var win = App.Win;

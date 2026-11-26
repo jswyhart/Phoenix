@@ -15,4 +15,9 @@
     <PackageReference Include="SharpCompress" Version="0.50.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- shared with the Windows app as they are -->
+    <Compile Include="..\..\Services\AutoEq.cs" Link="AutoEq.cs" />
+  </ItemGroup>
+
 </Project>

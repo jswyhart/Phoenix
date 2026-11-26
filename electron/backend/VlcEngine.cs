@@ -314,7 +314,10 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
     /// A song as 16 kHz mono samples for the speech model: VLC converts it to a WAV file as fast as it can (no sound
     /// plays), and the samples are read back from it.
     /// </summary>
-    public float[] DecodeForSpeech(string source, CancellationToken cancel)
+    public float[] DecodeForSpeech(string source, CancellationToken cancel) => DecodeMono(source, 16000, cancel);
+
+    /// <summary>A song as mono samples at the given rate (the speech model, the auto equalizer).</summary>
+    public float[] DecodeMono(string source, int rate, CancellationToken cancel)
     {
         lock (SpeechLock)
         {
@@ -322,7 +325,7 @@ public class VlcEngine : IMediaEngine, ISpeedEngine, IDisposable
             try
             {
                 using var media = Open(source);
-                media.AddOption($":sout=#transcode{{vcodec=none,acodec=s16l,channels=1,samplerate=16000}}:std{{access=file,mux=wav,dst='{wav.Replace("'", "\\'")}'}}");
+                media.AddOption($":sout=#transcode{{vcodec=none,acodec=s16l,channels=1,samplerate={rate}}}:std{{access=file,mux=wav,dst='{wav.Replace("'", "\\'")}'}}");
                 media.AddOption(":no-sout-video");
                 media.AddOption(":sout-keep");
                 using var mp = new MediaPlayer(media);

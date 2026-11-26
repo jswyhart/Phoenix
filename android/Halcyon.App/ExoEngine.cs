@@ -52,15 +52,20 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerLi
     /// <summary>The levelling applied to the song playing, in dB (0 when off or the song carries no ReplayGain).</summary>
     public double LevelDb { get; private set; }
 
-    /// <summary>Sets the phone's equalizer to the ten bands chosen (read off at the phone's own band centres).</summary>
+    /// <summary>
+    /// Sets the phone's equalizer: your own ten bands (when on) plus the auto equalizer's adjustment for the song playing,
+    /// read off at the phone's own band centres.
+    /// </summary>
     public void ApplyEqualizer()
     {
         var s = App.Settings;
         try
         {
-            if (!s.EqEnabled) { if (_eq != null) _eq.SetEnabled(false); return; }
+            var own = s.EqEnabled ? EqPresets.Current(s) : null;
+            var auto = s.AutoEq && App.Player.Current?.Track is { } t && Halcyon.Services.AutoEq.LevelsFor(t) is { } l ? Halcyon.Services.AutoEq.Gains(l, s.AutoEqProfile) : null;
+            if (own == null && auto == null) { if (_eq != null) _eq.SetEnabled(false); return; }
             _eq ??= new AFx.Equalizer(0, _player.AudioSessionId);
-            var gains = EqPresets.Current(s);
+            var gains = own == null ? auto! : auto == null ? own : own.Zip(auto, (a, b) => Math.Clamp(a + b, -12, 12)).ToArray();
             var range = _eq.GetBandLevelRange()!;   // millibels
             for (short b = 0; b < _eq.NumberOfBands; b++)
             {
@@ -99,6 +104,7 @@ public class ExoEngine : Java.Lang.Object, IMediaEngine, ISpeedEngine, IPlayerLi
     {
         _opened = false;
         Level(url);
+        ApplyEqualizer();
         VideoWidth = VideoHeight = 0;
         var uri = url.Contains("://") ? Android.Net.Uri.Parse(url)! : Android.Net.Uri.FromFile(new Java.IO.File(url))!;
         var b = new MediaItem.Builder()!.SetUri(uri)!;

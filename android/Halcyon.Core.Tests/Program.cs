@@ -728,6 +728,75 @@ Section("radio, podcast sources, play log, sleep timer, speed, sections, backup,
         "a newer release is recognised with the file for this platform, and a file from anywhere else is never offered");
 }
 
+Section("the auto equalizer");
+{
+    // made-up songs: noise shaped to be dull (little treble), boomy (lots of bass) or balanced
+    float[] Shaped(double bassDb, double trebleDb, int seconds = 12, int rate = 44100)
+    {
+        var rnd = new Random(7);
+        var white = new float[rate * seconds];
+        for (var i = 0; i < white.Length; i++) white[i] = (float)(rnd.NextDouble() * 2 - 1);
+        // pink-ish: Paul Kellet's filter, then a low and a high one-pole shelf
+        double b0 = 0, b1 = 0, b2 = 0, lp = 0, hp = 0, prev = 0;
+        var o = new float[white.Length];
+        double gl = Math.Pow(10, bassDb / 20) - 1, gh = Math.Pow(10, trebleDb / 20) - 1;
+        double al = Math.Exp(-2 * Math.PI * 150 / rate), ah = Math.Exp(-2 * Math.PI * 3000 / rate);
+        for (var i = 0; i < white.Length; i++)
+        {
+            var w = white[i];
+            b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.96300 * b1 + w * 0.2965164; b2 = 0.57000 * b2 + w * 1.0526913;
+            var pink = (b0 + b1 + b2 + w * 0.1848) * 0.05;
+            lp = (1 - al) * pink + al * lp;
+            hp = ah * (hp + pink - prev); prev = pink;
+            o[i] = (float)(pink + gl * lp + gh * hp);
+        }
+        return o;
+    }
+    var dull = AutoEq.Measure(Shaped(0, -14), 44100)!;
+    var boomy = AutoEq.Measure(Shaped(12, 0), 44100)!;
+    var even = AutoEq.Measure(Shaped(0, 0), 44100)!;
+    Check(dull != null && boomy != null && even != null && AutoEq.Measure(new float[44100 * 5], 44100) == null, "songs are measured band by band; silence isn't");
+    Check(Math.Abs(even.Max() - even.Min()) < 2.5 && dull[9] < even[9] - 5 && dull[1] > even[1] - 1 && boomy[1] > even[1] + 8 && boomy[8] > even[8] - 1,
+        $"the measurement follows the sound: flat stays flat, less treble and more bass show where they are (dull {string.Join(",", dull.Select(x => x.ToString("0")))})");
+    // the sounds, from band levels set against a well-balanced mix
+    double[] balanced = { 34, 40, 40, 39, 38, 37, 35.5, 34, 32, 26 };
+    double[] Off(params (int band, double db)[] change) { var v = balanced.ToArray(); foreach (var (b, d) in change) v[b] += d; return v; }
+    var dullAcc = AutoEq.Gains(Off((7, -6), (8, -9), (9, -10)), "accuracy");
+    var boomyAcc = AutoEq.Gains(Off((0, 9), (1, 10), (2, 8)), "accuracy");
+    var balancedAcc = AutoEq.Gains(balanced, "accuracy");
+    Check(dullAcc[8] > 1.5 && boomyAcc[1] < -1.5 && balancedAcc.All(g => Math.Abs(g) < 0.6),
+        $"sound accuracy lifts a dull song's treble, tames a boomy song's bass, and leaves a balanced one alone: dull {string.Join(",", dullAcc)}  boomy {string.Join(",", boomyAcc)}");
+    var evenBass = AutoEq.Gains(balanced, "bass");
+    var boomyBass = AutoEq.Gains(Off((0, 9), (1, 10), (2, 8)), "bass");
+    var thinBass = AutoEq.Gains(Off((0, -8), (1, -8), (2, -6)), "bass");
+    Check(evenBass[1] > 2 && thinBass[1] > evenBass[1] + 1 && boomyBass[1] < evenBass[1] - 1, $"bass lifts the low end, more on a thin song, less on one that has plenty: thin {thinBass[1]}  even {evenBass[1]}  boomy {boomyBass[1]}");
+    var evenClarity = AutoEq.Gains(balanced, "clarity");
+    var muddyClarity = AutoEq.Gains(Off((3, 6), (4, 6)), "clarity");
+    Check(evenClarity[6] > 0.5 && evenClarity[7] > 1 && evenClarity[3] < 0 && muddyClarity[3] < evenClarity[3] - 1, $"clarity brings the presence forward and trims the low mids, more on a muddy song: {string.Join(",", evenClarity)}");
+    Check(new[] { dullAcc, boomyAcc, evenBass, boomyBass, thinBass, evenClarity, muddyClarity }.All(g => g.All(x => x >= -8 && x <= 8)), "no band goes past 8 dB either way");
+    Check(AutoEq.Parse(AutoEq.Format(dull))!.Zip(dull).All(z => Math.Abs(z.First - z.Second) < 0.06), "a measurement round-trips through its text form");
+
+    // keeping it: Phoenix's library, the song's tags, the album folder's file
+    var dir = Path.Combine(Path.GetTempPath(), "phoenix-autoeq-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var mp3 = Path.Combine(dir, "song.mp3");
+    WriteWav(Path.ChangeExtension(mp3, ".wav"), 1);
+    File.Copy(Path.ChangeExtension(mp3, ".wav"), Path.Combine(dir, "other.wav"));
+    var song = new Track { Source = "local", SourceId = mp3 + "-x", Location = Path.Combine(dir, "other.wav"), Title = "x" };
+    AutoEq.Remember(song, even, "folder");
+    var inFolder = File.Exists(Path.Combine(dir, AutoEq.FolderFile)) && File.ReadAllText(Path.Combine(dir, AutoEq.FolderFile)).Contains("other.wav");
+    AutoEq.Remember(new Track { Source = "jellyfin", SourceId = "srv1", Location = "srv1|direct" }, boomy, "tags");
+    Check(inFolder && AutoEq.LevelsFor(new Track { Source = "local", SourceId = "fresh", Location = song.Location }) is { } f && Math.Abs(f[1] - even[1]) < 0.06,
+        "a measurement kept in the album folder's file is found for the song");
+    Check(AutoEq.LevelsFor(new Track { Source = "jellyfin", SourceId = "srv1", Location = "srv1|direct" }) is { } srv && Math.Abs(srv[1] - boomy[1]) < 0.06,
+        "a song on a server (no tags to write) is kept in Phoenix's library instead");
+    App.Settings.AutoEq = true; App.Settings.AutoEqProfile = "bass"; App.Settings.EqEnabled = true; App.Settings.EqGains = new double[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+    var combined = AutoEq.Combine(App.Settings, new Track { Source = "local", SourceId = "fresh2", Location = song.Location })!;
+    Check(Math.Abs(combined[1] - (1 + AutoEq.Gains(even, "bass")[1])) < 0.01, "the auto equalizer goes on top of your own equalizer");
+    App.Settings.AutoEq = false; App.Settings.EqEnabled = false;
+    try { Directory.Delete(dir, true); } catch { }
+}
+
 Console.WriteLine();
 Console.WriteLine(failures == 0 ? $"ALL {checks} CHECKS PASSED" : $"{failures} of {checks} CHECKS FAILED");
 try { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(root, true); } catch { }

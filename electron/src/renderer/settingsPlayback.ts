@@ -1,10 +1,15 @@
 // settings → playback, as on Windows: crossfade, volume levelling and the equalizer.
-import { call } from "./api";
+import { call, on } from "./api";
 import { h, pill } from "./ui";
 
 interface Playback {
   crossfade: number; eqEnabled: boolean; eqPreset: string; eqGains: number[]; presets: string[]; bands: number[];
   levelling: boolean; levelByAlbum: boolean; levelMeasure: boolean;
+  autoEq: AutoEqState;
+}
+interface AutoEqState {
+  on: boolean; profile: string; store: string; profiles: { id: string; name: string; about: string }[]; stores: { id: string; name: string }[];
+  nowGains: number[] | null; nowMeasured: boolean; playing: boolean; scanning: boolean; status: string;
 }
 
 export function playbackPanel() {
@@ -28,6 +33,33 @@ export function playbackPanel() {
   const reset = pill("RESET", () => void set({ eqPreset: "flat" }));
   reset.style.marginLeft = "10px";
   const bands = h("div.eqbands");
+  // the auto equalizer
+  const autoOn = check("Adjust the sound of each song by itself", "autoEq");
+  const autoProfile = h("select.box.autoeqprofile", { style: { width: "440px" } });
+  autoProfile.onchange = () => void set({ autoEqProfile: autoProfile.value });
+  const autoStore = h("select.box.autoeqstore", { style: { width: "440px" } });
+  autoStore.onchange = () => void set({ autoEqStore: autoStore.value });
+  const autoStatus = h("div.statusline", { style: { marginLeft: "24px" } });
+  const autoScan = pill("MEASURE ALL SONGS NOW", async () => paintAuto(await call<AutoEqState>("autoeq.scan")));
+  const autoRow = (label: string, box: HTMLElement) => h("div", { style: { display: "flex", alignItems: "center", margin: "8px 0 0 24px" } },
+    h("span", { style: { width: "80px", flex: "none", color: "var(--fg-dim)" } }, label), box);
+  const bandName = (f: number) => f >= 1000 ? `${f / 1000}k` : String(f);
+  function paintAuto(a: AutoEqState) {
+    autoOn.box.checked = a.on;
+    if (autoProfile.options.length === 0) {
+      autoProfile.replaceChildren(...a.profiles.map(x => h("option", { value: x.id }, `${x.name}: ${x.about}`)));
+      autoStore.replaceChildren(...a.stores.map(x => h("option", { value: x.id }, x.name)));
+    }
+    autoProfile.value = a.profile;
+    autoStore.value = a.store;
+    autoProfile.disabled = autoStore.disabled = !a.on;
+    autoScan.textContent = a.scanning ? "STOP" : "MEASURE ALL SONGS NOW";
+    autoStatus.textContent = a.scanning || a.status ? a.status
+      : !a.on || !a.playing ? ""
+      : a.nowGains ? "now playing: " + a.nowGains.map((g, i) => `${bandName(P?.bands[i] ?? 0)} ${g > 0 ? "+" : ""}${g}`).join("  ")
+      : "the song playing hasn't been measured yet";
+  }
+  on("autoeq", (a: AutoEqState) => { if (P) { P.autoEq = a; paintAuto(a); } });
   const sliders: HTMLInputElement[] = [], values: HTMLElement[] = [];
 
   function fadeWords(n: number) {
@@ -62,6 +94,7 @@ export function playbackPanel() {
     sliders.forEach((s, i) => { s.value = String(p.eqGains[i] ?? 0); s.oninput!(new Event("input")); s.disabled = !p.eqEnabled; });
     preset.disabled = reset.disabled = !p.eqEnabled;
     bands.style.opacity = p.eqEnabled ? "1" : "0.4";
+    paintAuto(p.autoEq);
   }
 
   const el = h("div", h("div.h2", "playback"),
@@ -70,6 +103,10 @@ export function playbackPanel() {
     h("div.label", { style: { margin: "22px 0 3px 0" } }, "VOLUME LEVELLING"), level.el, byAlbum.el, measure.el,
     h("div.note", { style: { margin: "8px 0 0 24px" } }, "Uses the ReplayGain tags in your files where they have them. Songs without them are evened out as they play when the second choice is on, or otherwise given an average level; your files are not changed."),
     h("div.label", { style: { margin: "22px 0 3px 0" } }, "EQUALIZER"), eqOn.el,
-    h("div", { style: { display: "flex", alignItems: "center", marginTop: "8px" } }, preset, reset), bands);
+    h("div", { style: { display: "flex", alignItems: "center", marginTop: "8px" } }, preset, reset), bands,
+    h("div.label", { style: { margin: "22px 0 3px 0" } }, "AUTO EQUALIZER"), autoOn.el,
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, "Each song is measured once (how much of its sound falls in each band) and the equalizer is set for it as it plays, on top of your own equalizer when that is on. Songs are measured the first time they play, or all at once below."),
+    autoRow("sound", autoProfile), autoRow("keep it", autoStore),
+    h("div", { style: { margin: "12px 0 0 24px" } }, autoScan), autoStatus);
   return { el, shown: async () => paint(await call<Playback>("playback.state")), state: () => P };
 }

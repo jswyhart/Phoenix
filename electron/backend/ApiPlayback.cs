@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Halcyon.Core;
+using Halcyon.Services;
 
 namespace Phoenix.Backend;
 
@@ -52,14 +53,34 @@ public static partial class Api
         var e = Program.Engine;
         e.Crossfade = S.Crossfade;
         if (S.EqGains.Length != Bands.Length) S.EqGains = new double[Bands.Length];
-        e.SetEqualizer(S.EqEnabled ? S.EqGains : null);
+        // your own equalizer plus the auto equalizer's adjustment for the song playing
+        e.SetEqualizer(AutoEq.Combine(S, P.Current?.Track));
+    }
+
+    static CancellationTokenSource? _autoEqScan;
+    static string _autoEqStatus = "";
+
+    static object AutoEqState()
+    {
+        var now = P.Current?.Track;
+        var levels = now != null ? AutoEq.LevelsFor(now) : null;
+        return new
+        {
+            on = S.AutoEq, profile = S.AutoEqProfile, store = S.AutoEqStore,
+            profiles = AutoEq.Profiles.Select(x => new { id = x.Id, name = x.Name, about = x.About }),
+            stores = AutoEq.Stores.Select(x => new { id = x.Id, name = x.Name }),
+            nowGains = levels != null ? AutoEq.Gains(levels, S.AutoEqProfile) : null,
+            nowMeasured = levels != null, playing = now != null,
+            scanning = _autoEqScan != null, status = _autoEqStatus,
+        };
     }
 
     static object PlaybackState() => new
     {
         crossfade = S.Crossfade, eqEnabled = S.EqEnabled, eqPreset = S.EqPreset, eqGains = S.EqGains,
         presets = EqPresets.Select(x => x.Name).Append("custom"), bands = Bands,
-        levelling = S.Levelling, levelByAlbum = S.LevelByAlbum, levelMeasure = S.LevelMeasure
+        levelling = S.Levelling, levelByAlbum = S.LevelByAlbum, levelMeasure = S.LevelMeasure,
+        autoEq = AutoEqState()
     };
 
     static void RegisterPlayback()
@@ -67,7 +88,57 @@ public static partial class Api
         Program.Engine.MediaOptions = LevelOptions;
         // only music crossfades: not videos, podcasts or audiobooks
         P.CurrentChanged += () => Program.Engine.FadeThis = P.Current?.Track != null;
+        // the auto equalizer follows the song playing, and measures a song the first time it plays if it hasn't been yet
+        AutoEq.Decode = (file, cancel) => (Program.Engine.DecodeMono(file, 44100, cancel), 44100);
+        P.CurrentChanged += () => { ApplyPlayback(); AutoEq.EnsureMeasured(S, P.Current?.Track); };
+        AutoEq.Measured += t => MainLoop.Post(() => { if (P.Current?.Track == t) { ApplyPlayback(); Rpc.Emit("autoeq", AutoEqState()); } });
         ApplyPlayback();
+
+        // the self-test: measure a song of noise, keep it in its album folder's file, and give its measurement to a song
+        Rpc.On("smoke.autoEqNoise", async p =>
+        {
+            var dir = Path.Combine(p.Str("dir"), "autoeq", "Noise Album");
+            Directory.CreateDirectory(dir);
+            var file = Path.Combine(dir, "01 Noise.wav");
+            var rnd = new Random(3);
+            using (var f = File.Create(file))
+            using (var w = new BinaryWriter(f))
+            {
+                const int rate = 44100, seconds = 6;
+                var data = rate * seconds * 2;
+                w.Write("RIFF"u8.ToArray()); w.Write(36 + data); w.Write("WAVEfmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)1);
+                w.Write(rate); w.Write(rate * 2); w.Write((short)2); w.Write((short)16); w.Write("data"u8.ToArray()); w.Write(data);
+                for (var i = 0; i < rate * seconds; i++) w.Write((short)rnd.Next(-8000, 8000));
+            }
+            var noise = new Track { Source = "local", SourceId = file, Location = file, Title = "Noise" };
+            var (_, measured) = await AutoEq.ScanAsync(new[] { noise }, "folder", null, CancellationToken.None);
+            var levels = AutoEq.LevelsFor(noise);
+            if (levels != null && Lib.ById.GetValueOrDefault(p.Long("id")) is { } song) AutoEq.Remember(song, levels, "phoenix");
+            return new { gains = levels != null ? AutoEq.Gains(levels, "accuracy") : null, kept = measured == 1 && File.Exists(Path.Combine(dir, AutoEq.FolderFile)) };
+        });
+
+        Rpc.On("autoeq.scan", scanParams =>
+        {
+            if (_autoEqScan != null) { _autoEqScan.Cancel(); return AutoEqState(); }
+            _autoEqScan = new CancellationTokenSource();
+            var cancel = _autoEqScan.Token;
+            var songs = Lib.Tracks.ToList();
+            var store = S.AutoEqStore;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            void Tell(string s) => MainLoop.Post(() => { _autoEqStatus = s; Rpc.Emit("autoeq", AutoEqState()); });
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var (done, measured) = await AutoEq.ScanAsync(songs, store, (d, total, m) => Tell($"measuring {d + 1} of {total}   ({m} measured so far)"), cancel);
+                    MainLoop.Post(() => _autoEqScan = null);
+                    Tell(done == 0 ? "every song is measured already" : $"measured {measured} of {done} songs in {watch.Elapsed.TotalSeconds:0} s");
+                }
+                catch (OperationCanceledException) { MainLoop.Post(() => _autoEqScan = null); Tell("stopped; the songs measured so far are kept"); }
+                MainLoop.Post(ApplyPlayback);
+            });
+            return AutoEqState();
+        });
 
         Rpc.On("playback.state", _ => PlaybackState());
         Rpc.On("playback.set", p =>
@@ -91,6 +162,9 @@ public static partial class Api
             if (p.Has("levelling")) S.Levelling = p.Bool("levelling");
             if (p.Has("levelByAlbum")) S.LevelByAlbum = p.Bool("levelByAlbum");
             if (p.Has("levelMeasure")) S.LevelMeasure = p.Bool("levelMeasure");
+            if (p.Has("autoEq")) { S.AutoEq = p.Bool("autoEq"); AutoEq.EnsureMeasured(S, P.Current?.Track); }
+            if (p.Has("autoEqProfile") && AutoEq.Profiles.Any(x => x.Id == p.Str("autoEqProfile"))) S.AutoEqProfile = p.Str("autoEqProfile");
+            if (p.Has("autoEqStore") && AutoEq.Stores.Any(x => x.Id == p.Str("autoEqStore"))) S.AutoEqStore = p.Str("autoEqStore");
             Save();
             ApplyPlayback();
             return PlaybackState();

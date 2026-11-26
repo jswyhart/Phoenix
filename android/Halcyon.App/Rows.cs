@@ -205,19 +205,17 @@ public class RowAdapter : BaseAdapter
                 note.Text = r.Title;
                 return note;
             case RowKind.Strip:
-                var scroll = convertView as HorizontalScrollView ?? new HorizontalScrollView(_c) { HorizontalScrollBarEnabled = false };
-                scroll.RemoveAllViews();
-                scroll.ScrollTo(0, 0);
-                var line = new LinearLayout(_c) { Orientation = Orientation.Horizontal };
+                // tiles wrap onto as many lines as they need: nothing scrolls sideways
+                var line = convertView as FlowLayout ?? new FlowLayout(_c) { TileDp = 124 };
+                line.RemoveAllViews();
                 line.SetPadding(Th.Dp(10), 0, Th.Dp(10), 0);
                 foreach (var t in r.Strip ?? new())
                 {
                     var tile = new TileView(_c);
                     tile.Bind(t, 1f, Th.Dp(124));
-                    line.AddView(tile, new LinearLayout.LayoutParams(Th.Dp(124), ViewGroup.LayoutParams.WrapContent));
+                    line.AddView(tile);
                 }
-                scroll.AddView(line);
-                return scroll;
+                return line;
             default:
                 var row = convertView as RowView ?? new RowView(_c);
                 row.Bind(r);
@@ -233,8 +231,7 @@ public class RowAdapter : BaseAdapter
 public class Page : LinearLayout
 {
     public readonly MainActivity A;
-    readonly LinearLayout _actions, _chips;
-    readonly HorizontalScrollView _chipScroll;
+    readonly FlowLayout _actions, _chips;
     readonly ListView _list;
     readonly GridView _grid;
     readonly TextView _empty, _subtitle;
@@ -272,17 +269,14 @@ public class Page : LinearLayout
         AddView(_subtitle, Ui.Fill());
 
         // As on the desktop, top to bottom: the page's tabs, its action links, then the bar to filter, show and sort by.
-        _chips = new LinearLayout(a) { Orientation = Orientation.Horizontal };
+        // tabs and action links wrap onto a second line when they don't fit: nothing scrolls sideways
+        _chips = new FlowLayout(a) { Visibility = ViewStates.Gone };
         _chips.SetPadding(Th.Dp(8), 0, Th.Dp(8), 0);
-        _chipScroll = new HorizontalScrollView(a) { HorizontalScrollBarEnabled = false, Visibility = ViewStates.Gone };
-        _chipScroll.AddView(_chips);
-        AddView(_chipScroll, Ui.Fill());
+        AddView(_chips, Ui.Fill());
 
-        _actions = new LinearLayout(a) { Orientation = Orientation.Horizontal };
+        _actions = new FlowLayout(a);
         _actions.SetPadding(Th.Dp(4), 0, Th.Dp(4), 0);
-        var actionScroll = new HorizontalScrollView(a) { HorizontalScrollBarEnabled = false };
-        actionScroll.AddView(_actions);
-        AddView(actionScroll, Ui.Fill());
+        AddView(_actions, Ui.Fill());
 
         _filterReload = Reload;
         _filter = Ui.Input(a, "filter");
@@ -404,7 +398,7 @@ public class Page : LinearLayout
     public Page Chips(Func<IEnumerable<string>> all, Func<string> current, Action<string> select)
     {
         _chipSource = all; _chipCurrent = current; _chipSelect = select;
-        _chipScroll.Visibility = ViewStates.Visible;
+        _chips.Visibility = ViewStates.Visible;
         return this;
     }
 

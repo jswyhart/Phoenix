@@ -28,6 +28,10 @@ public class HalcyonApp : Application
         Engine = new ExoEngine(this);
         App.Init(FilesDir!.AbsolutePath, Engine, DefaultSettings);
         Engine.ApplyEqualizer();
+        // the auto equalizer: songs are measured with the phone's own decoders, the first time they play if not before
+        Halcyon.Services.AutoEq.Decode = AudioDecode.Mono;
+        App.Player.CurrentChanged += () => Halcyon.Services.AutoEq.EnsureMeasured(App.Settings, App.Player.Current?.Track);
+        Halcyon.Services.AutoEq.Measured += t => Main.Post(() => { if (App.Player.Current?.Track == t) Engine.ApplyEqualizer(); });
         Th.Apply(App.Settings.Theme, this);
         PlaybackService.Watch(this);
     }
