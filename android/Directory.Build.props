@@ -4,4 +4,15 @@
     <AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' And Exists('D:\android-sdk')">D:\android-sdk</AndroidSdkDirectory>
     <JavaSdkDirectory Condition="'$(JavaSdkDirectory)' == '' And Exists('D:\android-jdk')">D:\android-jdk</JavaSdkDirectory>
   </PropertyGroup>
+
+  <!-- Phoenix's own signing key (made once with make-signing-key.ps1, kept outside the project): when it is there,
+       every build is signed with it, so a new build always installs over the old one. -->
+  <PropertyGroup Condition="Exists('$(LOCALAPPDATA)\Phoenix-signing\phoenix.keystore') And Exists('$(LOCALAPPDATA)\Phoenix-signing\password.txt') And Exists('$(LOCALAPPDATA)\Phoenix-signing\key-password.txt')">
+    <AndroidKeyStore>true</AndroidKeyStore>
+    <AndroidSigningKeyStore>$(LOCALAPPDATA)\Phoenix-signing\phoenix.keystore</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>phoenix</AndroidSigningKeyAlias>
+    <AndroidSigningStorePass>file:$(LOCALAPPDATA)\Phoenix-signing\password.txt</AndroidSigningStorePass>
+    <!-- a file of its own: apksigner reads both passwords line by line from one stream, so one file would run dry -->
+    <AndroidSigningKeyPass>file:$(LOCALAPPDATA)\Phoenix-signing\key-password.txt</AndroidSigningKeyPass>
+  </PropertyGroup>
 </Project>
