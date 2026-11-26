@@ -241,15 +241,15 @@ public static class SettingsScreen
             rows.Add(Row.Caption("VOLUME LEVELLING"));
             rows.Add(new Row
             {
-                Title = "play every song at about the same loudness", Trail = S.Levelling ? "on" : "off",
-                Sub = "uses the ReplayGain tags in your songs; songs without them play as they are",
+                Title = "even out loudness", Trail = S.Levelling ? "on" : "off",
+                Sub = "plays every song at about the same loudness, from the ReplayGain tags in your songs; songs without them play as they are",
                 Click = () => { S.Levelling = !S.Levelling; S.Save(); page.Reload(); }
             });
             if (S.Levelling)
                 rows.Add(new Row
                 {
-                    Title = "keep an album's loud and quiet songs as they are", Trail = S.LevelByAlbum ? "on" : "off",
-                    Sub = "levels whole albums rather than each song",
+                    Title = "level whole albums", Trail = S.LevelByAlbum ? "on" : "off",
+                    Sub = "keeps an album's loud and quiet songs as they are to each other",
                     Click = () => { S.LevelByAlbum = !S.LevelByAlbum; S.Save(); page.Reload(); }
                 });
             rows.Add(Row.Note("These apply from the next song. The equalizer is the phone's own, so how many bands it has depends on the phone; the ten bands here are read off at its bands."));
@@ -260,7 +260,7 @@ public static class SettingsScreen
             rows.Add(Row.Caption("LYRICS"));
             rows.Add(new Row
             {
-                Title = "look lyrics up on LRCLIB by itself", Trail = S.LyricsAuto ? "on" : "off",
+                Title = "find lyrics by itself", Trail = S.LyricsAuto ? "on" : "off",
                 Sub = "when a song has none: sends its title, artist and album to LRCLIB, a free, open lyrics database",
                 Click = () => { S.LyricsAuto = !S.LyricsAuto; S.Save(); page.Reload(); }
             });
