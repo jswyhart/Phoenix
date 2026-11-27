@@ -532,6 +532,14 @@ public static partial class Smoke
         App.Settings.VideoFolders = new() { videoDir };
 
         await Shot("01-empty");
+        {
+            // the welcome page offers the usual folders in one click (not clicked here: they are the real ones)
+            var welcome = App.Win.Page<QuickplayView>("quickplay");
+            var usual = QuickplayView.UsualFolders();
+            var useBtn = (System.Windows.Controls.Button)welcome.FindName("UseUsualBtn");
+            Check("the welcome page offers the usual Music, Videos and Pictures folders in one click", usual.All(u => System.IO.Directory.Exists(u.Path)) && (usual.Count == 0) == (useBtn.Visibility != Visibility.Visible),
+                string.Join(", ", usual.Select(u => $"{u.Kind}: {u.Path}")));
+        }
 
         // --- scan ---
         await lib.ScanAsync(_ => { });

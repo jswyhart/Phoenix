@@ -175,7 +175,7 @@ public class TagEditorWindow : Window
         _pattern.SelectedIndex = 0;
         _pattern.ToolTip = "How your files are named. Choose the layout that matches, then press FROM FILE NAMES to fill in the songs' details from their file names.";
 
-        var fixes = new WrapPanel { Margin = new Thickness(16, 12, 16, 8) };
+        var fixes = new WrapPanel { Margin = new Thickness(16, 8, 16, 8) };
         void Fix(string label, Action run, string tip) => fixes.Children.Add(Make.Button(label, "PillBtn", () => { _grid.CommitEdit(DataGridEditingUnit.Row, true); run(); ShowStatus(); }, tip, new Thickness(0, 0, 8, 6)));
         Fix("NUMBER TRACKS", NumberTracks, "Numbers the songs 1, 2, 3… in the order shown");
         Fix("TIDY CAPITALS", () => Each(r => { r.Title = TagFixes.TitleCase(r.Title); r.Album = TagFixes.TitleCase(r.Album); }), "Title Case for titles and albums");
@@ -206,7 +206,7 @@ public class TagEditorWindow : Window
         DockPanel.SetDock(fixes, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         var about = new TextBlock { Text = "File tags are saved into the music files themselves, so they go wherever the files go. (Search tags, Phoenix's own #labels, are kept in its library: right-click → Edit search tags.)",
-            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16, 12, 16, 0) };
         about.SetResourceReference(TextBlock.ForegroundProperty, "FgDim");
         DockPanel.SetDock(about, Dock.Top);
         dock.Children.Add(about);

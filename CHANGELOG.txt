@@ -14,6 +14,9 @@ New
   (⌘ instead of Ctrl on a Mac.)
 - The phone page can turn phone sync on right there, shows the paired phones and when each last
   synced, and says how to pair one when none is.
+- The welcome page (nothing in the collection yet) adds your usual Music, Videos and Pictures
+  folders in one click, and scans them.
+- A search that finds nothing says so, and how else to look.
 
 Changed
 - Messages in the title bar (Android: under the title) fade after ten seconds instead of staying
@@ -26,6 +29,9 @@ Changed
 Fixed
 - Windows: when Phoenix starts with nothing playing, the player bar's song area stays empty
   instead of showing "nothing playing" until the first song.
+- Windows: podcast episode names no longer start with two empty boxes, and a podcast without a
+  picture shows a microphone instead of a blank square.
+- Windows: the note at the top of the file tags window lines up with the buttons under it.
 
 
 1.0.5 — 2026-11-26

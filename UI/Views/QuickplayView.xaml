@@ -64,7 +64,11 @@
             <TextBlock Text="welcome" Style="{StaticResource H2}" FontSize="34" HorizontalAlignment="Center"/>
             <TextBlock Foreground="{DynamicResource FgDim}" TextAlignment="Center" Margin="0,0,0,14"
                        Text="Add your music, video and picture folders, or connect a Jellyfin or Plex server, to get started."/>
-            <Button Style="{StaticResource PillBtn}" Content="open settings" HorizontalAlignment="Center" Click="OpenSettings_Click"/>
+            <WrapPanel HorizontalAlignment="Center">
+                <Button x:Name="UseUsualBtn" Style="{StaticResource PillBtn}" Content="USE MY MUSIC, VIDEOS AND PICTURES" Margin="0,0,10,8" Click="UseUsual_Click"/>
+                <Button Style="{StaticResource PillBtn}" Content="CHOOSE FOLDERS OR A SERVER" Margin="0,0,0,8" Click="OpenSettings_Click"/>
+            </WrapPanel>
+            <TextBlock x:Name="UsualText" Foreground="{DynamicResource FgFaint}" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="560" Margin="0,4,0,0"/>
         </StackPanel>
     </Grid>
 </UserControl>

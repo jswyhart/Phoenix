@@ -60,7 +60,14 @@ public partial class SearchView : UserControl
             TagChips.Children.Add(b);
         }
         TagChips.Visibility = r.Tags.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var nothing = r.Albums.Count == 0 && r.Songs.Count == 0 && other.Count == 0 && r.Tags.Count == 0;
+        NothingText.Text = nothing ? NothingFound(query) : "";
+        NothingText.Visibility = nothing ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>What the search page says when nothing in the collection matches.</summary>
+    public static string NothingFound(string query) =>
+        $"Nothing in your collection matches “{query.Trim()}”.\n\nTry fewer words, or part of a name. Search looks at titles, artists, albums, genres and your search tags (#tag finds one tag); streaming services and podcasts you haven't added are searched on their own pages.";
 
     void Song_DoubleClick(object sender, MouseButtonEventArgs e)
     {

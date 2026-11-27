@@ -43,6 +43,12 @@ public partial class QuickplayView : UserControl
         var lib = App.Lib;
         var empty = lib.Tracks.Count == 0 && lib.Videos.Count == 0;
         EmptyPanel.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (empty)
+        {
+            var usual = UsualFolders();
+            UseUsualBtn.Visibility = usual.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UsualText.Text = usual.Count > 0 ? "adds " + string.Join(",  ", usual.Select(u => u.Path)) : "";
+        }
         Sections.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
 
         var pins = new List<QuickItem>();
@@ -122,5 +128,36 @@ public partial class QuickplayView : UserControl
     }
 
     void OpenSettings_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("settings");
+
+    /// <summary>Windows' own Music, Videos and Pictures folders that exist and aren't in the collection yet.</summary>
+    public static List<(string Kind, string Path)> UsualFolders()
+    {
+        var s = App.Settings;
+        var found = new List<(string, string)>();
+        void Add(string kind, Environment.SpecialFolder where, List<string> have)
+        {
+            var path = Environment.GetFolderPath(where);
+            if (path != "" && System.IO.Directory.Exists(path) && !have.Contains(path, StringComparer.OrdinalIgnoreCase)) found.Add((kind, path));
+        }
+        Add("music", Environment.SpecialFolder.MyMusic, s.MusicFolders);
+        Add("video", Environment.SpecialFolder.MyVideos, s.VideoFolders);
+        Add("picture", Environment.SpecialFolder.MyPictures, s.PictureFolders);
+        return found;
+    }
+
+    /// <summary>One click on the welcome page: the usual folders go into the collection, and it's scanned.</summary>
+    async void UseUsual_Click(object sender, RoutedEventArgs e)
+    {
+        var s = App.Settings;
+        var usual = UsualFolders();
+        foreach (var (kind, path) in usual)
+            (kind == "music" ? s.MusicFolders : kind == "video" ? s.VideoFolders : s.PictureFolders).Add(path);
+        s.Save();
+        UseUsualBtn.IsEnabled = false;
+        await App.RefreshCollectionAsync();
+        _ = App.Win.Page<PicturesView>("pictures").ReloadAsync();
+        UseUsualBtn.IsEnabled = true;
+        Reload();
+    }
     void Stats_Click(object sender, RoutedEventArgs e) => App.Win.Navigate("stats");
 }

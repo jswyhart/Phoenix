@@ -162,7 +162,9 @@ export function searchPage(): SearchPage {
   albums.onClick = async t => { albums.select(t.key); setSongs(await call<Song[]>("album.songs", { key: t.key })); };
   albums.onActivate = t => void call("play.album", { key: t.key });
   albums.onContext = async (t, e) => { const x = e.clientX, y = e.clientY; showMenu(await albumMenu(t.key), x, y); };
-  const el = h("div.page", header, h("div.cols", { style: { gridTemplateColumns: "1.1fr 1fr" } }, h("div.pane", albumCap, albums.el), h("div.pane.gap", songCap, songList.el)));
+  // nothing matched: say so, and how else to look
+  const nothing = h("div.center-note.hidden", { style: { background: "none", pointerEvents: "none" } }, h("div.dim.nothingfound", { style: { maxWidth: "520px", whiteSpace: "pre-wrap" } }));
+  const el = h("div.page", { style: { position: "relative" } }, header, h("div.cols", { style: { gridTemplateColumns: "1.1fr 1fr" } }, h("div.pane", albumCap, albums.el), h("div.pane.gap", songCap, songList.el)), nothing);
 
   function setSongs(list: Song[]) {
     songs = list;
@@ -179,6 +181,11 @@ export function searchPage(): SearchPage {
     albums.selectedKey = null;
     albums.setItems(v.albums.map(a => ({ ...a, item: a })));
     setSongs(v.songs);
+    const none = v.albums.length === 0 && v.songs.length === 0;
+    nothing.classList.toggle("hidden", !none);
+    nothing.firstElementChild!.textContent = none
+      ? `Nothing in your collection matches “${q.trim()}”.\n\nTry fewer words, or part of a name. Search looks at titles, artists, albums, genres and your search tags (#tag finds one tag); streaming services and podcasts you haven't added are searched on their own pages.`
+      : "";
   }
   on("lib", debounce(() => { if (query !== "" && el.isConnected) void search(query); }));
   return { el, search: q => void search(q) };

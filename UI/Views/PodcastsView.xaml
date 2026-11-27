@@ -27,6 +27,8 @@
                     <DataTemplate>
                         <DockPanel Height="64">
                             <Grid DockPanel.Dock="Left" Width="52" Height="52" Background="{DynamicResource BgAlt}" Margin="0,0,12,0">
+                                <!-- a podcast with no picture of its own: a microphone, as an album without a cover shows a note -->
+                                <TextBlock Text="&#xE720;" FontFamily="{StaticResource Icons}" FontSize="18" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 <Image ui:Art.Path="{Binding ArtUrl}" ui:Art.Size="120" Stretch="UniformToFill"/>
                             </Grid>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding NewText}" Foreground="{DynamicResource Accent}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,6,0"/>
@@ -54,11 +56,18 @@
                                 <ColumnDefinition Width="110"/>
                                 <ColumnDefinition Width="70"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Description}"><Run FontFamily="{StaticResource Icons}" FontSize="12" Text="{Binding KindGlyph, Mode=OneWay}"/><Run Text="{Binding KindGap, Mode=OneWay}"/><Run Text="{Binding Title, Mode=OneWay}"/></TextBlock>
+                            <DockPanel VerticalAlignment="Center" ToolTip="{Binding Description}">
+                                <!-- a small film mark in front of a video episode's name -->
+                                <TextBlock x:Name="Kind" DockPanel.Dock="Left" FontFamily="{StaticResource Icons}" FontSize="12" Text="{Binding KindGlyph}" VerticalAlignment="Center" Margin="0,1,8,0"/>
+                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DockPanel>
                             <TextBlock Grid.Column="1" Text="{Binding StateText}" Foreground="{DynamicResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             <TextBlock Grid.Column="2" Text="{Binding DateText}" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="3" Text="{Binding DurationText}" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,16,0"/>
                         </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding KindGlyph}" Value=""><Setter TargetName="Kind" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

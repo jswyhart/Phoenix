@@ -272,6 +272,14 @@ public static partial class Api
             Save();
             return SettingsState();
         });
+        // the welcome page: the system's usual Music, Movies/Videos and Pictures folders that exist and aren't added yet
+        Rpc.On("settings.usualFolders", _ => UsualFolders().Select(u => new { kind = u.Kind, path = u.Path }));
+        Rpc.On("settings.useUsualFolders", _ =>
+        {
+            foreach (var (kind, path) in UsualFolders()) FolderList(kind).Add(path);
+            Save();
+            return SettingsState();
+        });
         Rpc.On("settings.addFolders", p =>
         {
             var list = FolderList(p.Str("kind"));
@@ -286,5 +294,17 @@ public static partial class Api
             Save();
             return SettingsState();
         });
+    }
+
+    static List<(string Kind, string Path)> UsualFolders()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var found = new List<(string, string)>();
+        foreach (var (kind, names) in new[] { ("music", new[] { "Music" }), ("video", new[] { "Movies", "Videos" }), ("picture", new[] { "Pictures" }) })
+        {
+            var path = names.Select(n => Path.Combine(home, n)).FirstOrDefault(Directory.Exists);
+            if (path != null && !FolderList(kind).Contains(path, NoCase)) found.Add((kind, path));
+        }
+        return found;
     }
 }

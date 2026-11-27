@@ -1,5 +1,5 @@
 // quickplay: pins, new albums and history across the top, liked songs underneath.
-import { call, on } from "./api";
+import { call, on, SettingsState } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { h, menuAt, pill, textBtn, TileGrid } from "./ui";
 import type { MusicPage } from "./music";
@@ -36,10 +36,25 @@ export function quickplayPage(): Page {
   likedSection.style.gridColumn = "1 / span 3";
   const sections = h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "380px minmax(0, 1fr)", height: "100%", padding: "14px 0 0 22px" } },
     section("pins", pinsHint, pins), section("new", null, fresh), section("history", historyHint, history), likedSection);
+  // one click: the usual folders go into the collection and are scanned
+  const usualNote = h("div.faint", { style: { fontSize: "12px", marginTop: "6px", maxWidth: "560px" } });
+  const useUsual = pill("USE MY MUSIC, VIDEOS AND PICTURES", async () => {
+    useUsual.disabled = true;
+    shell.settings = await call<SettingsState>("settings.useUsualFolders");
+    shell.setStatus("scanning…");
+    try { await call("scan"); } finally { useUsual.disabled = false; shell.setStatus(""); }
+    void load();
+  });
   const empty = h("div.center-note.hidden",
     h("div.h2", { style: { fontSize: "34px" } }, "welcome"),
-    h("div.note", "Add your music, video and picture folders, or connect a Jellyfin or Plex server, to get started."),
-    pill("open settings", () => shell.navigate("settings")));
+    h("div.note", { style: { marginBottom: "14px" } }, "Add your music, video and picture folders, or connect a Jellyfin or Plex server, to get started."),
+    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 10px", justifyContent: "center" } }, useUsual, pill("CHOOSE FOLDERS OR A SERVER", () => shell.navigate("settings"))),
+    usualNote);
+  async function paintUsual() {
+    const usual = await call<{ kind: string; path: string }[]>("settings.usualFolders");
+    useUsual.style.display = usual.length ? "" : "none";
+    usualNote.textContent = usual.length ? "adds " + usual.map(u => u.path).join(",  ") : "";
+  }
   const el = h("div", { style: { height: "100%", position: "relative" } }, sections, empty);
 
   let dirty = false;
@@ -47,6 +62,7 @@ export function quickplayPage(): Page {
     const v = await call<QuickView>("quick.view");
     const tiles = (list: QuickTile[]) => list.map((q, i) => ({ key: String(i), title: q.title, caption: q.caption, art: q.art, item: q }));
     empty.classList.toggle("hidden", !v.empty);
+    if (v.empty) void paintUsual();
     sections.classList.toggle("hidden", v.empty);
     pins.setItems(tiles(v.pins));
     fresh.setItems(tiles(v.fresh));

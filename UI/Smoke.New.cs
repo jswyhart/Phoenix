@@ -581,6 +581,17 @@ public static partial class Smoke
         var mixed = SongRowView.SourceFor(lib.Tracks);
         var oneAlbum = SongRowView.SourceFor(lib.Albums[0].Tracks);
         Check("a song list that mixes albums shows where each song is from; one album's list doesn't", mixed == 2 && oneAlbum == 0, $"{mixed} / {oneAlbum}");
+        App.Win.SearchFor("zzqx no such thing");
+        await Task.Delay(1200);
+        var searchPage = App.Win.Page<SearchView>("search");
+        var nothingText = (TextBlock)searchPage.FindName("NothingText");
+        Check("a search that finds nothing says so, and how else to look", nothingText.IsVisible && nothingText.Text.Contains("Nothing in your collection matches"), nothingText.Text);
+        App.Win.SearchFor("second example");
+        await Task.Delay(1200);
+        Check("a search that finds something doesn't say nothing was found", !nothingText.IsVisible);
+        App.Win.SearchFor("");
+        App.Win.Navigate("settings");
+        await Task.Delay(300);
         Check("F1 lists the keyboard shortcuts, volume and liking among them", MainWindow.Shortcuts.Contains("Ctrl + Up / Down") && MainWindow.Shortcuts.Contains("Ctrl + L") && MainWindow.Shortcuts.Contains("F1"));
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);
