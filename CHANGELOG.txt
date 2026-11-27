@@ -8,6 +8,29 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 Next version
 ------------------
 
+New
+- Pairing a phone is one step. On the phone, settings → sync with PC → "pair with my pc" finds
+  the computer and asks it; Phoenix there comes to the front and asks whether to allow the phone.
+  No code to type.
+- A QR code in the computer's settings (settings → phone → sync options): point the phone's camera
+  at it and open the link, and Phoenix opens on the phone and pairs by itself. If Phoenix isn't on
+  the phone yet, the page offers to download it.
+- Each phone gets a key of its own. The computer's settings list the paired phones (when each
+  last synced and what it did) and can forget one without the others having to pair again. The
+  six-digit pairing code still works, also for phones with an older Phoenix.
+- Android: the phone syncs by itself whenever Phoenix is opened and the computer can be reached
+  (at most every ten minutes; can be turned off). Music added to the phone sync list on the
+  computer arrives on the phone without tapping anything.
+- Android: when the computer's address changes (routers hand out new ones), the phone finds it
+  again by itself.
+- While a phone syncs, the computer's status line shows what it is doing ("Pixel 8: copying 3 of
+  40"), and when it is done.
+
+Changed
+- Android: the phone looks for the computer on each of its networks' own broadcast addresses as
+  well, which some routers pass on when they block the general one.
+- Android: clearer messages when the computer can't be found or has forgotten the phone.
+
 Fixed
 - Windows: rows of buttons in settings (such as the update buttons) wrap onto another line
   instead of running off the edge of a narrow window.

@@ -189,11 +189,12 @@ public static class SettingsScreen
             {
                 Title = "sync with pc…", Click = () => a.Push(SyncScreen.Build(a)),
                 Sub = !App.Sync.IsPaired ? "copy music, likes and playlists from Phoenix on your PC over Wi-Fi"
-                    : Fmt.Join(S.SyncHost, Fmt.Plural(App.Sync.State.Files.Count, "song") + " on this phone")
+                    : Fmt.Join(S.SyncPcName != "" ? S.SyncPcName : S.SyncHost, Fmt.Plural(App.Sync.State.Files.Count, "song") + " on this phone",
+                               S.SyncAuto ? "syncs by itself" : "")
             });
 
             if (App.Sync.IsPaired)
-                rows.Add(new Row { Title = "remote control for the pc…", Sub = "play, pause, skip and volume for Phoenix on " + S.SyncHost, Click = () => RemoteScreen.Open(a) });
+                rows.Add(new Row { Title = "remote control for the pc…", Sub = "play, pause, skip and volume for Phoenix on " + (S.SyncPcName != "" ? S.SyncPcName : S.SyncHost), Click = () => RemoteScreen.Open(a) });
 
             }
 

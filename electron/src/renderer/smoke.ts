@@ -382,11 +382,16 @@ async function run() {
       check("remote: the page is served, and asks for the code before telling anything", rc.pageStatus === 200 && rc.isPage && rc.refused === 401, `${rc.pageStatus} ${rc.refused}`);
       check("remote: it shows what is playing, and its play button works the player", st.title === songs[0].title && st.playing === true && rc.pressStatus === 200 && after.playing === false, `${st.title} ${st.playing} → ${after.playing}`);
       await call("player.stop");
+      // pairing: asked and refused, asked and allowed (its own key then works), the QR code's token, forgetting
+      const pr = await call<any>("smoke.pair");
+      check("pairing: a phone asks; no refuses it, yes gives it its own key, which works in place of the code", pr.denied === 403 && pr.allowed === 200 && pr.keyLength >= 20 && pr.withKey === 200 && pr.listedName === "Test phone" && pr.lastSummary.includes("3 songs"), JSON.stringify(pr));
+      check("pairing: the QR code's page opens Phoenix, its token pairs at once (a wrong one doesn't), and a forgotten phone is shut out", pr.badToken === 403 && pr.qr === 200 && pr.pagePairs && pr.infoHasId && pr.afterForget === 401 && pr.qrPng > 200, JSON.stringify(pr));
     }
     shell.navigate("settings");
     settings.showCategory("phone");
     await settle(400);
     check("settings: Phone shows sync options with the pairing code", settings.shown_() === "Sync options" && text(".statusline").includes(on.code) || [...document.querySelectorAll(".statusline")].some(e => (e.textContent ?? "").includes(on.code)), settings.shown_());
+    check("settings: Phone shows the QR code for pairing", !!document.querySelector("img.pairqr") && (document.querySelector("img.pairqr") as HTMLImageElement).src.startsWith("data:image/png"));
     await shot("17-settings-phone");
     const off = await call<any>("phone.enable", { on: false });
     check("turning phone sync off stops the server", off.enabled === false && off.running === false);

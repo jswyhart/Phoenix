@@ -1794,7 +1794,21 @@ public static partial class Smoke
         await Shot("12-settings-podcasts");
         settings.ShowCategory("phone");
         Check("settings: Phone shows sync options", Shown("PanelPhone") && !Shown("PanelDisplay"));
+        // with sync on: the QR code a phone scans to pair, and the paired phones
+        var syncWas = App.Settings.SyncEnabled;
+        App.Settings.SyncEnabled = true;
+        App.Sync.Start();
+        if (App.Sync.IsRunning)
+        {
+            settings.ShowCategory("software");
+            settings.ShowCategory("phone");
+            await Task.Delay(300);
+            var qr = (System.Windows.Controls.Image)settings.FindName("SyncQr");
+            Check("settings: Phone shows a QR code to pair a phone with, and the paired phones", qr.Source != null && qr.IsVisible && ((System.Windows.Controls.StackPanel)settings.FindName("PairedPhones")).Children.Count >= 1);
+        }
         await Shot("12-settings-phone");
+        App.Sync.Stop();
+        App.Settings.SyncEnabled = syncWas;
         settings.ShowCategory("servers", "Plex");
         Check("settings: Servers shows Plex", Shown("PanelPlex") && !Shown("PanelJellyfin") && !Shown("PanelPhone"));
         settings.ShowCategory("servers");

@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.9.0" />
     <ProjectReference Include="..\..\android\Halcyon.Core\Halcyon.Core.csproj" />
     <PackageReference Include="LibVLCSharp" Version="3.*" />
     <!-- the speech model that writes lyrics (whisper.cpp): Vulkan for any graphics card on Windows and Linux x64, Metal on
@@ -25,6 +26,7 @@
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <Compile Include="..\..\Services\SpeechLyrics.cs" Link="SpeechLyrics.cs" />
     <Compile Include="..\..\Services\Backgrounds.cs" Link="Backgrounds.cs" />
+    <Compile Include="..\..\Services\PhonePairing.cs" Link="PhonePairing.cs" />
     <!-- libVLC itself: the Windows build for running here; the Intel Mac build carries the NuGet copy; the Apple Silicon
          build gets VideoLAN's arm64 engine from ..\..\vendor (package.py); Linux uses the system's VLC. -->
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.*" Condition="'$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win'))" />

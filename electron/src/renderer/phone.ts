@@ -3,14 +3,24 @@
 import { call, isMac, on, Song } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { menuHooks, SongHeader, songMenu, songRow } from "./songs";
-import { h, menuAt, pill, VList } from "./ui";
+import { confirm, h, menuAt, pill, VList } from "./ui";
 import type { SettingsPage } from "./settings";
 
-export interface PhoneState { enabled: boolean; running: boolean; error: string; code: string; addresses: string[]; name: string; port: number }
+export interface PhoneState {
+  enabled: boolean; running: boolean; error: string; code: string; addresses: string[]; name: string; port: number;
+  qr: string; qrUrl: string; phones: { id: string; name: string; when: string }[];
+}
 export const computer = isMac ? "Mac" : "PC";
 
 /** "Add to phone sync list" for the song, album, artist and playlist menus. */
 export function installPhoneMenu() {
+  // a phone asks to pair (the window has been brought forward): allow it or not
+  on("phone.ask", async (r: { id: string; name: string; address: string }) => {
+    const allow = await confirm(`“${r.name}” (${r.address}) wants to pair with this ${computer}: to copy music from it, bring likes and playlists across, and work it as a remote.
+
+Allow it?`, "allow");
+    await call("phone.decide", { id: r.id, allow, name: r.name });
+  });
   menuHooks.addToPhone = ids => ({
     label: "Add to phone sync list",
     action: async () => {

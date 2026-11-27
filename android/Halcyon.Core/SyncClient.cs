@@ -73,6 +73,35 @@ public class SyncClient
 
     // ---------- finding and talking to the PC ----------
 
+    /// <summary>
+    /// The broadcast addresses of the networks this phone is on (192.168.1.255 for 192.168.1.x): some routers pass
+    /// these on when they drop the all-networks broadcast.
+    /// </summary>
+    static List<System.Net.IPAddress> Broadcasts()
+    {
+        var list = new List<System.Net.IPAddress> { System.Net.IPAddress.Broadcast };
+        try
+        {
+            foreach (var n in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (n.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                foreach (var a in n.GetIPProperties().UnicastAddresses)
+                {
+                    if (a.Address.AddressFamily != AddressFamily.InterNetwork || System.Net.IPAddress.IsLoopback(a.Address) || a.IPv4Mask == null) continue;
+                    var ip = a.Address.GetAddressBytes();
+                    var mask = a.IPv4Mask.GetAddressBytes();
+                    if (mask.All(b => b == 0)) continue;
+                    var b2 = new byte[4];
+                    for (var i = 0; i < 4; i++) b2[i] = (byte)(ip[i] | ~mask[i]);
+                    var cast = new System.Net.IPAddress(b2);
+                    if (!list.Contains(cast)) list.Add(cast);
+                }
+            }
+        }
+        catch { /* the all-networks broadcast alone */ }
+        return list;
+    }
+
     /// <summary>Asks the local network who is running Halcyon with phone sync on. Returns (name, address).</summary>
     public static async Task<List<(string name, string address)>> DiscoverAsync(int waitMs = 1500)
     {
@@ -81,7 +110,8 @@ public class SyncClient
         {
             using var udp = new UdpClient { EnableBroadcast = true };
             var ask = Encoding.UTF8.GetBytes("HALCYON_DISCOVER");
-            await udp.SendAsync(ask, ask.Length, new System.Net.IPEndPoint(System.Net.IPAddress.Broadcast, Port));
+            foreach (var cast in Broadcasts())
+                try { await udp.SendAsync(ask, ask.Length, new System.Net.IPEndPoint(cast, Port)); } catch { }
             using var cts = new CancellationTokenSource(waitMs);
             while (true)
             {
@@ -94,18 +124,113 @@ public class SyncClient
         return found.Distinct().ToList();
     }
 
-    async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? body = null)
+    // ---------- pairing ----------
+
+    static readonly HttpClient Quick = new() { Timeout = TimeSpan.FromSeconds(4) };
+
+    /// <summary>What a computer says about itself: its name, lasting id, and whether it can be paired with by asking (2) or only by code (1).</summary>
+    public record PcInfo(string Name, string Id, int Pairing);
+
+    public static async Task<PcInfo?> InfoAsync(string host)
+    {
+        try
+        {
+            var j = J.Parse(await Quick.GetStringAsync($"http://{(host.Contains(':') ? host : $"{host}:{Port}")}/sync/info"));
+            return j.S("app") is "Halcyon" or "Phoenix" ? new PcInfo(j.S("name"), j.S("id"), Math.Max(1, (int)j.L("pairing"))) : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Pairs with a computer: by asking (the person there chooses Allow; this waits up to two minutes) or with the
+    /// token from the QR code shown there (at once). The computer hands back this phone's own key, kept instead of a code.
+    /// </summary>
+    public static async Task PairAsync(string host, string token, string phoneName)
+    {
+        if (S.SyncDeviceId == "") S.SyncDeviceId = Guid.NewGuid().ToString("N");
+        var info = await InfoAsync(host) ?? throw new Exception("Can't reach Phoenix at " + host + ". Check that the PC and the phone are on the same Wi-Fi network, and that phone sync is turned on there.");
+        if (info.Pairing < 2) throw new Exception("Phoenix on that PC is older and can only pair with its six-digit code: update it, or enter the code.");
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2.5) };
+        var body = JsonSerializer.Serialize(new { name = phoneName, device = S.SyncDeviceId, token });
+        HttpResponseMessage res;
+        try { res = await http.PostAsync($"http://{(host.Contains(':') ? host : $"{host}:{Port}")}/sync/pair", new StringContent(body, Encoding.UTF8, "application/json")); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { throw new Exception("The PC stopped answering. Try again."); }
+        using (res)
+        {
+            var text = await res.Content.ReadAsStringAsync();
+            JsonElement j;
+            try { j = J.Parse(text); } catch { j = default; }
+            if (!res.IsSuccessStatusCode)
+                throw new Exception((int)res.StatusCode == 403 && token == "" ? $"{info.Name} said no." : j.ValueKind == JsonValueKind.Object && j.S("error") != "" ? Upper(j.S("error")) + "." : "Pairing failed.");
+            S.SyncHost = host;
+            S.SyncCode = j.S("key");
+            S.SyncPcId = j.S("id");
+            S.SyncPcName = j.S("pc") is { Length: > 0 } pc ? pc : info.Name;
+            S.Save();
+        }
+    }
+
+    static string Upper(string s) => s == "" ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    /// <summary>Forgets the PC on this phone (the music already copied stays).</summary>
+    public static void Unpair()
+    {
+        S.SyncHost = S.SyncCode = S.SyncPcId = S.SyncPcName = "";
+        S.Save();
+    }
+
+    /// <summary>
+    /// The PC answered at a new address (its network gave it another one): looks for it on the network by its id (or its
+    /// name, for a PC paired by code) and remembers where it is now.
+    /// </summary>
+    public static async Task<bool> FindAgainAsync()
+    {
+        if (S.SyncPcId == "" && S.SyncPcName == "") return false;
+        foreach (var (name, address) in await DiscoverAsync())
+        {
+            if (address == S.SyncHost) continue;
+            var info = await InfoAsync(address);
+            if (info == null) continue;
+            if (S.SyncPcId != "" ? info.Id == S.SyncPcId : string.Equals(info.Name, S.SyncPcName, StringComparison.OrdinalIgnoreCase))
+            {
+                S.SyncHost = address;
+                S.Save();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Is the PC there now? Quick, so a sync by itself never hangs away from home. Looks for it at a new address when it isn't where it was.</summary>
+    public static async Task<bool> ReachableAsync()
+    {
+        if (S.SyncHost == "") return false;
+        if (await InfoAsync(S.SyncHost) is { } info)
+        {
+            if (S.SyncPcId == "" && info.Id != "" && (S.SyncPcName == "" || S.SyncPcName == info.Name)) { S.SyncPcId = info.Id; S.SyncPcName = info.Name; S.Save(); }
+            return true;
+        }
+        return await FindAgainAsync();
+    }
+
+    /// <summary>What this phone is doing, told to the PC with each request so it can show it ("copying 3 of 40").</summary>
+    string _progress = "";
+
+    async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? body = null, bool retried = false)
     {
         if (S.SyncHost == "") throw new Exception("Choose the PC to sync with first.");
         var req = new HttpRequestMessage(method, Base + path) { Content = body };
         req.Headers.TryAddWithoutValidation("X-Halcyon-Code", S.SyncCode);
+        if (_progress != "") req.Headers.TryAddWithoutValidation("X-Halcyon-Progress", Uri.EscapeDataString(_progress));
         HttpResponseMessage res;
         try { res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead); }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            throw new Exception("Can't reach the PC. Check that Phoenix is open there with phone sync turned on, and that both devices are on the same Wi-Fi network.");
+            // the PC may have a new address: find it and try once more (a body can only be sent once)
+            if (!retried && body == null && await FindAgainAsync()) return await SendAsync(method, path, null, true);
+            throw new Exception($"Can't reach {(S.SyncPcName != "" ? S.SyncPcName : "the PC")}. Check that Phoenix is open there with phone sync turned on, and that both devices are on the same Wi-Fi network.");
         }
-        if ((int)res.StatusCode == 401) { res.Dispose(); throw new Exception("The PC rejected the pairing code. Enter the code shown in Phoenix's settings on the PC."); }
+        if ((int)res.StatusCode == 401) { res.Dispose(); throw new Exception(S.SyncCode.Length > 6 ? "The PC doesn't know this phone any more (it was forgotten there): pair again." : "The PC rejected the pairing code. Enter the code shown in Phoenix's settings on the PC."); }
         res.EnsureSuccessStatusCode();
         return res;
     }
@@ -163,6 +288,7 @@ public class SyncClient
         try
         {
             status("sync: reading the PC's collection…");
+            _progress = "reading the collection";
             var lib = await FetchLibraryAsync();
             var wanted = Wanted(lib);
             var wantedIds = wanted.Select(t => t.Id).ToHashSet();
@@ -195,6 +321,7 @@ public class SyncClient
             foreach (var t in todo)
             {
                 status($"sync: copying {copied + 1} of {todo.Count}  ·  {Size(done)} of {Size(bytes)}  ·  {t.Title}");
+                _progress = $"copying {copied + 1} of {todo.Count} ({Size(done)} of {Size(bytes)})";
                 var path = LocalPath(folder, t.Path);
                 try
                 {
@@ -263,13 +390,18 @@ public class SyncClient
             }
 
             status("");
-            return Fmt.Join(copied > 0 ? $"{copied} copied" : "", removed > 0 ? $"{removed} removed" : "", failed > 0 ? $"{failed} failed ({firstError})" : "",
+            var summary = Fmt.Join(copied > 0 ? $"{copied} copied" : "", removed > 0 ? $"{removed} removed" : "", failed > 0 ? $"{failed} failed ({firstError})" : "",
                        changed.Count > 0 ? $"{changed.Count} likes/plays from the PC" : "", back.Count > 0 ? $"{back.Count} likes/plays sent to the PC" : "",
                        lists > 0 ? Fmt.Plural(lists, "playlist") + " updated" : "") is { Length: > 0 } s ? s : "already up to date";
+            // the PC shows when this phone last synced, and what it did
+            _progress = $"done: {Fmt.Plural(State.Files.Count, "song")} on the phone, {summary}";
+            try { using var _ = await SendAsync(HttpMethod.Get, "/sync/done"); } catch { }
+            return summary;
         }
         finally
         {
             IsBusy = false;
+            _progress = "";
             status("");
         }
     }

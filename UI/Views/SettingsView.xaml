@@ -472,8 +472,23 @@
                 <!-- PHONE / Sync options -->
                 <StackPanel x:Name="PanelPhone" Visibility="Collapsed">
                     <TextBlock Text="sync options" Style="{StaticResource Head}"/>
-                    <TextBlock Style="{StaticResource Note}" Text="The companion app on your Android phone copies music, likes and playlists from this PC while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below."/>
+                    <TextBlock Style="{StaticResource Note}" Text="The companion app on your Android phone copies music, likes and playlists from this PC while both are on the same Wi-Fi network, and keeps them up to date by itself whenever Phoenix is opened on the phone."/>
                     <CheckBox x:Name="SyncEnabled" Content="Let my phone sync with and control this PC" Margin="0,8,0,4" Click="SyncEnabled_Click"/>
+                    <StackPanel x:Name="SyncPairPanel">
+                        <TextBlock Style="{StaticResource Label}" Text="PAIR A PHONE" Margin="0,18,0,6"/>
+                        <WrapPanel>
+                            <Border Background="White" Padding="6" Margin="0,0,18,8" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                <Image x:Name="SyncQr" Width="168" Height="168" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            </Border>
+                            <StackPanel Width="330">
+                                <TextBlock Style="{StaticResource Note}" Margin="0" Text="1. Point your phone's camera at this code and open the link it shows. Phoenix opens on the phone and pairs by itself (if Phoenix isn't on the phone yet, the page offers to download it)."/>
+                                <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="2. Or, in Phoenix on the phone, open settings → sync with PC and tap PAIR WITH MY PC. You'll be asked here to allow it."/>
+                                <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="3. Or type the pairing code shown below on the phone."/>
+                            </StackPanel>
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Label}" Text="PAIRED PHONES" Margin="0,14,0,3"/>
+                        <StackPanel x:Name="PairedPhones"/>
+                    </StackPanel>
                     <TextBlock x:Name="SyncStatus" Style="{StaticResource Status}" TextWrapping="Wrap"/>
                     <Button x:Name="SyncNewCodeBtn" Style="{StaticResource PillBtn}" Content="NEW CODE" HorizontalAlignment="Left" Margin="0,8,0,0" Click="SyncNewCode_Click"
                             ToolTip="Replaces the pairing code; phones paired with the old code must enter the new one"/>

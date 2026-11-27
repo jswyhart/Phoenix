@@ -401,6 +401,7 @@ else {
     backend = new Backend();
     backend.onEvent = (name, data) => {
       if (name === "helper-exit") { if (!quitting) fail(String(data)); return; }
+      if (name === "phone.ask") showMain();   // a phone asks to pair: the question must be seen
       win?.webContents.send("phoenix:event", name, data);
       mini?.webContents.send("phoenix:event", name, data);
     };

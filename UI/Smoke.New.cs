@@ -489,6 +489,46 @@ public static partial class Smoke
             Check("an address that keeps sending wrong pairing codes is shut out for a while, even with the right code",
                 wrongAnswer == HttpStatusCode.Unauthorized && notYet && shut == (HttpStatusCode)429 && SyncServer.LockedOut("127.0.0.1"), $"wrong code {(int)wrongAnswer}, after twenty {(int)shut}");
             SyncServer.NoteCode("127.0.0.1", true);
+
+            // pairing: a phone asks and is refused, asks again and is allowed, then syncs with its own key; the QR code pairs at once
+            PhonePairing.Reset();
+            async Task<(HttpStatusCode Status, string Body)> Pair(string token, string name)
+            {
+                using var res = await http.PostAsync($"http://127.0.0.1:{SyncServer.Port}/sync/pair", new StringContent(JsonSerializer.Serialize(new { name, device = name, token })));
+                return (res.StatusCode, await res.Content.ReadAsStringAsync());
+            }
+            async Task<HttpStatusCode> Library(string key)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{SyncServer.Port}/sync/library");
+                req.Headers.Add("X-Halcyon-Code", key);
+                req.Headers.Add("X-Halcyon-Progress", "done: 3 songs on the phone");
+                using var res = await http.SendAsync(req);
+                return res.StatusCode;
+            }
+            App.PairAnswerForTest = false;
+            var denied = await Pair("", "Test phone");
+            App.PairAnswerForTest = true;
+            var allowedPair = await Pair("", "Test phone");
+            App.PairAnswerForTest = null;
+            var key = allowedPair.Status == HttpStatusCode.OK ? JsonDocument.Parse(allowedPair.Body).RootElement.GetProperty("key").GetString() ?? "" : "";
+            var withKey = await Library(key);
+            await Task.Delay(300);   // the status line is told on the window's own thread
+            var listed = PhonePairing.Phones.FirstOrDefault();
+            Check("a phone asks to pair: refused when the answer is no; when it is yes it gets its own key, which then works in place of the code",
+                denied.Status == HttpStatusCode.Forbidden && allowedPair.Status == HttpStatusCode.OK && key.Length >= 20 && withKey == HttpStatusCode.OK && listed is { Name: "Test phone" } && listed.LastSummary.Contains("3 songs"),
+                $"no {(int)denied.Status}, yes {(int)allowedPair.Status}, with key {(int)withKey}, listed “{listed?.Name}”: {listed?.LastSummary}");
+            var badToken = await Pair("not-the-token", "QR phone");
+            var qrPair = await Pair(PhonePairing.QrToken(), "QR phone");
+            var pairPage = await http.GetStringAsync($"http://127.0.0.1:{SyncServer.Port}/pair");
+            var info = await http.GetStringAsync($"http://127.0.0.1:{SyncServer.Port}/sync/info");
+            Check("the QR code's page opens Phoenix on the phone, and its token pairs at once (a wrong one doesn't); the PC tells phones its lasting id",
+                badToken.Status == HttpStatusCode.Forbidden && qrPair.Status == HttpStatusCode.OK && pairPage.Contains("intent://") && pairPage.Contains("scheme=phoenix")
+                && info.Contains(PhonePairing.PcId) && info.Contains("\"pairing\":2") && PhonePairing.QrPng("http://192.168.1.2:47800/pair#t=x").Length > 200,
+                $"wrong token {(int)badToken.Status}, QR {(int)qrPair.Status}");
+            PhonePairing.Forget(listed?.Id ?? "");
+            var forgotten = await Library(key);
+            Check("a forgotten phone's key no longer works", forgotten == HttpStatusCode.Unauthorized && PhonePairing.Phones.Count == 1, $"{(int)forgotten}");
+            PhonePairing.Reset();
             App.Sync.Stop();
         }
         else Log.AppendLine($"INFO  the remote's server was not tried over the network (port {SyncServer.Port} is in use: {App.Sync.LastError})");

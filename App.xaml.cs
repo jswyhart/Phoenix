@@ -79,6 +79,10 @@ public partial class App : Application
         Discogs = new DiscogsClient();
         Jellyfin = new JellyfinClient();
         Plex = new PlexClient();
+        if (SmokeMode) PhonePairing.InMemory = true;
+        PhonePairing.Asked += r => Current.Dispatcher.BeginInvoke(() => AskToPair(r));
+        PhonePairing.Activity += (phone, text) => Current.Dispatcher.BeginInvoke(() => Win?.SetStatus(text.StartsWith("done", StringComparison.OrdinalIgnoreCase)
+            ? $"{phone.Name} synced: {text[4..].Trim(' ', ':')}" : $"{phone.Name}: {text}"));
         if (Settings.SyncEnabled && !SmokeMode) Sync.Start();
 
         Win = new MainWindow();
@@ -110,6 +114,23 @@ public partial class App : Application
             Updater.ClearSwapped();   // what a portable copy's last update renamed out of the way
             _ = Updater.DailyAsync();
         }
+    }
+
+    /// <summary>For the self-test: answers a phone's request to pair instead of asking.</summary>
+    public static bool? PairAnswerForTest;
+
+    /// <summary>A phone asks to pair: Phoenix comes to the front and asks whether to allow it.</summary>
+    static void AskToPair(PhonePairing.Request r)
+    {
+        if (PairAnswerForTest is { } answer) { PhonePairing.Decide(r.Id, answer); return; }
+        if (Win == null) { PhonePairing.Decide(r.Id, false); return; }
+        if (!Win.IsVisible) Win.Show();
+        if (Win.WindowState == WindowState.Minimized) Win.WindowState = WindowState.Normal;
+        Win.Activate();
+        var allow = Halcyon.UI.MessageBox.Show(Win, $"“{r.Name}” ({r.Address}) wants to pair with this PC: to copy music from it, bring likes and playlists across, and work it as a remote.\n\nAllow it?",
+            "Pair a phone", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        PhonePairing.Decide(r.Id, allow);
+        Win.SetStatus(allow ? $"{r.Name} is paired with this PC" : $"{r.Name} was not allowed to pair");
     }
 
     /// <summary>Rescans the library folders, then refreshes connected servers.</summary>

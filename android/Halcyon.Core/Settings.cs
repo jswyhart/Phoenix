@@ -130,6 +130,11 @@ public class Settings
     public string JellyfinUserId { get; set; } = "";
     public string PlexUrl { get; set; } = "";
     public string SyncHost { get; set; } = "";   // address of the Halcyon PC to copy music from, e.g. 192.168.1.20:47800
+    public string SyncPcId { get; set; } = "";   // the paired PC's lasting id, to find it again when its address changes
+    public string SyncPcName { get; set; } = "";
+    public string SyncDeviceId { get; set; } = "";   // this phone's own id, so pairing again replaces its old key on the PC
+    public bool SyncAuto { get; set; } = true;   // sync by itself when Phoenix is opened (and the PC can be reached)
+    public long SyncLastAuto { get; set; }
 
     // Secrets are stored encrypted (Android Keystore AES-GCM key; see App.Secrets).
     public string DiscogsTokenEnc { get; set; } = "";
@@ -139,6 +144,7 @@ public class Settings
     [JsonIgnore] public string DiscogsToken { get; set; } = "";
     [JsonIgnore] public string JellyfinToken { get; set; } = "";
     [JsonIgnore] public string PlexToken { get; set; } = "";
+    /// <summary>What the phone sends the PC: its own key from pairing, or the six-digit pairing code typed in.</summary>
     [JsonIgnore] public string SyncCode { get; set; } = "";
 
     public static Settings Load(Func<Settings>? defaults = null)

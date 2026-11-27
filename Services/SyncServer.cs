@@ -19,7 +19,12 @@ namespace Halcyon.Services;
 /// </summary>
 public class SyncServer
 {
-    public const int Port = 47800;
+    public const int DefaultPort = 47800;
+    /// <summary>
+    /// The port listened on: 47800, which the phone app looks for. The self-test lets the system pick a free one on this
+    /// computer only, so it can't collide with a running copy; PHOENIX_SYNC_PORT picks another for trying a test build.
+    /// </summary>
+    public static int Port { get; private set; } = DefaultPort;
     TcpListener? _tcp;
     UdpClient? _udp;
     CancellationTokenSource? _cts;
@@ -43,9 +48,23 @@ public class SyncServer
         {
             if (App.Settings.SyncCode == "") { App.Settings.SyncCode = NewCode(); App.Settings.Save(); }
             _cts = new CancellationTokenSource();
-            _tcp = new TcpListener(IPAddress.Any, Port);
-            _tcp.Start();
-            _udp = new UdpClient(new IPEndPoint(IPAddress.Any, Port));
+            var port = App.SmokeMode ? 0 : int.TryParse(Environment.GetEnvironmentVariable("PHOENIX_SYNC_PORT"), out var p) && p is > 0 and < 65536 ? p : DefaultPort;
+            var address = App.SmokeMode ? IPAddress.Loopback : IPAddress.Any;
+            // a port the system picks is free for TCP but may be one it keeps back for UDP: then try another
+            var tried = new List<TcpListener>();
+            try
+            {
+                for (var attempt = 0; ; attempt++)
+                {
+                    _tcp = new TcpListener(address, port);
+                    _tcp.Start();
+                    Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
+                    // discovery listens on the same port, except in the self-test (any free one: Windows keeps some UDP ranges back)
+                    try { _udp = new UdpClient(new IPEndPoint(address, port == 0 ? 0 : Port)); break; }
+                    catch (SocketException) when (port == 0 && attempt < 40) { tried.Add(_tcp); }
+                }
+            }
+            finally { foreach (var t in tried) t.Stop(); }
             LastError = null;
             _ = AcceptLoopAsync(_tcp, _cts.Token);
             _ = DiscoveryLoopAsync(_udp, _cts.Token);
@@ -139,7 +158,7 @@ public class SyncServer
 
     static async Task WriteHeadAsync(Stream s, int status, string type, long length, CancellationToken ct)
     {
-        var reason = status switch { 200 => "OK", 401 => "Unauthorized", 404 => "Not Found", 429 => "Too Many Requests", _ => "Error" };
+        var reason = status switch { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 408 => "Request Timeout", 429 => "Too Many Requests", _ => "Error" };
         var head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: {type}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n";
         await s.WriteAsync(Encoding.ASCII.GetBytes(head), ct);
     }
@@ -172,11 +191,6 @@ public class SyncServer
             (_, w) => DateTime.UtcNow >= w.Until ? (1, DateTime.UtcNow.AddMinutes(10)) : (w.Wrong + 1, DateTime.UtcNow.AddMinutes(10)));
     }
 
-    static bool CodeMatches(string given)
-    {
-        byte[] a = Encoding.UTF8.GetBytes(given), b = Encoding.UTF8.GetBytes(App.Settings.SyncCode);
-        return b.Length > 0 && CryptographicOperations.FixedTimeEquals(a, b);
-    }
 
     async Task HandleAsync(TcpClient client, CancellationToken ct)
     {
@@ -190,7 +204,12 @@ public class SyncServer
 
             if (req.Path == "/sync/info")   // lets the phone check it found a Halcyon PC before asking for the code
             {
-                await SendAsync(s, 200, JsonSerializer.Serialize(new { name = Environment.MachineName, app = "Halcyon", version = 1 }), ct);
+                await SendAsync(s, 200, JsonSerializer.Serialize(new { name = Environment.MachineName, app = "Halcyon", version = 1, id = PhonePairing.PcId, pairing = 2 }), ct);
+                return;
+            }
+            if (req.Path is "/pair" or "/pair/")   // the page the QR code in settings opens on the phone
+            {
+                await SendAsync(s, 200, PhonePairing.PairPage(Environment.MachineName), ct, "text/html; charset=utf-8");
                 return;
             }
             if (req.Path is "/remote" or "/remote/")   // the remote control page itself; everything it then asks for needs the code
@@ -204,8 +223,15 @@ public class SyncServer
                 await SendAsync(s, 429, "{\"error\":\"too many wrong pairing codes; try again in ten minutes\"}", ct);
                 return;
             }
+            if (req.Path == "/sync/pair" && req.Method == "POST")   // a phone asking to pair: the person here says yes or no
+            {
+                var (status, json) = await PhonePairing.HandlePairAsync(req.Body, from, Environment.MachineName, ct);
+                if (status == 403) NoteCode(from, false);
+                await SendAsync(s, status, json, ct);
+                return;
+            }
             var hasCode = req.Headers.TryGetValue("X-Halcyon-Code", out var code);
-            if (!hasCode || !CodeMatches(code!))
+            if (!hasCode || !PhonePairing.Allowed(code, App.Settings.SyncCode, out var phone))
             {
                 if (hasCode) NoteCode(from, false);   // a request with no code at all is the remote page asking before it has one
                 await Task.Delay(400, ct);   // slows down guessing the 6-digit code
@@ -213,6 +239,7 @@ public class SyncServer
                 return;
             }
             NoteCode(from, true);
+            PhonePairing.Seen(phone, req.Headers.GetValueOrDefault("X-Halcyon-Progress"));
 
             var tracks = App.Lib.Tracks.Where(t => t.IsLocal).ToList();
             if (req.Path == "/sync/library")
@@ -227,6 +254,8 @@ public class SyncServer
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { ok = RemoteControl.Command(req.Body) }), ct);
             else if (req.Path == "/remote/art" && RemoteControl.ArtFile() is { } cover)
                 await SendFileAsync(s, cover, ct);
+            else if (req.Path == "/sync/done")   // the phone saying it has finished (what it did came in its progress header)
+                await SendAsync(s, 200, "{}", ct);
             else if (req.Path == "/sync/stats" && req.Method == "POST")
                 await SendAsync(s, 200, JsonSerializer.Serialize(new { applied = ApplyStats(req.Body) }), ct);
             else

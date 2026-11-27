@@ -2,6 +2,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Halcyon.Core;
+using Halcyon.Services;
 
 namespace Phoenix.Backend;
 
@@ -19,11 +20,26 @@ public static partial class Api
 
     static Playlist? PhoneList => Lib.Playlists.FirstOrDefault(p => p.Name == PhoneListName);
 
-    static object PhoneState() => new
+    static object PhoneState()
     {
-        enabled = _syncEnabled, running = Sync.IsRunning, error = Sync.LastError ?? "", code = S.SyncCode,
-        addresses = SyncServer.LocalAddresses(), name = Environment.MachineName, port = Sync.Port
-    };
+        var url = _syncEnabled && Sync.IsRunning ? PhonePairing.QrUrl(Sync.Port) : null;
+        return new
+        {
+            enabled = _syncEnabled, running = Sync.IsRunning, error = Sync.LastError ?? "", code = S.SyncCode,
+            addresses = SyncServer.LocalAddresses(), name = Environment.MachineName, port = Sync.Port,
+            qr = url != null ? "data:image/png;base64," + Convert.ToBase64String(PhonePairing.QrPng(url)) : "",
+            qrUrl = url != null ? url[..url.IndexOf('#')] : "",
+            phones = PhonePairing.Phones.OrderByDescending(p => p.LastSeen).Select(p => new
+            {
+                id = p.Id, name = p.Name,
+                when = p.LastSync > 0 ? $"last synced {Fmt.Ago(p.LastSync)}" + (p.LastSummary != "" ? $" ({p.LastSummary})" : "")
+                     : $"paired {Fmt.Ago(p.Paired)}, last seen {Fmt.Ago(p.LastSeen)}"
+            })
+        };
+    }
+
+    /// <summary>For the self-test: answers a phone's request to pair instead of asking.</summary>
+    static bool? _pairAnswerForTest;
 
     static void SaveSync()
     {
@@ -37,7 +53,25 @@ public static partial class Api
         try { _syncEnabled = JsonDocument.Parse(File.ReadAllText(SyncFile)).RootElement.GetProperty("enabled").GetBoolean(); } catch { _syncEnabled = false; }
         if (_syncEnabled && !Program.SmokeMode) Sync.Start();
 
+        if (Program.SmokeMode) PhonePairing.InMemory = true;
+        // a phone asks to pair: the window comes forward and asks; a phone syncing shows in the status line
+        PhonePairing.Asked += r =>
+        {
+            if (_pairAnswerForTest is { } answer) { PhonePairing.Decide(r.Id, answer); return; }
+            Rpc.Emit("phone.ask", new { id = r.Id, name = r.Name, address = r.Address });
+        };
+        PhonePairing.Activity += (phone, text) => Rpc.Emit("status", text.StartsWith("done", StringComparison.OrdinalIgnoreCase)
+            ? $"{phone.Name} synced: {text[4..].Trim(' ', ':')}" : $"{phone.Name}: {text}");
+        PhonePairing.Changed += () => Rpc.Emit("phone", PhoneState());
+
         Rpc.On("phone.state", _ => PhoneState());
+        Rpc.On("phone.decide", p =>
+        {
+            PhonePairing.Decide(p.Str("id"), p.Bool("allow"));
+            Rpc.Emit("status", p.Bool("allow") ? $"{p.Str("name")} is paired with this computer" : $"{p.Str("name")} was not allowed to pair");
+            return (object?)null;
+        });
+        Rpc.On("phone.forget", p => { PhonePairing.Forget(p.Str("id")); return PhoneState(); });
         Rpc.On("phone.enable", p =>
         {
             _syncEnabled = p.Bool("on");
@@ -85,6 +119,45 @@ public static partial class Api
         });
 
         if (Program.SmokeMode) Rpc.On("smoke.sync", async _ => await SmokeSyncAsync());
+        if (Program.SmokeMode) Rpc.On("smoke.pair", async _ =>
+        {
+            PhonePairing.Reset();
+            using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{Sync.Port}"), Timeout = TimeSpan.FromSeconds(20) };
+            async Task<(int status, string body)> Pair(string token, string name)
+            {
+                using var res = await http.PostAsync("/sync/pair", new StringContent(System.Text.Json.JsonSerializer.Serialize(new { name, device = name, token })));
+                return ((int)res.StatusCode, await res.Content.ReadAsStringAsync());
+            }
+            _pairAnswerForTest = false;
+            var denied = await Pair("", "Test phone");
+            _pairAnswerForTest = true;
+            var allowed = await Pair("", "Test phone");
+            _pairAnswerForTest = null;
+            var key = JsonDocument.Parse(allowed.body).RootElement.GetProperty("key").GetString() ?? "";
+            async Task<int> Library(string k)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, "/sync/library");
+                req.Headers.Add("X-Halcyon-Code", k);
+                req.Headers.Add("X-Halcyon-Progress", "done: 3 songs on the phone");
+                using var res = await http.SendAsync(req);
+                return (int)res.StatusCode;
+            }
+            var withKey = await Library(key);
+            var listed = PhonePairing.Phones.FirstOrDefault();
+            var badToken = await Pair("not-the-token", "QR phone");
+            var qr = await Pair(PhonePairing.QrToken(), "QR phone");
+            var page = await http.GetStringAsync("/pair");
+            var info = await http.GetStringAsync("/sync/info");
+            PhonePairing.Forget(listed?.Id ?? "");
+            var afterForget = await Library(key);
+            PhonePairing.Reset();
+            return new
+            {
+                denied = denied.status, allowed = allowed.status, keyLength = key.Length, withKey, listedName = listed?.Name ?? "", lastSummary = listed?.LastSummary ?? "",
+                badToken = badToken.status, qr = qr.status, pagePairs = page.Contains("intent://") && page.Contains("phoenix"), infoHasId = info.Contains("\"id\"") && info.Contains("\"pairing\":2"),
+                afterForget, qrPng = PhonePairing.QrPng("http://192.168.1.2:47800/pair#t=x").Length
+            };
+        });
         // the phone remote: its page, then what is playing and a button press, with the pairing code
         if (Program.SmokeMode) Rpc.On("smoke.remote", async remoteParams =>
         {

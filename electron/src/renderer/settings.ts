@@ -3,7 +3,7 @@
 import { call, host, on, SettingsState } from "./api";
 import { debounce, Page, shell } from "./shell";
 import { computer, PhoneState } from "./phone";
-import { h, pill, tabs, VList } from "./ui";
+import { confirm, h, pill, tabs, VList } from "./ui";
 import { listeningPanel, storagePanel, tabsSection, updatesPanel, visualizerSection } from "./settingsMore";
 import { customTabsSection, streamingPanel } from "./settingsWeb";
 import { metadataPanel } from "./settingsMeta";
@@ -192,8 +192,35 @@ export function settingsPage(): SettingsPage {
   const newCode = pill("NEW CODE", async () => paintSync(await call<PhoneState>("phone.newCode")));
   newCode.title = "Replaces the pairing code; phones paired with the old code must enter the new one";
   syncEnabled.onchange = async () => paintSync(await call<PhoneState>("phone.enable", { on: syncEnabled.checked }));
+  // pairing: the QR code a phone's camera scans, and the phones paired so far
+  const qrImg = h("img.pairqr", { width: 168, height: 168, alt: "QR code for pairing a phone", style: { imageRendering: "pixelated", background: "#fff", padding: "6px", display: "block" } }) as HTMLImageElement;
+  const phonesBox = h("div.pairedphones");
+  const pairBox = h("div", { style: { display: "none" } },
+    h("div.label", { style: { margin: "18px 0 6px 0" } }, "PAIR A PHONE"),
+    h("div", { style: { display: "flex", flexWrap: "wrap", gap: "18px", alignItems: "flex-start" } }, qrImg,
+      h("div", { style: { maxWidth: "340px" } },
+        note("1. Point your phone's camera at this code and open the link it shows. Phoenix opens on the phone and pairs by itself (if Phoenix isn't on the phone yet, the page offers to download it)."),
+        note(`2. Or, in Phoenix on the phone, open settings → sync with PC and tap PAIR WITH MY PC. You'll be asked here to allow it.`),
+        note("3. Or type the pairing code shown below on the phone."))),
+    h("div.label", { style: { margin: "14px 0 3px 0" } }, "PAIRED PHONES"), phonesBox);
+  function paintPairing(s: PhoneState) {
+    const on = s.enabled && s.running;
+    pairBox.style.display = on ? "" : "none";
+    if (!on) return;
+    if (s.qr) { qrImg.src = s.qr; qrImg.title = s.qrUrl; }
+    phonesBox.replaceChildren(...(s.phones.length === 0 ? [h("div.note", "none yet")] : s.phones.map(p => h("div", { style: { display: "flex", alignItems: "center", margin: "2px 0 6px 0", maxWidth: "520px" } },
+      h("div", { style: { flex: "1" } }, h("div", p.name), h("div.dim", p.when)),
+      pill("FORGET", async () => {
+        if (!await confirm(`Forget “${p.name}”? It will have to pair again to sync with this ${computer}. Music already on the phone stays there.`, "forget")) return;
+        paintSync(await call<PhoneState>("phone.forget", { id: p.id }));
+      })))));
+  }
+  on("phone", (s: PhoneState) => paintSync(s));
+  // the QR code's token runs out after ten minutes: a fresh one while the page is open
+  setInterval(() => { if (pairBox.isConnected && pairBox.style.display !== "none") void refreshSync(); }, 4 * 60 * 1000);
   function paintSync(s: PhoneState) {
     paintRemote(s);
+    paintPairing(s);
     syncEnabled.checked = s.enabled;
     newCode.disabled = !s.enabled;
     if (!s.enabled) { syncStatus.textContent = "off"; return; }
@@ -234,9 +261,9 @@ export function settingsPage(): SettingsPage {
     Storage: storage.el,
     Updates: updates.el,
     "Sync options": h("div", h("div.h2", "sync options"),
-      note(`The companion app on your Android phone copies music, likes and playlists from this ${computer} while both are on the same Wi-Fi network. On the phone, open settings → sync with PC and enter the code below.`),
+      note(`The companion app on your Android phone copies music, likes and playlists from this ${computer} while both are on the same Wi-Fi network, and keeps them up to date by itself whenever Phoenix is opened on the phone.`),
       h("label.check", { style: { margin: "8px 0 4px 0" } }, syncEnabled, `Let my phone sync with this ${computer}`),
-      syncStatus, h("div", { style: { margin: "8px 0 18px 0" } }, newCode),
+      pairBox, syncStatus, h("div", { style: { margin: "8px 0 18px 0" } }, newCode),
       h("div.label", { style: { margin: "6px 0 3px 0" } }, "REMOTE CONTROL"),
       note(`While sync is on, the phone can also work this ${computer}: play, pause, skip, the volume and the queue. In the phone app choose “remote”; or open the address below in any browser on your network and enter the pairing code.`),
       remoteAddress,

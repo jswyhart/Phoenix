@@ -9,6 +9,8 @@ namespace Halcyon.Droid;
 [Activity(Label = "Phoenix", Name = "com.halcyon.player.MainActivity", MainLauncher = true, LaunchMode = LaunchMode.SingleTask, Exported = true,
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.KeyboardHidden | ConfigChanges.UiMode)]
+// the QR code in the computer's settings opens a page whose button opens phoenix://pair?host=…&t=… : pairing in one step
+[IntentFilter(new[] { Intent.ActionView }, Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable }, DataScheme = "phoenix", DataHost = "pair")]
 public class MainActivity : Activity
 {
     /// <summary>The home menu: quickplay, the collection sections that are switched on, then settings.</summary>
@@ -87,6 +89,7 @@ public class MainActivity : Activity
         Navigate(Intent?.GetStringExtra("pivot") ?? "home");
         OnPlayerChanged();
         if (Intent?.GetBooleanExtra("nowplaying", false) == true) ShowNowPlaying();
+        OpenLink(Intent);
         if (EnsureMediaPermission()) _ = App.RefreshCollectionAsync();
         _ = Halcyon.Services.Listening.FlushAsync();   // listens that could not be sent last time
         if (App.Settings.CheckUpdates && Fmt.Now - App.Settings.UpdateChecked > 20 * 3600) _ = CheckForUpdate(false);
@@ -209,6 +212,19 @@ public class MainActivity : Activity
         base.OnNewIntent(intent);
         if (intent?.GetStringExtra("pivot") is { } pivot) Navigate(pivot);
         if (intent?.GetBooleanExtra("nowplaying", false) == true) ShowNowPlaying();
+        OpenLink(intent);
+    }
+
+    /// <summary>phoenix://pair?host=192.168.1.20:47800&amp;t=… from the QR code on the computer: pair with it.</summary>
+    void OpenLink(Intent? intent)
+    {
+        var data = intent?.Data;
+        if (data == null || data.Scheme != "phoenix" || data.Host != "pair") return;
+        intent!.SetData(null);   // once only, not again when the screen turns
+        var host = data.GetQueryParameter("host") ?? "";
+        var token = data.GetQueryParameter("t") ?? "";
+        if (host == "" || token == "") { Ui.Alert(this, "That pairing link is incomplete. Scan the QR code on the computer again."); return; }
+        SyncScreen.PairFromLink(this, host, token);
     }
 
     protected override void OnResume()
@@ -219,6 +235,7 @@ public class MainActivity : Activity
         OnPlayerChanged();
         HalcyonApp.Main.RemoveCallbacks(_tick);
         HalcyonApp.Main.Post(_tick);
+        _ = SyncScreen.AutoSync(this);   // the phone keeps itself up to date with the PC
     }
 
     protected override void OnPause()

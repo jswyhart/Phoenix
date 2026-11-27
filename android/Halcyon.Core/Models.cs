@@ -27,6 +27,13 @@ public static class Fmt
     }
     public static string Clock(long ms) => ms <= 0 ? "0:00" : Time(ms);
     public static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    /// <summary>How long ago a moment was, in words: "just now", "5 minutes ago", "yesterday", "3 days ago".</summary>
+    public static string Ago(long unixSeconds)
+    {
+        var s = Math.Max(0, Now - unixSeconds);
+        return s < 60 ? "just now" : s < 3600 ? Plural((int)(s / 60), "minute") + " ago" : s < 86400 ? Plural((int)(s / 3600), "hour") + " ago"
+             : s < 172800 ? "yesterday" : s < 60 * 86400 ? $"{s / 86400} days ago" : DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime.ToString("d MMM yyyy");
+    }
     public static string Plural(int n, string noun) => n == 0 ? "" : $"{n} {noun}{(n == 1 ? "" : "s")}";
     public static string Join(params string[] parts) => string.Join("  ·  ", parts.Where(s => s != ""));
 

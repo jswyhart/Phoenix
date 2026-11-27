@@ -836,6 +836,24 @@ Section("the auto equalizer");
             Check(heard != null && heard.GetValueOrDefault("speech") > 0.3, $"YAMNet recognises speech in a spoken clip, on {AutoEqAi.RanOn} in {watch.ElapsedMilliseconds} ms: {AutoEqAi.Describe(heard)} ({(heard == null ? "" : AutoEqAi.Format(heard))})");
         }
     }
+
+    // pairing against a running Phoenix (PHOENIX_PAIR_HOST=127.0.0.1:47801): the phone's own code asks, the person
+    // there allows it, and the key it gets then reads the collection
+    if (Environment.GetEnvironmentVariable("PHOENIX_PAIR_HOST") is { Length: > 0 } pairHost)
+    {
+        App.Settings.SyncHost = App.Settings.SyncCode = App.Settings.SyncPcId = App.Settings.SyncPcName = "";
+        var info = await SyncClient.InfoAsync(pairHost);
+        Check(info is { Pairing: 2 } && info.Id.Length == 32, $"the PC says who it is: {info?.Name} {info?.Id}");
+        try
+        {
+            await SyncClient.PairAsync(pairHost, "", "Core test phone");
+            var pairedLib = await App.Sync.FetchLibraryAsync();
+            Check(App.Settings.SyncCode.Length >= 20 && App.Settings.SyncPcId == info?.Id && pairedLib.Tracks.Count > 0,
+                $"paired by asking, then the collection read with the phone's own key: {pairedLib.Name}, {pairedLib.Tracks.Count} songs");
+            Check(await SyncClient.ReachableAsync(), "the paired PC is found where it is");
+        }
+        catch (Exception ex) { Check(false, "pairing by asking: " + ex.Message); }
+    }
 }
 
 Console.WriteLine();

@@ -149,10 +149,63 @@ public partial class SettingsView : UserControl
         RefreshStatus();
         SyncEnabled.IsChecked = S.SyncEnabled;
         RefreshSync();
+        PhonePairing.Changed += () => Dispatcher.BeginInvoke(() => { if (PanelPhone.Visibility == Visibility.Visible) RefreshSync(); });
+        // the QR code's token runs out after ten minutes: a fresh one while the page is open
+        _qrTimer.Tick += (_, _) => { if (PanelPhone.IsVisible) RefreshSync(); else _qrTimer.Stop(); };
+    }
+
+    readonly System.Windows.Threading.DispatcherTimer _qrTimer = new() { Interval = TimeSpan.FromMinutes(4) };
+
+    /// <summary>The QR code a phone scans to pair, and the phones paired so far.</summary>
+    void ShowPairing()
+    {
+        var on = S.SyncEnabled && App.Sync.IsRunning;
+        SyncPairPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (!on) { _qrTimer.Stop(); return; }
+        if (PhonePairing.QrUrl(SyncServer.Port) is { } url)
+        {
+            var png = PhonePairing.QrPng(url);
+            var img = new System.Windows.Media.Imaging.BitmapImage();
+            img.BeginInit();
+            img.StreamSource = new System.IO.MemoryStream(png);
+            img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            img.EndInit();
+            img.Freeze();
+            SyncQr.Source = img;
+            SyncQr.ToolTip = url[..url.IndexOf('#')];
+        }
+        _qrTimer.Start();
+        PairedPhones.Children.Clear();
+        var phones = PhonePairing.Phones.OrderByDescending(p => p.LastSeen).ToList();
+        if (phones.Count == 0)
+            PairedPhones.Children.Add(new TextBlock { Text = "none yet", Style = (Style)FindResource("Note"), Margin = new Thickness(0) });
+        foreach (var phone in phones)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
+            var forget = Make.Button("FORGET", "PillBtn", () =>
+            {
+                if (MessageBox.Show(App.Win, $"Forget “{phone.Name}”? It will have to pair again to sync with this PC. Music already on the phone stays there.", "Phoenix",
+                        MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                PhonePairing.Forget(phone.Id);
+                RefreshSync();
+            }, "This phone has to pair again to sync", new Thickness(12, 0, 0, 0));
+            DockPanel.SetDock(forget, Dock.Right);
+            row.Children.Add(forget);
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(new TextBlock { Text = phone.Name, FontSize = 14 });
+            var when = phone.LastSync > 0 ? $"last synced {Fmt.Ago(phone.LastSync)}" + (phone.LastSummary != "" ? $" ({phone.LastSummary})" : "")
+                     : phone.LastSeen > 0 ? $"paired {Fmt.Ago(phone.Paired)}, last seen {Fmt.Ago(phone.LastSeen)}" : $"paired {Fmt.Ago(phone.Paired)}";
+            var sub = new TextBlock { Text = when, TextWrapping = TextWrapping.Wrap };
+            sub.SetResourceReference(TextBlock.ForegroundProperty, "FgDim");
+            text.Children.Add(sub);
+            row.Children.Add(text);
+            PairedPhones.Children.Add(row);
+        }
     }
 
     void RefreshSync()
     {
+        ShowPairing();
         SyncNewCodeBtn.IsEnabled = S.SyncEnabled;
         RemoteAddress.Text = S.SyncEnabled && App.Sync.IsRunning
             ? string.Join("   or   ", SyncServer.LocalAddresses().Select(a => $"http://{a}:{SyncServer.Port}/remote")) : "Turn sync on above to use the remote.";
@@ -165,7 +218,7 @@ public partial class SettingsView : UserControl
         var addresses = SyncServer.LocalAddresses();
         SyncStatus.Text = $"pairing code  {S.SyncCode}\n" +
             (addresses.Count == 0 ? "this PC is not on a network" : "this PC's address  " + string.Join("  or  ", addresses)) +
-            "\nIf the phone can't find this PC, allow Phoenix through Windows Firewall for private networks.";
+            "\nIf the phone can't find this PC, check both are on the same Wi-Fi, and allow Phoenix through Windows Firewall for private networks.";
     }
 
     void SyncEnabled_Click(object sender, RoutedEventArgs e)

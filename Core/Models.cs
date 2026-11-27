@@ -35,6 +35,14 @@ public static class Fmt
         return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
     }
     public static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    static string Unit(long n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")} ago";
+    /// <summary>How long ago a moment was, in words: "just now", "5 minutes ago", "yesterday", "3 days ago".</summary>
+    public static string Ago(long unixSeconds)
+    {
+        var s = Math.Max(0, Now - unixSeconds);
+        return s < 60 ? "just now" : s < 3600 ? Unit(s / 60, "minute") : s < 86400 ? Unit(s / 3600, "hour")
+             : s < 172800 ? "yesterday" : s < 60 * 86400 ? $"{s / 86400} days ago" : DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime.ToString("d MMM yyyy");
+    }
 
     /// <summary>A long stretch of time in words: "2 days 7 hours", "5 hours 12 minutes", "48 minutes".</summary>
     public static string Long(long ms)
