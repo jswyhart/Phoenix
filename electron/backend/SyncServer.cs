@@ -62,8 +62,8 @@ public class SyncServer
                     _tcp = new TcpListener(address, port);
                     _tcp.Start();
                     Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
-                    // discovery listens on the same port, except in the self-test (any free one: Windows keeps some UDP ranges back)
-                    try { _udp = new UdpClient(new IPEndPoint(address, port == 0 ? 0 : Port)); break; }
+                    // discovery listens on the same port (the self-test asks there too); a port Windows keeps back for UDP means another try
+                    try { _udp = new UdpClient(new IPEndPoint(address, Port)); break; }
                     catch (SocketException) when (port == 0 && attempt < 40) { tried.Add(_tcp); }
                 }
             }

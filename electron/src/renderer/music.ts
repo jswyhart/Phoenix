@@ -1,7 +1,7 @@
 // collection → music: artists or genres on the left, album covers in the middle, songs on the right.
 import { call, on, Song, TileData } from "./api";
 import { debounce, Page, shell } from "./shell";
-import { albumMenu, artistMenu, SongHeader, songMenu, songRow } from "./songs";
+import { albumMenu, artistMenu, SongHeader, songMenu, songRow, sourceFor } from "./songs";
 import { h, menuAt, pill, showMenu, tabButton, tabs, TileGrid, ViewBar, VList } from "./ui";
 import { attachServiceTabs } from "./web";
 import { tr } from "./translate";
@@ -17,7 +17,7 @@ export interface MusicPage extends Page {
 
 export function musicPage(): MusicPage {
   let mode = "artists", sel: string | null = null, album: string | null = null;
-  let songs: Song[] = [], leftItems: string[] = [];
+  let songs: Song[] = [], leftItems: string[] = [], source: 0 | 1 | 2 = 0;
   let seq = 0, dirty = false, pending: Promise<void> = Promise.resolve();
 
   const leftCap = h("div.cap", "ARTISTS"), midCap = h("div.cap", "ALBUMS"), rightCap = h("div.cap", "SONGS"), count = h("div.cap.count");
@@ -38,7 +38,7 @@ export function musicPage(): MusicPage {
   albums.onContext = async (t, e) => { const x = e.clientX, y = e.clientY; showMenu(await albumMenu(t.key), x, y); };
   const songList = new VList<Song>({
     rowHeight: 30, multi: true,
-    render: (s, i) => songRow(s, i, mode === "songs"),
+    render: (s, i) => songRow(s, i, mode === "songs", mode === "songs" ? 0 : source),
     onActivate: s => void call("play.tracks", { ids: songs.map(x => x.id), start: s.id }),
     onContext: (chosen, e) => menuAt(songMenu(chosen, chosen.length === 1 ? songs : null), e),
   });
@@ -102,6 +102,7 @@ export function musicPage(): MusicPage {
       }
       songs = v.songs;
       rightCap.textContent = `SONGS  ${songs.length}`;
+      source = sourceFor(songs);
       songList.setItems(songs, keep);
     })();
   }

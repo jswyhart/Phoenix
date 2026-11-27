@@ -18,7 +18,10 @@
             </Grid>
             <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource Accent}"/>
             <TextBlock x:Name="DetailText" TextWrapping="Wrap" Foreground="{DynamicResource FgDim}" Margin="0,8,0,0"/>
-            <Button Style="{StaticResource PillBtn}" Content="VIEW SYNC OPTIONS" HorizontalAlignment="Left" Margin="0,18,0,0" Click="Options_Click"/>
+            <WrapPanel Margin="0,18,0,0">
+                <Button x:Name="TurnOnBtn" Style="{StaticResource PillBtn}" Content="TURN ON PHONE SYNC" Margin="0,0,10,8" Click="TurnOn_Click"/>
+                <Button x:Name="OptionsBtn" Style="{StaticResource PillBtn}" Content="SYNC OPTIONS" Margin="0,0,10,8" Click="Options_Click"/>
+            </WrapPanel>
         </StackPanel>
 
         <DockPanel Grid.Column="1">
@@ -31,7 +34,7 @@
             <Grid>
                 <ListBox x:Name="SongList" SelectionMode="Extended" ItemTemplate="{StaticResource SongRow}" MouseDoubleClick="Song_DoubleClick" MouseRightButtonUp="Song_RightClick"/>
                 <TextBlock x:Name="EmptyText" Foreground="{DynamicResource FgFaint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="460" TextAlignment="Center"
-                           Text="Drag and drop things here to sync with your phone: drag songs, albums, artists or playlists from your collection to the phone icon in the lower left."/>
+                           Text="Nothing is chosen here yet. Right-click songs, albums, artists or playlists in your collection and choose “Add to phone sync list”, or drag them to the phone icon in the lower left. The phone can also choose its own playlists, artists and albums."/>
             </Grid>
         </DockPanel>
     </Grid>

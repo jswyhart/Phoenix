@@ -569,6 +569,19 @@ public static partial class Smoke
             for (var i = 0; i < buttons.Count; i++) buttons[i].Visibility = was[i];
             row?.InvalidateMeasure();
         }
+
+        // ---------- small things that make the app easier ----------
+        App.Win.SetStatus("4 songs on the burn list");
+        var fades = App.Win.StatusFades;
+        App.Win.SetStatus("scanning…");
+        var stays = !App.Win.StatusFades;
+        App.Win.SetStatus("");
+        Check("a message about something done fades by itself; one about work still going on stays", fades && stays);
+        Check("a stretch under a minute is told in seconds, not as 0 minutes", Fmt.Long(48_000) == "48 seconds" && Fmt.Long(60_000) == "1 minute" && Fmt.Long(0) == "0 minutes", Fmt.Long(48_000));
+        var mixed = SongRowView.SourceFor(lib.Tracks);
+        var oneAlbum = SongRowView.SourceFor(lib.Albums[0].Tracks);
+        Check("a song list that mixes albums shows where each song is from; one album's list doesn't", mixed == 2 && oneAlbum == 0, $"{mixed} / {oneAlbum}");
+        Check("F1 lists the keyboard shortcuts, volume and liking among them", MainWindow.Shortcuts.Contains("Ctrl + Up / Down") && MainWindow.Shortcuts.Contains("Ctrl + L") && MainWindow.Shortcuts.Contains("F1"));
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);
         settings.ShowCategory("software");

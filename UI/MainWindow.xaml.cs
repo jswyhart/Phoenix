@@ -525,7 +525,31 @@ public partial class MainWindow : Window
         if (_back.Count > 0) Navigate(_back.Pop(), push: false);
     }
 
-    public void SetStatus(string text) => StatusText.Text = text;
+    /// <summary>
+    /// A message in the title bar. One that reports something done ("4 songs on the burn list") fades after ten seconds;
+    /// one about work still going on (ending in "…", like "scanning…") stays until the next message replaces it.
+    /// </summary>
+    public void SetStatus(string text)
+    {
+        StatusText.Text = text;
+        _statusTimer ??= NewStatusTimer();
+        _statusTimer.Stop();
+        if (text != "" && !text.TrimEnd().EndsWith("…") && !text.TrimEnd().EndsWith("...")) _statusTimer.Start();
+    }
+
+    System.Windows.Threading.DispatcherTimer? _statusTimer;
+    System.Windows.Threading.DispatcherTimer NewStatusTimer()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(StatusSeconds) };
+        t.Tick += (_, _) => { t.Stop(); StatusText.Text = ""; };
+        return t;
+    }
+
+    /// <summary>Whether the message on show will fade by itself (for the self-test).</summary>
+    public bool StatusFades => _statusTimer?.IsEnabled == true;
+
+    /// <summary>How long a finished message stays.</summary>
+    public static double StatusSeconds = 10;
 
     /// <summary>Puts a control in the window without showing it (the offline translator's hidden browser view needs a window to live in).</summary>
     public void AddHidden(UIElement element) => Root.Children.Add(element);
@@ -1188,6 +1212,30 @@ public partial class MainWindow : Window
             case Key.Escape when _full: ToggleFullscreen(); e.Handled = true; break;
             case Key.Escape when IsNowOpen: ShowNow(false); e.Handled = true; break;
             case Key.F when Keyboard.Modifiers == ModifierKeys.Control: SearchBox.Focus(); e.Handled = true; break;
+            // volume, a jump within the song, and liking what's playing
+            case Key.Up when !typing && Keyboard.Modifiers == ModifierKeys.Control: P.Volume = Math.Min(1, P.Volume + 0.05); SetStatus($"volume {P.Volume:P0}"); e.Handled = true; break;
+            case Key.Down when !typing && Keyboard.Modifiers == ModifierKeys.Control: P.Volume = Math.Max(0, P.Volume - 0.05); SetStatus($"volume {P.Volume:P0}"); e.Handled = true; break;
+            case Key.Right when !typing && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && P.Current != null: P.Seek(P.Position + TimeSpan.FromSeconds(10)); e.Handled = true; break;
+            case Key.Left when !typing && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && P.Current != null: P.Seek(P.Position > TimeSpan.FromSeconds(10) ? P.Position - TimeSpan.FromSeconds(10) : TimeSpan.Zero); e.Handled = true; break;
+            case Key.L when !typing && Keyboard.Modifiers == ModifierKeys.Control && P.Current?.Track is { } liked:
+                App.Lib.Rate(new List<Track> { liked }, liked.Rating == 1 ? 0 : 1);
+                SetStatus(liked.Rating == 1 ? $"liked “{liked.Title}”" : $"“{liked.Title}” is no longer liked"); e.Handled = true; break;
+            case Key.F1: ShowShortcuts(); e.Handled = true; break;
         }
     }
+
+    /// <summary>The keyboard shortcuts, listed (F1).</summary>
+    public const string Shortcuts =
+        "Space\tplay or pause\n" +
+        "Ctrl + Right / Left\tnext / previous song\n" +
+        "Ctrl + Shift + Right / Left\tten seconds forward / back\n" +
+        "Ctrl + Up / Down\tvolume up / down\n" +
+        "Ctrl + L\tlike the song playing (again to unlike)\n" +
+        "Ctrl + F\tsearch\n" +
+        "F11\tnow playing, full screen\n" +
+        "V / C\tin now playing: next visualizer / its colours\n" +
+        "Esc\tleave full screen, then now playing\n" +
+        "F1\tthis list";
+
+    void ShowShortcuts() => Halcyon.UI.MessageBox.Show(this, Shortcuts.Replace("\t", "   —   "), "Keyboard shortcuts");
 }

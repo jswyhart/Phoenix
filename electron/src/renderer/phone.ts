@@ -47,14 +47,20 @@ export function phonePage(): Page {
     onContext: (chosen, e) => menuAt(songMenu(chosen, chosen.length === 1 ? songs : null), e),
   });
   const empty = h("div.center-note.hidden", { style: { background: "none", pointerEvents: "none" } },
-    h("div.faint", { style: { maxWidth: "460px" } }, "Nothing is set to sync yet. Right-click songs, albums, artists or playlists in your collection and choose “Add to phone sync list”."));
+    h("div.faint", { style: { maxWidth: "460px" } }, "Nothing is chosen here yet. Right-click songs, albums, artists or playlists in your collection and choose “Add to phone sync list”. The phone can also choose its own playlists, artists and albums."));
   // the phone itself: an outline with the accent-coloured screen
   const picture = h("div", { style: { width: "120px", height: "200px", margin: "6px 0 18px 0", position: "relative", border: "3px solid var(--fg-faint)", borderRadius: "14px", background: "var(--bg-alt)" } },
     h("div", { style: { position: "absolute", inset: "19px 8px 27px 8px", background: "var(--grad)" } }),
     h("div", { style: { position: "absolute", left: "51px", bottom: "6px", width: "12px", height: "12px", border: "2px solid var(--fg-faint)", borderRadius: "6px" } }));
+  const turnOn = pill("TURN ON PHONE SYNC", async () => {
+    const r = await call<PhoneState>("phone.enable", { on: true });
+    shell.setStatus(r.running ? "phone sync is on: pair a phone under sync options" : "phone sync couldn't start");
+    void load(true);
+  });
+  const options = pill("SYNC OPTIONS", () => { shell.navigate("settings"); shell.get<SettingsPage>("settings").showCategory("phone"); });
   const left = h("div", { style: { marginRight: "30px" } },
     h("div.h2", { style: { fontSize: "34px" } }, "phone"), picture, status, detail,
-    h("div", { style: { marginTop: "18px" } }, pill("VIEW SYNC OPTIONS", () => { shell.navigate("settings"); shell.get<SettingsPage>("settings").showCategory("phone"); })));
+    h("div", { style: { marginTop: "18px", display: "flex", flexWrap: "wrap", rowGap: "8px" } }, turnOn, options));
   const right = h("div.pane", listCap, header.el, h("div", { style: { flex: "1 1 0", minHeight: "0", position: "relative" } }, list.el, empty),
     h("div", { style: { marginTop: "10px", flex: "none" } },
       pill("REMOVE", async () => { const ids = list.selected().map(s => s.id); if (ids.length) await call("phone.remove", { ids }); }),
@@ -70,22 +76,28 @@ export function phonePage(): Page {
     empty.classList.toggle("hidden", songs.length > 0);
     listCap.textContent = `PHONE SYNC LIST  ${songs.length}   ·   ${v.total}`;
     const s = v.state;
+    turnOn.style.display = s.enabled ? "none" : "";
+    options.textContent = "SYNC OPTIONS";
     if (!s.enabled) {
       status.textContent = "PHONE SYNC IS OFF";
-      detail.textContent = `Turn it on under sync options, then pair the companion app on your Android phone with this ${computer}.`;
+      detail.textContent = "Turn it on to copy music, likes and playlists to Phoenix on your Android phone over Wi-Fi, and to use the phone as a remote.";
     } else if (!s.running) {
       status.textContent = "PHONE SYNC COULD NOT START";
       detail.textContent = s.error;
     } else {
       status.textContent = "READY TO SYNC OVER WI-FI";
-      detail.textContent = `Pairing code  ${s.code}\n` + (s.addresses.length === 0 ? `This ${computer} is not on a network.` : `This ${computer}'s address  ` + s.addresses.join("  or  ")) +
-        "\n\nOn the phone: settings → sync with PC. Everything on the phone sync list is copied the next time the phone syncs.";
+      if (s.phones.length === 0) {
+        detail.textContent = "No phone is paired yet. Choose PAIR A PHONE and point the phone's camera at the QR code, or in Phoenix on the phone tap settings → sync with PC → pair with my pc.";
+        options.textContent = "PAIR A PHONE";
+      } else
+        detail.textContent = s.phones.map(p => `${p.name}\n${p.when}`).join("\n\n") + "\n\nThe phone copies this list, and keeps it up to date by itself whenever Phoenix is opened on it.";
     }
   }
 
   const changed = debounce(() => { if (el.isConnected) void load(true); else dirty = true; });
   on("lib", changed);
   on("ratings", changed);
+  on("phone", changed);
   void load(false);
   return { el, shown: () => { dirty = false; void load(true); } };
 }

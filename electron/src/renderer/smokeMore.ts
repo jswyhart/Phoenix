@@ -60,7 +60,7 @@ export async function runExtras(check: Check, shot: Shot, settle: Settle, until:
   check("shuffle all is drawn like the tabs and on their line", shuffleEl.textContent === "shuffle all" && sa.fontSize === sb.fontSize && sa.fontFamily === sb.fontFamily && Math.abs(a.top - b.top) < 1.5 && Math.abs(a.height - b.height) < 1.5,
     `${sb.fontSize} vs ${sa.fontSize}, top ${b.top.toFixed(1)} vs ${a.top.toFixed(1)}`);
   const counts = music.state().counts;
-  check("the music page shows the total playing time after the counts", /12 songs  ·  \d+ minutes?$/.test(counts), counts);
+  check("the music page shows the total playing time after the counts", /12 songs  ·  \d+ (minutes?|seconds?)$/.test(counts), counts);
   check("music albums: 3 shown with nothing chosen", music.state().albums === 3, String(music.state().albums));
   music.bar.set({ show: "liked" });
   await sleep(100); await music.ready();

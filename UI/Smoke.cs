@@ -1531,6 +1531,11 @@ public static partial class Smoke
         Check("the phone sync list is saved as a playlist", new Database(AppPaths.DbPath).LoadPlaylists().Any(pl => pl.Name == PhoneView.ListName && pl.TrackIds.Count == 3));
         win.Navigate("phone");
         await Shot("19-phone");
+        {
+            var phonePage = App.Win.Page<PhoneView>("phone");
+            var turnOn = (System.Windows.Controls.Button)phonePage.FindName("TurnOnBtn");
+            Check("the phone page offers to turn phone sync on right there while it is off", App.Settings.SyncEnabled || turnOn.Visibility == Visibility.Visible);
+        }
 
         win.Navigate("settings");
         var settings = win.Page<SettingsView>("settings");

@@ -460,7 +460,18 @@ public class MainActivity : Activity
 
     void OnPlayerError(string message) { if (message != "") Ui.Toast(this, message); }
 
-    void OnStatus(string text) => HalcyonApp.Main.Post(() => { if (!IsDestroyed) _status.Text = text; });
+    // a message about something done fades after ten seconds; one about work still going on ("sync: copying…") stays
+    void OnStatus(string text) => HalcyonApp.Main.Post(() =>
+    {
+        if (IsDestroyed) return;
+        _status.Text = text;
+        HalcyonApp.Main.RemoveCallbacks(_clearStatus);
+        var t = text.TrimEnd();
+        if (t != "" && !t.EndsWith("…") && !t.EndsWith("...") && !t.StartsWith("sync: ")) HalcyonApp.Main.PostDelayed(_clearStatus, 10000);
+    });
+
+    Java.Lang.Runnable? _clearStatusRunnable;
+    Java.Lang.Runnable _clearStatus => _clearStatusRunnable ??= new Java.Lang.Runnable(() => { if (!IsDestroyed) _status.Text = ""; });
 
     // ---------- permissions ----------
 

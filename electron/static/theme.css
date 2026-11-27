@@ -116,6 +116,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .songrow { display: grid; align-items: center; column-gap: 0; }
 .songrow.full, .songhead { grid-template-columns: 34px 3fr 2fr 2fr 1.5fr 56px 30px; }
 .songrow.compact { grid-template-columns: 34px 1fr 56px 30px; }
+/* a list that mixes albums: where each song is from, after its title */
+.songrow.compact.src { grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) 56px 30px; }
+.songrow .src { font-size: 0.93em; padding-right: 8px; }
 .songrow > div { min-width: 0; padding-right: 12px; }
 .songrow .no { text-align: right; color: var(--fg-faint); }
 .songrow .time { text-align: right; color: var(--fg-dim); padding-right: 0; }

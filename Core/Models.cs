@@ -51,7 +51,8 @@ public static class Fmt
         static string N(int n, string unit) => $"{n} {unit}{(n == 1 ? "" : "s")}";
         if (t.TotalDays >= 1) return t.Hours > 0 ? $"{N((int)t.TotalDays, "day")} {N(t.Hours, "hour")}" : N((int)t.TotalDays, "day");
         if (t.TotalHours >= 1) return t.Minutes > 0 ? $"{N((int)t.TotalHours, "hour")} {N(t.Minutes, "minute")}" : N((int)t.TotalHours, "hour");
-        return N((int)t.TotalMinutes, "minute");
+        // under a minute: the seconds, not "0 minutes"
+        return t.TotalMinutes >= 1 || ms <= 0 ? N((int)t.TotalMinutes, "minute") : N(Math.Max(1, (int)Math.Round(t.TotalSeconds)), "second");
     }
 }
 

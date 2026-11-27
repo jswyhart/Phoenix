@@ -1,5 +1,5 @@
 // The window: header navigation, the page in the middle, the now-playing layer, and the transport bar.
-import { call, clock, host, Init, on, PlayerState, time } from "./api";
+import { call, clock, host, Init, isMac, on, PlayerState, time } from "./api";
 
 /** A second of silence as a WAV (for the system's media controls; see paintSession). */
 function silentWav(): string {
@@ -34,7 +34,7 @@ import { Page, shell } from "./shell";
 import { runSmoke } from "./smoke";
 import { videosPage } from "./videos";
 import { customTabPage, loadWeb, onWeb, remote, serviceById, WebServicePage, webState } from "./web";
-import { art, artUrl, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, setArt, setIcon, Slider } from "./ui";
+import { art, artUrl, bumpArt, h, icon, iconBtn, MenuEntry, menuAt, message, setArt, setIcon, Slider } from "./ui";
 
 const makers: Record<string, () => Page> = {
   quickplay: quickplayPage, music: musicPage, videos: videosPage, pictures: picturesPage, podcasts: podcastsPage,
@@ -152,7 +152,13 @@ async function start() {
   shell.navigate = navigate;
   shell.get = get;
   shell.goBackOr = fallback => { const p = back.pop(); navigate(p ?? fallback, p === undefined); };
-  shell.setStatus = text => { status.textContent = text; status.title = text; };
+  // a message about something done fades after ten seconds; one about work still going on ("scanning…") stays
+  let statusTimer = 0;
+  shell.setStatus = text => {
+    status.textContent = text; status.title = text;
+    clearTimeout(statusTimer);
+    if (text && !/(…|\.\.\.)\s*$/.test(text)) statusTimer = window.setTimeout(() => { status.textContent = ""; status.title = ""; }, 10000);
+  };
   // light or dark (the self-test); a theme of your own is chosen in settings → display
   shell.applyTheme = theme => void call<ThemeShape>("themes.use", { id: theme === "dark" ? "dark" : "light" }).then(applyTheme);
   await loadTheme();
@@ -377,6 +383,19 @@ async function start() {
   });
 
   // ---------- keys ----------
+  const mod = isMac ? "⌘" : "Ctrl";
+  const SHORTCUTS = [
+    ["Space", "play or pause"],
+    [`${mod} + Right / Left`, "next / previous song"],
+    [`${mod} + Shift + Right / Left`, "ten seconds forward / back"],
+    [`${mod} + Up / Down`, "volume up / down"],
+    [`${mod} + L`, "like the song playing (again to unlike)"],
+    [`${mod} + F`, "search"],
+    ["F11", "now playing, full screen"],
+    ["V / C", "in now playing: next visualizer / its colours"],
+    ["Esc", "leave full screen, then now playing"],
+    ["F1", "this list"],
+  ].map(([k, what]) => `${k}   —   ${what}`).join("\n");
   document.addEventListener("keydown", e => {
     const t = e.target as HTMLElement;
     const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t.isContentEditable;
@@ -392,6 +411,26 @@ async function start() {
     else if (e.key === "Escape" && now.full) { now.toggleFullscreen(); done(); }
     else if (e.key === "Escape" && now.open) { now.show(false); done(); }
     else if (e.key.toLowerCase() === "f" && command) { search.focus(); search.select(); done(); }
+    // volume, a jump within the song, and liking what's playing
+    else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !typing && command && shell.player) {
+      const v = Math.min(1, Math.max(0, shell.player.volume + (e.key === "ArrowUp" ? 0.05 : -0.05)));
+      shell.player.volume = v;
+      void call("player.volume", { value: v });
+      shell.setStatus(`volume ${Math.round(v * 100)}%`);
+      done();
+    }
+    else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && !typing && command && e.shiftKey && shell.player?.current) {
+      void call("player.seek", { ms: Math.max(0, shell.player.pos + (e.key === "ArrowRight" ? 10000 : -10000)) });
+      done();
+    }
+    else if (e.key.toLowerCase() === "l" && command && !typing && shell.player?.current?.trackId != null) {
+      const c = shell.player.current;
+      const rating = c.rating === 1 ? 0 : 1;
+      void call("rate", { ids: [c.trackId], rating });
+      shell.setStatus(rating === 1 ? `liked “${c.title}”` : `“${c.title}” is no longer liked`);
+      done();
+    }
+    else if (e.key === "F1") { void message(SHORTCUTS); done(); }
     else if (!typing && now.open) now.key(e);
   });
   // dropping a file on the window must not make the page leave itself

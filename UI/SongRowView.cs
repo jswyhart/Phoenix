@@ -24,6 +24,24 @@ public class SongRowView : FrameworkElement, IThemed
     /// <summary>Number, title, time and heart only (the song list beside an album).</summary>
     public bool Compact { get => (bool)GetValue(CompactProperty); set => SetValue(CompactProperty, value); }
 
+    /// <summary>
+    /// Set on a list of compact rows that mixes songs from several albums: 1 adds each song's album after its title,
+    /// 2 its artist and album, so "Song 1" twice can be told apart. Inherited by the rows.
+    /// </summary>
+    public static readonly DependencyProperty SourceShownProperty =
+        DependencyProperty.RegisterAttached("SourceShown", typeof(int), typeof(SongRowView), new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+    public static void SetSourceShown(DependencyObject d, int v) => d.SetValue(SourceShownProperty, v);
+    public static int GetSourceShown(DependencyObject d) => (int)d.GetValue(SourceShownProperty);
+
+    /// <summary>What a compact list of these songs should show beside each title: 0 nothing, 1 the album, 2 artist and album.</summary>
+    public static int SourceFor(IReadOnlyCollection<Track> songs)
+    {
+        if (songs.Count < 2) return 0;
+        var albums = songs.Select(t => t.AlbumKey).Distinct().Count();
+        if (albums < 2) return 0;
+        return songs.Select(t => t.Artist).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1 ? 2 : 1;
+    }
+
     const double RowHeight = 30, NumberWidth = 34, TimeWidth = 56, CompactTimeWidth = 52, HeartWidth = 30, Gap = 12;
     Track? _track;
     ListBoxItem? _item;
@@ -123,7 +141,15 @@ public class SongRowView : FrameworkElement, IThemed
         var heartLeft = w - HeartWidth;
         if (Compact)
         {
-            Name(t.Title, fg, NumberWidth, heartLeft - CompactTimeWidth - NumberWidth);
+            var room = heartLeft - CompactTimeWidth - NumberWidth;
+            var source = GetSourceShown(this) switch { 1 => t.Album, 2 => string.Join("  ·  ", new[] { t.Artist, t.Album }.Where(x => x != "")), _ => "" };
+            if (source == "" || room < 220) Name(t.Title, fg, NumberWidth, room);
+            else
+            {
+                // the title first; where it's from after it, quieter
+                Name(t.Title, fg, NumberWidth, room * 0.5);
+                Left(source, dim, NumberWidth + room * 0.5, room * 0.5, size - 1);
+            }
             Right(t.DurationText, dim, heartLeft, CompactTimeWidth, size);
         }
         else

@@ -352,7 +352,7 @@ async function run() {
     shell.navigate("music");
     shell.navigate("phone");
     await settle(500);
-    check("phone page shows it is ready, the code and the list", text("#root").includes("READY TO SYNC OVER WI-FI") && text("#root").includes(on.code) && text("#root").includes("PHONE SYNC LIST  3") && document.querySelectorAll(".songrow.full").length === 3,
+    check("phone page shows it is ready, the code and the list", text("#root").includes("READY TO SYNC OVER WI-FI") && text("#root").includes("No phone is paired yet") && text("#root").includes("PHONE SYNC LIST  3") && document.querySelectorAll(".songrow.full").length === 3,
       `${document.querySelectorAll(".songrow.full").length} rows`);
     await shot("17-phone");
     const r = await call<any>("smoke.sync");
@@ -391,6 +391,14 @@ async function run() {
     settings.showCategory("phone");
     await settle(400);
     check("settings: Phone shows sync options with the pairing code", settings.shown_() === "Sync options" && text(".statusline").includes(on.code) || [...document.querySelectorAll(".statusline")].some(e => (e.textContent ?? "").includes(on.code)), settings.shown_());
+    // a mixed song list (all artists) shows where each song is from
+    shell.navigate("music");
+    await settle(300);
+    check("a song list that mixes albums shows each song's artist and album beside its title", document.querySelectorAll(".songrow.compact.src").length > 0 || document.querySelectorAll(".songrow.full").length > 0,
+      `${document.querySelectorAll(".songrow.compact.src").length} rows with where they're from`);
+    shell.navigate("settings");
+    settings.showCategory("phone");
+    await settle(300);
     check("settings: Phone shows the QR code for pairing", !!document.querySelector("img.pairqr") && (document.querySelector("img.pairqr") as HTMLImageElement).src.startsWith("data:image/png"));
     await shot("17-settings-phone");
     const off = await call<any>("phone.enable", { on: false });

@@ -5,6 +5,29 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
+Next version
+------------------
+
+New
+- Keyboard shortcuts: Ctrl + Up / Down for the volume, Ctrl + Shift + Right / Left to jump ten
+  seconds, Ctrl + L to like the song playing (again to unlike). F1 lists every shortcut.
+  (⌘ instead of Ctrl on a Mac.)
+- The phone page can turn phone sync on right there, shows the paired phones and when each last
+  synced, and says how to pair one when none is.
+
+Changed
+- Messages in the title bar (Android: under the title) fade after ten seconds instead of staying
+  until the next one. Messages about work still going on ("scanning…") stay while it goes on.
+- A song list beside the albums that mixes several albums (all of an artist, all artists, a genre)
+  shows each song's album, and its artist when there are several, after the title, so two songs
+  called the same can be told apart.
+- Stretches under a minute read "48 seconds" instead of "0 minutes".
+
+Fixed
+- Windows: when Phoenix starts with nothing playing, the player bar's song area stays empty
+  instead of showing "nothing playing" until the first song.
+
+
 1.0.5 — 2026-11-26
 ------------------
 

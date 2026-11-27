@@ -7,7 +7,17 @@ import { h, MenuEntry, menuAt, textBtn } from "./ui";
 const heartText = (r: number) => (r > 0 ? "♥" : r < 0 ? "✕" : "♡");
 
 /** One song in a list: number down the list, title, (artist, album, tags), length, heart. */
-export function songRow(s: Song, index: number, full: boolean): HTMLElement {
+/**
+ * What a compact list of these songs shows beside each title, so "Song 1" from two albums can be told apart:
+ * 0 nothing (one album), 1 the album, 2 the artist and album.
+ */
+export function sourceFor(songs: Song[]): 0 | 1 | 2 {
+  if (songs.length < 2 || new Set(songs.map(s => s.album + "" + s.artist)).size < 2) return 0;
+  if (new Set(songs.map(s => s.album)).size < 2) return 0;
+  return new Set(songs.map(s => s.artist.toLowerCase())).size > 1 ? 2 : 1;
+}
+
+export function songRow(s: Song, index: number, full: boolean, source: 0 | 1 | 2 = 0): HTMLElement {
   const heart = h("div.heart", { title: "Like / dislike", data: { noselect: "1", noactivate: "1" } }, heartText(s.rating));
   if (s.rating === 0) heart.classList.add("unrated");
   heart.onclick = e => {
@@ -23,6 +33,7 @@ export function songRow(s: Song, index: number, full: boolean): HTMLElement {
   const dur = h("div.time", time(s.dur));
   return full
     ? h("div.songrow.full", no, title, tr(h("div.ell.dim"), s.artist), tr(h("div.ell.dim"), s.album), h("div.ell.tags", s.tags), dur, heart)
+    : source ? h("div.songrow.compact.src", no, title, h("div.ell.dim.src", source === 2 ? [s.artist, s.album].filter(x => x).join("  ·  ") : s.album), dur, heart)
     : h("div.songrow.compact", no, title, dur, heart);
 }
 

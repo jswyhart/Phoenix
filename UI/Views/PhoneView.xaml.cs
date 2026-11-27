@@ -24,6 +24,7 @@ public partial class PhoneView : UserControl
         AllowDrop = true;
         DragOver += (_, e) => { e.Effects = TrackDrag.Tracks(e.Data) != null ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
         Drop += (_, e) => { if (TrackDrag.Tracks(e.Data) is { } t) Add(t); };
+        PhonePairing.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible) Reload(); });
         Reload();
     }
 
@@ -47,10 +48,12 @@ public partial class PhoneView : UserControl
         SongList.ItemsSource = _songs;
         EmptyText.Visibility = _songs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ListCap.Text = $"PHONE SYNC LIST  {_songs.Count}   ·   {Fmt.Time(_songs.Sum(t => t.DurationMs))}";
+        TurnOnBtn.Visibility = s.SyncEnabled ? Visibility.Collapsed : Visibility.Visible;
+        OptionsBtn.Content = "SYNC OPTIONS";
         if (!s.SyncEnabled)
         {
             StatusText.Text = "PHONE SYNC IS OFF";
-            DetailText.Text = "Turn it on under sync options, then pair the companion app on your Android phone with this PC.";
+            DetailText.Text = "Turn it on to copy music, likes and playlists to Phoenix on your Android phone over Wi-Fi, and to use the phone as a remote.";
         }
         else if (!App.Sync.IsRunning)
         {
@@ -59,11 +62,26 @@ public partial class PhoneView : UserControl
         }
         else
         {
-            var addresses = SyncServer.LocalAddresses();
+            var phones = PhonePairing.Phones.OrderByDescending(x => x.LastSeen).ToList();
             StatusText.Text = "READY TO SYNC OVER WI-FI";
-            DetailText.Text = $"Pairing code  {s.SyncCode}\n" + (addresses.Count == 0 ? "This PC is not on a network." : "This PC's address  " + string.Join("  or  ", addresses)) +
-                              "\n\nOn the phone: settings → sync with PC. Everything you drag to the phone icon is copied the next time the phone syncs.";
+            if (phones.Count == 0)
+            {
+                DetailText.Text = "No phone is paired yet. Choose PAIR A PHONE and point the phone's camera at the QR code, or in Phoenix on the phone tap settings → sync with PC → pair with my pc.";
+                OptionsBtn.Content = "PAIR A PHONE";
+            }
+            else
+                DetailText.Text = string.Join("\n\n", phones.Select(x => x.Name + "\n" + (x.LastSync > 0 ? $"last synced {Fmt.Ago(x.LastSync)}" : $"paired {Fmt.Ago(x.Paired)}, not synced yet")))
+                                  + "\n\nThe phone copies this list, and keeps it up to date by itself whenever Phoenix is opened on it.";
         }
+    }
+
+    void TurnOn_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.SyncEnabled = true;
+        App.Settings.Save();
+        App.Sync.Start();
+        Reload();
+        App.Win.SetStatus(App.Sync.IsRunning ? "phone sync is on: pair a phone under sync options" : "phone sync couldn't start");
     }
 
     void Options_Click(object sender, RoutedEventArgs e)

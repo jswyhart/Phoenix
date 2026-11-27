@@ -197,6 +197,7 @@ public partial class MusicView : UserControl
         }
         RightCap.Text = $"SONGS  {_songs.Count}";
         if (!(SongList.ItemsSource is List<Track> shownSongs && shownSongs.SequenceEqual(_songs))) SongList.ItemsSource = _songs;
+        SongRowView.SetSourceShown(SongList, _mode == "songs" ? 0 : SongRowView.SourceFor(_songs));
     }
 
     void Left_SelectionChanged(object sender, SelectionChangedEventArgs e)
