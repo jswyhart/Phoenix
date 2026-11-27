@@ -84,7 +84,7 @@
                             <DataTemplate>
                                 <DockPanel Height="64">
                                     <Grid DockPanel.Dock="Left" Width="96" Height="54" Background="{DynamicResource BgAlt}" Margin="0,0,14,0">
-                                        <Image ui:Art.Path="{Binding ArtPath}" ui:Art.Size="200" Stretch="UniformToFill"/>
+                                        <Image ui:Art.Path="{Binding ArtPath}" ui:Art.Size="200" Stretch="Uniform"/>
                                     </Grid>
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding DurationText}" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Margin="12,0,18,0"/>
                                     <StackPanel VerticalAlignment="Center">

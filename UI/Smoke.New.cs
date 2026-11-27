@@ -592,6 +592,20 @@ public static partial class Smoke
         App.Win.SearchFor("");
         App.Win.Navigate("settings");
         await Task.Delay(300);
+        {
+            var settingsPage = App.Win.Page<SettingsView>("settings");
+            var eq = settingsPage.Find("equalizer");
+            var pairing = settingsPage.Find("pairing code");
+            var none = settingsPage.Find("zzqx");
+            Check("settings can be searched: “equalizer” finds the playback page, “pairing code” the phone's", eq.Any(f => f.Category == "Playback") && pairing.Any(f => f.Pivot == "phone") && none.Count == 0,
+                $"{eq.Count} for equalizer (first: {eq.FirstOrDefault()}), {pairing.Count} for pairing code");
+            if (eq.FirstOrDefault(f => f.Category == "Playback") is { } goTo)
+            {
+                settingsPage.Go(goTo);
+                await Task.Delay(300);
+                Check("choosing a found setting opens its page", ((FrameworkElement)settingsPage.FindName("PanelPlayback")).Visibility == Visibility.Visible);
+            }
+        }
         Check("F1 lists the keyboard shortcuts, volume and liking among them", MainWindow.Shortcuts.Contains("Ctrl + Up / Down") && MainWindow.Shortcuts.Contains("Ctrl + L") && MainWindow.Shortcuts.Contains("F1"));
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);

@@ -5,6 +5,21 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
+Next version
+------------------
+
+New
+- Find a setting: a box above the settings categories finds any option by its words ("equalizer",
+  "theme", "pairing"), across every page; choosing one opens its page and points it out. Android:
+  settings → "find a setting".
+
+Changed
+- Listening stats under a minute read in seconds ("36 seconds listened") instead of 0 minutes.
+
+Fixed
+- Windows: an episode's picture is no longer cut off when it isn't a widescreen frame.
+
+
 1.0.6 — 2026-11-27
 ------------------
 

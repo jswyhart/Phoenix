@@ -41,14 +41,21 @@
             <RadioButton x:Name="PivotServers" Style="{StaticResource NavTab}" Content="SERVERS" Tag="servers" GroupName="settingsPivot" Click="Pivot_Click" FontSize="15" FontFamily="Segoe UI Semibold"/>
         </StackPanel>
 
-        <!-- categories -->
-        <ListBox x:Name="CategoryList" Grid.Row="1" Margin="-8,0,24,0" SelectionChanged="Category_SelectionChanged">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" FontSize="15" Height="34" Padding="0,7,0,0"/>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- categories, and a box to find a setting among all of them -->
+        <DockPanel Grid.Row="1" Margin="0,0,24,0">
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                <TextBox x:Name="FindBox" FontSize="13" Height="28" VerticalContentAlignment="Center" TextChanged="Find_Changed" KeyDown="Find_KeyDown"
+                         ToolTip="Type part of a setting's name, like “equalizer”, “theme” or “pairing”"/>
+                <TextBlock x:Name="FindHint" Text="find a setting" FontSize="13" Foreground="{DynamicResource FgFaint}" Margin="7,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+            <ListBox x:Name="CategoryList" Margin="-8,0,0,0" SelectionChanged="Category_SelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontSize="15" MinHeight="34" Padding="0,7,0,7" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
 
         <!-- the chosen category -->
         <ScrollViewer x:Name="PageScroll" Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" Focusable="False" PreviewMouseWheel="Page_Wheel">

@@ -40,11 +40,37 @@ public static class SettingsScreen
     {
         var page = new Page(a, "settings");
         page.Chips(() => new[] { "SOFTWARE", "PC", "SERVERS" }, () => _group.ToUpperInvariant(), g => _group = g.ToLowerInvariant());
+        page.Actions(("find a setting", () => Ui.Ask(a, "Find a setting", "for example: equalizer, theme, pairing", "", q => { if (q.Trim() != "") a.Push(Found(a, q)); })));
         return page.List(() => Groups[_group].Select(c => new Row
         {
             Title = c.Name, Sub = c.About,
             Click = () => a.Push(Category(a, c.Id, c.Name))
         }).ToList());
+    }
+
+    /// <summary>
+    /// The settings whose words match, from every page: each word must appear in the setting, what it says under it, or
+    /// the name of its page. Tapping one opens its page.
+    /// </summary>
+    static Page Found(MainActivity a, string query)
+    {
+        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var page = new Page(a, "settings found");
+        page.Subtitle = () => $"“{query.Trim()}”";
+        var found = new List<Row>();
+        foreach (var (id, name, _) in Groups.Values.SelectMany(g => g))
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in Category(a, id, name).RowsNow())
+            {
+                if (r.Kind is not (RowKind.Item or RowKind.Caption) || r.Title == "" || !seen.Add(r.Title)) continue;
+                var text = $"{r.Title} {r.Sub} {name}";
+                if (!words.All(w => text.Contains(w, StringComparison.OrdinalIgnoreCase))) continue;
+                var title = r.Kind == RowKind.Caption ? char.ToUpperInvariant(r.Title[0]) + r.Title[1..].ToLowerInvariant() : r.Title;
+                found.Add(new Row { Title = title, Sub = Fmt.Join(name, r.Sub), Click = () => a.Push(Category(a, id, name)) });
+            }
+        }
+        return page.List(() => found, "Nothing matches. Try one word, like “equalizer”, “theme” or “sync”.");
     }
 
     /// <summary>One category's options.</summary>

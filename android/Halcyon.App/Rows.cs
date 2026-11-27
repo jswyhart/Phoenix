@@ -403,6 +403,8 @@ public class Page : LinearLayout
     }
 
     public Page Show(Func<Content> content) { _content = content; Reload(); return this; }
+    /// <summary>The rows the page would show now (for finding a setting across pages).</summary>
+    public List<Row> RowsNow() { try { return _content?.Invoke().Rows ?? new(); } catch { return new(); } }
     public Page List(Func<List<Row>> rows, string empty = "") => Show(() => new Content(rows(), 0, 1f, empty));
     public Page Grid(Func<List<Row>> rows, int tileDp, float ratio, string empty = "") => Show(() => new Content(rows(), tileDp, ratio, empty));
 

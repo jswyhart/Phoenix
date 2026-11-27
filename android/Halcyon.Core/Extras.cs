@@ -637,7 +637,9 @@ namespace Halcyon.Services
         public static string Hours(long ms)
         {
             var t = TimeSpan.FromMilliseconds(ms);
-            return t.TotalHours >= 10 ? $"{t.TotalHours:0} hours" : t.TotalHours >= 1 ? $"{t.TotalHours:0.#} hours" : $"{Math.Max(0, (int)t.TotalMinutes)} minutes";
+            return t.TotalHours >= 10 ? $"{t.TotalHours:0} hours" : t.TotalHours >= 1 ? $"{t.TotalHours:0.#} hours"
+                 : t.TotalMinutes >= 1 || ms <= 0 ? $"{Math.Max(0, (int)t.TotalMinutes)} minute{((int)t.TotalMinutes == 1 ? "" : "s")}"
+                 : $"{(int)Math.Round(t.TotalSeconds)} seconds";   // under a minute: the seconds, not "0 minutes"
         }
     }
 

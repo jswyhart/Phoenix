@@ -399,6 +399,11 @@ async function run() {
     shell.navigate("settings");
     settings.showCategory("phone");
     await settle(300);
+    {
+      const eq = settings.find("equalizer"), pairing = settings.find("pairing code");
+      check("settings can be searched: “equalizer” finds the playback page, “pairing code” the phone's", eq.some(f => f.category === "Playback") && pairing.some(f => f.pivot === "phone") && settings.find("zzqx").length === 0,
+        `${eq.length} for equalizer, ${pairing.length} for pairing code`);
+    }
     check("settings: Phone shows the QR code for pairing", !!document.querySelector("img.pairqr") && (document.querySelector("img.pairqr") as HTMLImageElement).src.startsWith("data:image/png"));
     await shot("17-settings-phone");
     const off = await call<any>("phone.enable", { on: false });

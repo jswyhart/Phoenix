@@ -47,6 +47,8 @@ export function fitPath(path: string, width: number, font = '14px "Selawik"'): s
 
 export interface SettingsPage extends Page {
   showCategory(pivot: string, category?: string): void; shown_(): string; refreshFolders(): Promise<void>;
+  /** Settings whose words match (for the self-test): "Playback · Use the equalizer". */
+  find(query: string): { pivot: string; category: string; text: string }[];
   updates: ReturnType<typeof updatesPanel>; listening: ReturnType<typeof listeningPanel>; meta: ReturnType<typeof metadataPanel>; playback: ReturnType<typeof playbackPanel>;
 }
 
@@ -289,13 +291,72 @@ export function settingsPage(): SettingsPage {
     onSelect: items => { if (items[0]) { chosen = items[0]; showPanel(); } },
   });
   const scroll = h("div", { style: { overflowY: "auto", minHeight: "0" } }, h("div", { style: { maxWidth: "600px", margin: "0 18px 10px 0" } }, ...Object.values(panels)));
+
+  // ---- finding a setting: every word must appear in the setting or the name of its page ----
+  interface Found { pivot: string; category: string; text: string; el: HTMLElement; weight: number }
+  const clean = (t: string) => {
+    let x = t.replace(/\s+/g, " ").trim().replace(/[….:]+$/, "");
+    if (x === x.toUpperCase() && /[A-Z]/.test(x)) x = x[0] + x.slice(1).toLowerCase();   // CAPITAL captions read as words
+    return x.length > 90 ? x.slice(0, 87).trim() + "…" : x;
+  };
+  function findable(): Found[] {
+    const list: Found[] = [];
+    for (const [category, panel] of Object.entries(panels)) {
+      const pivotOf = Object.keys(GROUPS).find(k => GROUPS[k].includes(category)) ?? "software";
+      const seen = new Set<string>();
+      for (const e of panel.querySelectorAll<HTMLElement>(".h2, .label, label.check, button, .note")) {
+        const text = clean(e.textContent ?? "");
+        if (text.length < 2 || seen.has(text.toLowerCase())) continue;
+        seen.add(text.toLowerCase());
+        const weight = e.matches(".h2, .label") ? 4 : e.matches("label.check") ? 3 : e.matches("button") ? 2 : 1;
+        list.push({ pivot: pivotOf, category, text, el: e, weight });
+      }
+    }
+    return list;
+  }
+  function find(query: string): Found[] {
+    const words = query.toLowerCase().split(/\s+/).filter(w => w);
+    if (!words.length) return [];
+    return findable()
+      .filter(f => words.every(w => f.text.toLowerCase().includes(w) || f.category.toLowerCase().includes(w)))
+      .sort((a, b) => Number(b.text.toLowerCase().startsWith(words[0])) - Number(a.text.toLowerCase().startsWith(words[0])) || b.weight - a.weight)
+      .slice(0, 40);
+  }
+  const findBox = h("input.findsetting", { type: "text", placeholder: "find a setting", spellcheck: false, style: { width: "100%", margin: "0 0 10px 0" },
+    title: "Type part of a setting's name, like “equalizer”, “theme” or “pairing”" }) as HTMLInputElement;
+  const results = h("div.findresults.hidden", { style: { overflowY: "auto", minHeight: "0" } });
+  let found: Found[] = [];
+  function go(f: Found) {
+    findBox.value = "";
+    paintFind();
+    showCategory(f.pivot, f.category);
+    requestAnimationFrame(() => {
+      f.el.scrollIntoView({ block: "center" });
+      f.el.classList.remove("flash"); void f.el.offsetWidth; f.el.classList.add("flash");
+    });
+  }
+  function paintFind() {
+    const q = findBox.value.trim();
+    results.classList.toggle("hidden", q === "");
+    categories.el.classList.toggle("hidden", q !== "");
+    if (!q) return;
+    found = find(q);
+    results.replaceChildren(...(found.length === 0 ? [h("div.dim", { style: { padding: "7px 0" } }, "nothing found")]
+      : found.map(f => h("div.findrow", { style: { padding: "7px 0", fontSize: "14px", cursor: "pointer" }, onclick: () => go(f) }, h("span.dim", `${f.category}  ·  `), f.text))));
+  }
+  findBox.addEventListener("input", paintFind);
+  findBox.addEventListener("keydown", e => {
+    if (e.key === "Escape") { findBox.value = ""; paintFind(); }
+    else if (e.key === "Enter" && found.length) go(found[0]);
+  });
   const ok = pill("OK", () => shell.goBackOr("quickplay"));
   ok.title = "Changes are saved as you make them";
   ok.style.minWidth = "96px";
   ok.style.marginRight = "0";
   const el = h("div", { style: { height: "100%", display: "grid", gridTemplateColumns: "230px minmax(0, 1fr)", gridTemplateRows: "auto minmax(0, 1fr) auto", padding: "6px 28px 14px 28px" } },
     h("div", { style: { gridColumn: "1 / span 2" } }, pivots.el),
-    h("div", { style: { margin: "0 24px 0 -8px", minHeight: "0" } }, categories.el), scroll,
+    h("div", { style: { margin: "0 24px 0 0", minHeight: "0", display: "flex", flexDirection: "column" } }, findBox,
+      h("div", { style: { margin: "0 0 0 -8px", minHeight: "0", flex: "1", display: "flex", flexDirection: "column" } }, categories.el, results)), scroll,
     h("div", { style: { gridColumn: "1 / span 2", display: "flex", justifyContent: "flex-end", marginTop: "10px" } }, ok));
 
   function showCategory(p: string, category?: string) {
@@ -326,5 +387,6 @@ export function settingsPage(): SettingsPage {
   showCategory("software");
   paintFolders();
   void refreshStatus();
-  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening, meta, playback };
+  return { el, shown: () => { void refreshFolders(); void refreshStatus(); showPanel(); }, showCategory, shown_: () => chosen, refreshFolders, updates, listening, meta, playback,
+    find: q => find(q).map(f => ({ pivot: f.pivot, category: f.category, text: f.text })) };
 }

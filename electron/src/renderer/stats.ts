@@ -63,7 +63,8 @@ export function statsPage(): StatsPage {
     }
     const hours = s.ms / 3_600_000;
     body.append(h("div", { style: { display: "flex", marginBottom: "18px" } },
-      number(hours >= 1 ? (Math.round(hours * 10) / 10).toLocaleString() : String(Math.floor(s.ms / 60_000)), hours >= 1 ? "hours listened" : "minutes listened"),
+      number(hours >= 1 ? (Math.round(hours * 10) / 10).toLocaleString() : s.ms >= 60_000 || s.ms <= 0 ? String(Math.floor(s.ms / 60_000)) : String(Math.round(s.ms / 1000)),
+        hours >= 1 ? "hours listened" : s.ms >= 60_000 || s.ms <= 0 ? "minutes listened" : "seconds listened"),
       number(s.plays.toLocaleString(), s.plays === 1 ? "play" : "plays"),
       number(s.artistCount.toLocaleString(), s.artistCount === 1 ? "artist" : "artists"),
       number(s.albumCount.toLocaleString(), s.albumCount === 1 ? "album" : "albums"),

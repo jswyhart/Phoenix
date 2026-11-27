@@ -52,8 +52,106 @@ public partial class SettingsView : UserControl
 
     void Pivot_Click(object sender, RoutedEventArgs e) => ShowCategory((string)((FrameworkElement)sender).Tag);
 
+    // ---------- finding a setting ----------
+
+    /// <summary>One thing a setting can be found by: its words, where it is, and the control to bring into view.</summary>
+    public record Found(string Pivot, string Category, string Text, FrameworkElement Element, int Weight)
+    {
+        public override string ToString() => $"{Category}  ·  {Text}";
+    }
+
+    List<Found>? _findable;
+    List<Found> _found = new();
+
+    /// <summary>Everything in the settings pages a search can find: headings, options, buttons and notes.</summary>
+    List<Found> Findable()
+    {
+        if (_findable != null) return _findable;
+        var list = new List<Found>();
+        foreach (var (pivot, cats) in Categories)
+            foreach (var (name, panelName) in cats)
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                void Walk(DependencyObject d)
+                {
+                    string? text = null; var weight = 0;
+                    switch (d)
+                    {
+                        case CheckBox { Content: string c }: text = c; weight = 3; break;
+                        case RadioButton { Content: string r }: text = r; weight = 3; break;
+                        case Button { Content: string b }: text = b; weight = 2; break;
+                        case TextBlock t when t.Style == (Style)TryFindResource("Label") || t.Style == (Style)TryFindResource("Head"): text = t.Text; weight = 4; break;
+                        case TextBlock t when t.Style == (Style)TryFindResource("Note"): text = t.Text; weight = 1; break;
+                    }
+                    if (text is { Length: > 1 } && seen.Add(text) && d is FrameworkElement fe)
+                        list.Add(new Found(pivot, name, Clean(text), fe, weight));
+                    foreach (var child in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(child);
+                }
+                if (FindName(panelName) is DependencyObject panel) Walk(panel);
+            }
+        return _findable = list;
+    }
+
+    static string Clean(string text)
+    {
+        var t = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('…', '.', ':');
+        t = t.ToUpperInvariant() == t && t.Any(char.IsLetter) ? char.ToUpperInvariant(t[0]) + t[1..].ToLowerInvariant() : t;   // CAPITAL captions read as words
+        return t.Length > 90 ? t[..87].TrimEnd() + "…" : t;
+    }
+
+    /// <summary>The settings a search finds, best first: every word must appear in the setting or the name of its page.</summary>
+    public List<Found> Find(string query)
+    {
+        var words = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return new();
+        return Findable()
+            .Where(f => words.All(w => f.Text.Contains(w, StringComparison.OrdinalIgnoreCase) || f.Category.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(f => f.Text.StartsWith(words[0], StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(f => f.Weight)
+            .Take(40).ToList();
+    }
+
+    void Find_Changed(object sender, TextChangedEventArgs e)
+    {
+        FindHint.Visibility = FindBox.Text == "" ? Visibility.Visible : Visibility.Collapsed;
+        if (FindBox.Text.Trim() == "") { _found.Clear(); ShowCategory(_pivot); return; }
+        _found = Find(FindBox.Text);
+        _settingUp = true;
+        CategoryList.ItemsSource = _found.Count > 0 ? _found.Select(f => f.ToString()).ToList() : new List<string> { "nothing found" };
+        CategoryList.SelectedIndex = -1;
+        _settingUp = false;
+    }
+
+    void Find_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape) { FindBox.Text = ""; e.Handled = true; }
+        else if (e.Key == System.Windows.Input.Key.Enter && _found.Count > 0) { Go(_found[0]); e.Handled = true; }
+        else if (e.Key == System.Windows.Input.Key.Down && _found.Count > 0) { CategoryList.Focus(); e.Handled = true; }
+    }
+
+    /// <summary>Opens the page a found setting is on and brings it into view, briefly marked.</summary>
+    public void Go(Found f)
+    {
+        FindBox.Text = "";
+        ShowCategory(f.Pivot, f.Category);
+        Dispatcher.BeginInvoke(() =>
+        {
+            f.Element.BringIntoView();
+            var was = f.Element.Opacity;
+            var flash = new System.Windows.Media.Animation.DoubleAnimation(0.25, 1, TimeSpan.FromMilliseconds(450)) { AutoReverse = false, RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2) };
+            f.Element.BeginAnimation(OpacityProperty, flash);
+            if (f.Element.Focusable && f.Element is Control) f.Element.Focus();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
     void Category_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_settingUp) return;
+        if (FindBox.Text.Trim() != "")
+        {
+            if (CategoryList.SelectedIndex >= 0 && CategoryList.SelectedIndex < _found.Count) Go(_found[CategoryList.SelectedIndex]);
+            return;
+        }
         if (CategoryList.SelectedIndex < 0) return;
         var show = Categories[_pivot][CategoryList.SelectedIndex].panel;
         foreach (var panel in Categories.Values.SelectMany(v => v).Select(c => c.panel))

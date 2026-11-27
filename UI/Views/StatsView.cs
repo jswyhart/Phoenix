@@ -77,7 +77,8 @@ public class StatsView : UserControl
             ((FrameworkElement)numbers.Children[^1]).Margin = new Thickness(0, 0, 44, 0);
         }
         var time = TimeSpan.FromMilliseconds(s.Ms);
-        Number(time.TotalHours >= 1 ? $"{time.TotalHours:0.#}" : $"{(int)time.TotalMinutes}", time.TotalHours >= 1 ? "hours listened" : "minutes listened");
+        Number(time.TotalHours >= 1 ? $"{time.TotalHours:0.#}" : time.TotalMinutes >= 1 || time.Ticks == 0 ? $"{(int)time.TotalMinutes}" : $"{(int)Math.Round(time.TotalSeconds)}",
+            time.TotalHours >= 1 ? "hours listened" : time.TotalMinutes >= 1 || time.Ticks == 0 ? "minutes listened" : "seconds listened");
         Number(s.Plays.ToString("N0"), s.Plays == 1 ? "play" : "plays");
         Number(s.Artists.ToString("N0"), s.Artists == 1 ? "artist" : "artists");
         Number(s.Albums.ToString("N0"), s.Albums == 1 ? "album" : "albums");
