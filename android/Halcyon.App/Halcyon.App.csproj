@@ -10,8 +10,8 @@
     <RootNamespace>Halcyon.Droid</RootNamespace>
     <AssemblyName>Halcyon.Droid</AssemblyName>
     <ApplicationId>com.halcyon.player</ApplicationId>
-    <ApplicationVersion>7</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0.6</ApplicationDisplayVersion>
+    <ApplicationVersion>8</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.7</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
   </PropertyGroup>
 
