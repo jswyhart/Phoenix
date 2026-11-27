@@ -12,7 +12,7 @@
     <AssemblyName>Phoenix</AssemblyName>
     <!-- the app was first called Halcyon; the code keeps that namespace -->
     <RootNamespace>Halcyon</RootNamespace>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <ApplicationIcon>installer\Phoenix.ico</ApplicationIcon>
     <Product>Phoenix</Product>
     <Description>Music, video, pictures, podcasts and books in one player</Description>

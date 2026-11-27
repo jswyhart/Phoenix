@@ -163,7 +163,7 @@ public partial class BooksView : UserControl
         m.Items.Add(new Separator());
         m.Items.Add(Menus.Item(b.Finished ? "Mark as not started" : "Mark as finished", () => App.Lib.SetBookFinished(b, !b.Finished)));
         m.Items.Add(Menus.Item("Edit book info…", () => EditBook(b)));
-        m.Items.Add(Menus.Item("Edit tags…", () => new EditTagsDialog(Library.BookTag, new[] { b.Id }, $"“{b.Title}”").ShowDialog()));
+        m.Items.Add(Menus.SearchTags("Edit search tags (#)…", () => new EditTagsDialog(Library.BookTag, new[] { b.Id }, $"“{b.Title}”").ShowDialog()));
         if (b.Source == "local")
             m.Items.Add(Menus.Item("Show in File Explorer", () => System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{b.SourceId}\"")));
         return m;

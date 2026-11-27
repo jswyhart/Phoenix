@@ -746,7 +746,7 @@ async function runCare(check: Check, shot: Shot, settle: Settle, songs: Song[]) 
   await call("meta.tie", { key, source: "" });
   const menu = await albumMenu(key);
   const labels = menu.filter((x): x is { label: string } => !!x && typeof x === "object").map(x => x.label);
-  check("the album menu offers find album info, its info source, the tag editor and Mixview", ["Find album info…", "Info source", "Tag editor…", "Mixview", "Start Smart DJ"].every(l => labels.includes(l)), labels.join(", "));
+  check("the album menu offers find album info, its info source, the tag editor and Mixview", ["Find album info…", "Info source", "Edit file tags…", "Edit search tags (#) for all songs…", "Add to phone sync list", "Mixview", "Start Smart DJ"].every(l => labels.includes(l)), labels.join(", "));
   settings.showCategory("software");
 }
 

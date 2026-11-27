@@ -145,7 +145,8 @@ export async function tagEditor(ids: number[]): Promise<TagEditor | null> {
 
   const fix = (label: string, run: () => void, tip: string) => { const b = pill(label, () => { (document.activeElement as HTMLElement | null)?.blur(); run(); }); b.title = tip; b.style.marginBottom = "6px"; return b; };
   d.body.append(
-    h("div.h2", `tag editor  ·  ${rows.length} song${rows.length === 1 ? "" : "s"}`),
+    h("div.h2", `file tags  ·  ${rows.length} song${rows.length === 1 ? "" : "s"}`),
+    h("div.note", { style: { margin: "0 0 8px 0" } }, "File tags are saved into the music files themselves, so they go wherever the files go. (Search tags, Phoenix's own #labels, are kept in its library: right-click → Edit search tags.)"),
     h("div", { style: { display: "flex", flexWrap: "wrap", alignItems: "center", flex: "none" } },
       fix("NUMBER TRACKS", editor.numberTracks, "Numbers the songs 1, 2, 3… in the order shown"),
       fix("TIDY CAPITALS", editor.tidy, "Title Case for titles and albums"),
@@ -201,9 +202,9 @@ async function editTags(ids: number[], what: string) {
   const t = await call<{ common: string[]; all: { tag: string; count: number }[] }>("owntags.get", { ids });
   const d = openDialog(560);
   const box = h("input", { type: "text", value: t.common.join(", "), spellcheck: false });
-  let hint = `Tags for ${what}. Separate them with commas. Search finds them by plain words or as #tag (use #"two words" for a tag with a space).`;
+  let hint = `Search tags for ${what}: Phoenix's own labels, kept in its library and not written into the files (for the files' own title, artist, genre and so on, use Edit file tags). Separate them with commas. Search finds them by plain words or as #tag (use #"two words" for a tag with a space).`;
   if (ids.length > 1) hint += " Tags you add go on every selected item; tags you delete from the box come off every selected item.";
-  d.body.append(h("div.h2", "tags"), h("div.note", hint), box,
+  d.body.append(h("div.h2", "search tags"), h("div.note", hint), box,
     h(t.all.length ? "div.cap" : "div.hidden", { style: { margin: "14px 0 6px 0" } }, "YOUR TAGS"),
     h("div", { style: { display: "flex", flexWrap: "wrap", maxHeight: "120px", overflowY: "auto" } }, ...t.all.map(x => {
       const b = pill(`${x.tag}  ${x.count}`, () => {

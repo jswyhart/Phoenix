@@ -121,7 +121,7 @@ public class TagEditorWindow : Window
     public TagEditorWindow(IEnumerable<Track> tracks)
     {
         _rows = new ObservableCollection<TagRow>(tracks.Select(t => new TagRow(t)));
-        Title = $"Tag editor  ·  {_rows.Count} song{(_rows.Count == 1 ? "" : "s")}";
+        Title = $"File tags  ·  {_rows.Count} song{(_rows.Count == 1 ? "" : "s")}  ·  saved into the music files";
         Width = 1240; Height = 700; MinWidth = 900; MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -205,6 +205,11 @@ public class TagEditorWindow : Window
         var dock = new DockPanel();
         DockPanel.SetDock(fixes, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
+        var about = new TextBlock { Text = "File tags are saved into the music files themselves, so they go wherever the files go. (Search tags, Phoenix's own #labels, are kept in its library: right-click → Edit search tags.)",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
+        about.SetResourceReference(TextBlock.ForegroundProperty, "FgDim");
+        DockPanel.SetDock(about, Dock.Top);
+        dock.Children.Add(about);
         dock.Children.Add(fixes);
         dock.Children.Add(bottom);
         dock.Children.Add(_grid);

@@ -121,8 +121,8 @@ export function songMenu(songs: Song[], context: Song[] | null): MenuEntry[] {
       { label: "Clear rating", action: () => call("rate", { ids, rating: 0 }) },
     ] },
     { label: songs.length === 1 ? "Edit song info…" : `Edit info for ${songs.length} songs…`, action: () => menuHooks.editSongs(ids, false) },
-    { label: songs.length === 1 ? "Edit tags…" : `Edit tags for ${songs.length} songs…`, action: () => menuHooks.editTags(ids, songs.length === 1 ? `“${songs[0].title}”` : `${songs.length} songs`) },
-    { label: "Tag editor…", action: () => menuHooks.tagEditor(ids) },
+    { label: songs.length === 1 ? "Edit file tags…" : `Edit file tags for ${songs.length} songs…`, action: () => menuHooks.tagEditor(ids) },
+    { label: songs.length === 1 ? "Edit search tags (#)…" : `Edit search tags (#) for ${songs.length} songs…`, action: () => menuHooks.editTags(ids, songs.length === 1 ? `“${songs[0].title}”` : `${songs.length} songs`) },
     { label: "Find album info…", action: async () => { const key = await call<string | null>("track.albumKey", { id: ids[0] }); if (key) menuHooks.discogs(key); } },
     { label: "Mixview", action: async () => { const key = await call<string | null>("track.albumKey", { id: ids[0] }); menuHooks.mixview(key, songs[0].artist); } },
     songs.length === 1 && songs[0].local && shell.canIdentify ? { label: "Identify by sound…", action: () => menuHooks.identify(ids[0], songs[0].title) } : null,
@@ -146,8 +146,8 @@ export async function albumMenu(key: string): Promise<MenuEntry[]> {
     { label: "Find album info…", action: () => menuHooks.discogs(key) },
     source,
     { label: "Edit album info…", action: () => menuHooks.editSongs(a.ids, true) },
-    { label: "Tag editor…", action: () => menuHooks.tagEditor(a.ids) },
-    { label: "Edit tags for all songs…", action: () => menuHooks.editTags(a.ids, `“${a.title}” (${a.ids.length} songs)`) },
+    { label: "Edit file tags…", action: () => menuHooks.tagEditor(a.ids) },
+    { label: "Edit search tags (#) for all songs…", action: () => menuHooks.editTags(a.ids, `“${a.title}” (${a.ids.length} songs)`) },
   ];
 }
 
@@ -164,6 +164,6 @@ export async function artistMenu(artist: string): Promise<MenuEntry[]> {
     { label: pinned ? "Unpin from quickplay" : "Pin to quickplay", action: () => call("pin.toggle", { kind: "artist", key: artist, title: artist }) },
     { label: "Mixview", action: () => menuHooks.mixview(null, artist) },
     "-",
-    { label: "Tag editor…", disabled: ids.length === 0, action: () => menuHooks.tagEditor(ids) },
+    { label: "Edit file tags…", disabled: ids.length === 0, action: () => menuHooks.tagEditor(ids) },
   ];
 }

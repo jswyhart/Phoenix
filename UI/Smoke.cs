@@ -874,6 +874,15 @@ public static partial class Smoke
         await ShotWindow("17-mini", new MiniWindow());
         foreach (var menu in new[] { Menus.ForTracks(lib.Albums[0].Tracks.Take(1).ToList()), Menus.ForAlbum(lib.Albums[0]), Menus.ForArtist(lib.Albums[0].Artist) })
             Check("context menu builds", menu.Items.Count >= 5);
+        {
+            static List<string> Labels(System.Windows.Controls.ContextMenu m) => m.Items.OfType<System.Windows.Controls.MenuItem>().Select(i => i.Header as string ?? "").ToList();
+            var song = Labels(Menus.ForTracks(lib.Albums[0].Tracks.Take(1).ToList()));
+            var albumMenu = Labels(Menus.ForAlbum(lib.Albums[0]));
+            var artistMenu = Labels(Menus.ForArtist(lib.Albums[0].Artist));
+            Check("songs, albums and artists can be added to the phone sync list from their menus", new[] { song, albumMenu, artistMenu }.All(l => l.Contains("Add to phone sync list")));
+            Check("the menus tell file tags and search tags apart", song.Contains("Edit file tags…") && song.Contains("Edit search tags (#)…") && albumMenu.Contains("Edit file tags…")
+                && albumMenu.Contains("Edit search tags (#) for all songs…") && !song.Concat(albumMenu).Any(l => l is "Tag editor…" or "Edit tags…"), string.Join(", ", song));
+        }
 
         // --- live Discogs probe (public release endpoint, no token): informational only ---
         try

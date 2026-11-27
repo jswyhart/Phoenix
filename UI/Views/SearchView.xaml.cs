@@ -90,11 +90,11 @@ public partial class SearchView : UserControl
         {
             case VideoItem v:
                 m.Items.Add(Menus.Item("Play", () => App.Player.Play(new[] { Player.From(v) })));
-                m.Items.Add(Menus.Item("Edit tags…", () => new EditTagsDialog(Library.VideoTag, new[] { v.Id }, $"“{v.Title}”").ShowDialog()));
+                m.Items.Add(Menus.SearchTags("Edit search tags (#)…", () => new EditTagsDialog(Library.VideoTag, new[] { v.Id }, $"“{v.Title}”").ShowDialog()));
                 break;
             case Book b:
                 m.Items.Add(Menus.Item(b.IsAudio ? "Listen" : "Read", () => BooksView.OpenBook(b)));
-                m.Items.Add(Menus.Item("Edit tags…", () => new EditTagsDialog(Library.BookTag, new[] { b.Id }, $"“{b.Title}”").ShowDialog()));
+                m.Items.Add(Menus.SearchTags("Edit search tags (#)…", () => new EditTagsDialog(Library.BookTag, new[] { b.Id }, $"“{b.Title}”").ShowDialog()));
                 break;
         }
         Menus.Open(m, OtherList);

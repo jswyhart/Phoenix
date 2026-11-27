@@ -237,7 +237,7 @@ public partial class VideosView : UserControl
         m.Items.Add(Menus.Item("Add to now playing", () => App.Player.Enqueue(videos.Select(Player.From))));
         m.Items.Add(new Separator());
         m.Items.Add(Menus.Item(videos.Count == 1 ? "Edit video info…" : $"Edit info for {videos.Count} videos…", () => new EditVideoDialog(videos).ShowDialog()));
-        m.Items.Add(Menus.Item(videos.Count == 1 ? "Edit tags…" : $"Edit tags for {videos.Count} videos…",
+        m.Items.Add(Menus.SearchTags(videos.Count == 1 ? "Edit search tags (#)…" : $"Edit search tags (#) for {videos.Count} videos…",
             () => new EditTagsDialog(Library.VideoTag, videos.Select(v => v.Id), videos.Count == 1 ? $"“{videos[0].Title}”" : $"{videos.Count} videos").ShowDialog()));
         if (videos.Count == 1 && videos[0].Source == "local")
             m.Items.Add(Menus.Item("Show in File Explorer", () => System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{videos[0].SourceId}\"")));

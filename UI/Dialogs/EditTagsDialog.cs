@@ -22,7 +22,7 @@ public class EditTagsDialog : Window
         _ids = ids.Distinct().ToList();
         _before = App.Lib.CommonTags(kind, _ids);
         Owner = App.Win;
-        Title = "Edit tags";
+        Title = "Search tags";
         Width = 560;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -34,8 +34,9 @@ public class EditTagsDialog : Window
         SetResourceReference(ForegroundProperty, "Fg");
 
         var panel = new StackPanel { Margin = new Thickness(22) };
-        panel.Children.Add(new TextBlock { Text = "tags", Style = (Style)FindResource("H2") });
-        var hint = $"Tags for {what}. Separate them with commas. Search finds them by plain words or as #tag (use #\"two words\" for a tag with a space).";
+        panel.Children.Add(new TextBlock { Text = "search tags", Style = (Style)FindResource("H2") });
+        var hint = $"Search tags for {what}: Phoenix's own labels, kept in its library and not written into the files (for the files' own title, artist, genre and so on, use Edit file tags). "
+                 + "Separate them with commas. Search finds them by plain words or as #tag (use #\"two words\" for a tag with a space).";
         if (_ids.Count > 1) hint += " Tags you add go on every selected item; tags you delete from the box come off every selected item.";
         panel.Children.Add(new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10), Foreground = (System.Windows.Media.Brush)FindResource("FgDim") });
         _box.Text = string.Join(", ", _before);

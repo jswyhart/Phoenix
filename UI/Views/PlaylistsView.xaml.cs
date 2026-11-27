@@ -105,6 +105,7 @@ public partial class PlaylistsView : UserControl
         m.Items.Add(Menus.Item("Play", () => Menus.Play(_songs)));
         m.Items.Add(Menus.Item("Add to now playing", () => Menus.Enqueue(_songs)));
         m.Items.Add(Menus.Item("Add to burn list", () => { foreach (var t in _songs) App.BurnList.Add(t); }));
+        if (row.Name != PhoneView.ListName) m.Items.Add(Menus.AddToPhone(() => _songs));
         if (row.Smart is { } sp)
         {
             m.Items.Add(new Separator());

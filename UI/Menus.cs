@@ -96,6 +96,17 @@ public static class Menus
         App.Win.SetStatus($"{App.BurnList.Count} songs on the burn list (collection → disc)");
     });
 
+    /// <summary>"Add to phone sync list": the songs are copied to the phone the next time it syncs.</summary>
+    public static MenuItem AddToPhone(Func<IEnumerable<Track>> tracks) => Item("Add to phone sync list", () => App.Win.DropOn("phone", tracks().ToList()));
+
+    public const string SearchTagsTip = "Phoenix's own labels, kept in its library (not written into the files). Search finds them as #tag.";
+    public const string FileTagsTip = "Title, artist, album, genre and the rest, saved into the music files themselves.";
+
+    /// <summary>Phoenix's own tags, found by search (#tag), kept in the library.</summary>
+    public static MenuItem SearchTags(string header, Action click) { var mi = Item(header, click); mi.ToolTip = SearchTagsTip; return mi; }
+    /// <summary>The tags inside the music files.</summary>
+    public static MenuItem FileTags(string header, Action click, bool enabled = true) { var mi = Item(header, click, enabled); mi.ToolTip = FileTagsTip; return mi; }
+
     public static MenuItem Item(string header, Action click, bool enabled = true)
     {
         var mi = new MenuItem { Header = header, IsEnabled = enabled };
@@ -136,6 +147,7 @@ public static class Menus
         m.Items.Add(Item("Start Smart DJ", () => SmartDj(tracks[0])));
         m.Items.Add(AddToPlaylist(() => tracks));
         m.Items.Add(AddToBurnList(() => tracks));
+        m.Items.Add(AddToPhone(() => tracks));
         m.Items.Add(new Separator());
         var rate = new MenuItem { Header = "Rate" };
         rate.Items.Add(Item("Like", () => Rate(tracks, 1)));
@@ -143,9 +155,9 @@ public static class Menus
         rate.Items.Add(Item("Clear rating", () => Rate(tracks, 0)));
         m.Items.Add(rate);
         m.Items.Add(Item(tracks.Count == 1 ? "Edit song info…" : $"Edit info for {tracks.Count} songs…", () => new EditInfoDialog(tracks, false).ShowDialog()));
-        m.Items.Add(Item(tracks.Count == 1 ? "Edit tags…" : $"Edit tags for {tracks.Count} songs…",
+        m.Items.Add(FileTags(tracks.Count == 1 ? "Edit file tags…" : $"Edit file tags for {tracks.Count} songs…", () => new TagEditorWindow(tracks).ShowDialog()));
+        m.Items.Add(SearchTags(tracks.Count == 1 ? "Edit search tags (#)…" : $"Edit search tags (#) for {tracks.Count} songs…",
             () => new EditTagsDialog(Library.SongTag, tracks.Select(t => t.Id), tracks.Count == 1 ? $"“{tracks[0].Title}”" : $"{tracks.Count} songs").ShowDialog()));
-        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(tracks).ShowDialog()));
         var album = App.Lib.Albums.FirstOrDefault(a => a.Key == tracks[0].AlbumKey);
         if (album != null) m.Items.Add(Item("Find album info…", () => new DiscogsDialog(album).ShowDialog()));
         if (album != null) m.Items.Add(Item("Mixview", () => MixviewPage.Open(album, album.Artist)));
@@ -163,14 +175,15 @@ public static class Menus
         m.Items.Add(Item("Start Smart DJ", () => SmartDj(Pick(a.Tracks)), a.Tracks.Count > 0));
         m.Items.Add(AddToPlaylist(() => a.Tracks));
         m.Items.Add(AddToBurnList(() => a.Tracks));
+        m.Items.Add(AddToPhone(() => a.Tracks));
         m.Items.Add(Item(App.Lib.IsPinned("album", a.Key) ? "Unpin from quickplay" : "Pin to quickplay", () => App.Lib.TogglePin("album", a.Key, a.Title)));
         m.Items.Add(Item("Mixview", () => MixviewPage.Open(a, a.Artist)));
         m.Items.Add(new Separator());
         m.Items.Add(Item("Find album info…", () => new DiscogsDialog(a).ShowDialog()));
         m.Items.Add(InfoSource(a));
         m.Items.Add(Item("Edit album info…", () => new EditInfoDialog(a.Tracks, true).ShowDialog()));
-        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(a.Tracks).ShowDialog()));
-        m.Items.Add(Item("Edit tags for all songs…", () => new EditTagsDialog(Library.SongTag, a.Tracks.Select(t => t.Id), $"“{a.Title}” ({a.Tracks.Count} songs)").ShowDialog()));
+        m.Items.Add(FileTags("Edit file tags…", () => new TagEditorWindow(a.Tracks).ShowDialog()));
+        m.Items.Add(SearchTags("Edit search tags (#) for all songs…", () => new EditTagsDialog(Library.SongTag, a.Tracks.Select(t => t.Id), $"“{a.Title}” ({a.Tracks.Count} songs)").ShowDialog()));
         return m;
     }
 
@@ -183,10 +196,11 @@ public static class Menus
         m.Items.Add(Item("Start Smart DJ", () => SmartDj(Pick(tracks)), tracks.Count > 0));
         m.Items.Add(Item("Add to now playing", () => Enqueue(tracks)));
         m.Items.Add(AddToPlaylist(() => tracks));
+        m.Items.Add(AddToPhone(() => tracks));
         m.Items.Add(Item(App.Lib.IsPinned("artist", artist) ? "Unpin from quickplay" : "Pin to quickplay", () => App.Lib.TogglePin("artist", artist, artist)));
         m.Items.Add(Item("Mixview", () => MixviewPage.Open(null, artist)));
         m.Items.Add(new Separator());
-        m.Items.Add(Item("Tag editor…", () => new TagEditorWindow(tracks).ShowDialog(), tracks.Count > 0));
+        m.Items.Add(FileTags("Edit file tags…", () => new TagEditorWindow(tracks).ShowDialog(), tracks.Count > 0));
         return m;
     }
 }

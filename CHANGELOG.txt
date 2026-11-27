@@ -5,6 +5,20 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
+1.0.4 — 2026-11-26
+------------------
+
+New
+- Windows: "Add to phone sync list" when you right-click songs, albums, artists or playlists
+  (besides dragging them to the phone icon).
+
+Changed
+- The two kinds of tags are told apart: "Edit file tags…" (title, artist, genre and so on,
+  saved into the music files; it was "Tag editor") and "Edit search tags (#)…" (Phoenix's own
+  labels, kept in its library and found by search as #tag; it was "Edit tags"). Each window says
+  which kind it is and where its tags are kept.
+
+
 1.0.3 — 2026-11-26
 ------------------
 
