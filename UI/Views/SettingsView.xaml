@@ -61,36 +61,36 @@
 
                     <TextBlock Style="{StaticResource Label}" Text="MUSIC FOLDERS"/>
                     <ListBox x:Name="MusicFolders" Height="84" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="music" Click="AddFolder_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="music" Click="RemoveFolder_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="music" Click="AddFolder_Click" Margin="0,0,10,8"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="music" Click="RemoveFolder_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
 
                     <TextBlock Style="{StaticResource Label}" Text="VIDEO FOLDERS"/>
                     <ListBox x:Name="VideoFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="video" Click="AddFolder_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="video" Click="RemoveFolder_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="video" Click="AddFolder_Click" Margin="0,0,10,8"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="video" Click="RemoveFolder_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
 
                     <TextBlock Style="{StaticResource Label}" Text="PICTURE FOLDERS"/>
                     <ListBox x:Name="PictureFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="picture" Click="AddFolder_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="picture" Click="RemoveFolder_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="picture" Click="AddFolder_Click" Margin="0,0,10,8"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="picture" Click="RemoveFolder_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
 
                     <TextBlock Style="{StaticResource Label}" Text="BOOK FOLDERS (AUDIOBOOKS, EBOOKS AND COMICS)"/>
                     <ListBox x:Name="BookFolders" Height="64" BorderThickness="1" BorderBrush="{DynamicResource Line}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="book" Click="AddFolder_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="book" Click="RemoveFolder_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="ADD FOLDER" Tag="book" Click="AddFolder_Click" Margin="0,0,10,8"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE" Tag="book" Click="RemoveFolder_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-                        <Button x:Name="RescanBtn" Style="{StaticResource PillBtn}" Content="RESCAN COLLECTION NOW" Click="Rescan_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="FIND DUPLICATES AND MISSING FILES" Click="Care_Click" ToolTip="The same song stored twice, and songs whose files have gone"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,16,0,0">
+                        <Button x:Name="RescanBtn" Style="{StaticResource PillBtn}" Content="RESCAN COLLECTION NOW" Click="Rescan_Click" Margin="0,0,10,8"/>
+                        <Button Style="{StaticResource PillBtn}" Content="FIND DUPLICATES AND MISSING FILES" Click="Care_Click" ToolTip="The same song stored twice, and songs whose files have gone" Margin="0,0,10,8"/>
+                    </WrapPanel>
                     <TextBlock x:Name="ScanStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
 
@@ -162,12 +162,12 @@
                         <ComboBox x:Name="ThemeBox" Width="260" SelectionChanged="ThemeBox_Changed"/>
                         <Button Style="{StaticResource PillBtn}" Content="CUSTOMISE" Margin="10,0,0,0" Click="ThemeDesign_Click" ToolTip="Change this theme's colours and fonts, or make a new theme from it"/>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <WrapPanel Margin="0,8,0,0">
                         <Button Style="{StaticResource TextBtn}" Content="import" Margin="0,0,16,0" Click="ThemeImport_Click" ToolTip="Add a theme file someone gave you"/>
                         <Button x:Name="ThemeExportBtn" Style="{StaticResource TextBtn}" Content="export" Margin="0,0,16,0" Click="ThemeExport_Click" ToolTip="Save this theme as a file to share"/>
                         <Button x:Name="ThemeDeleteBtn" Style="{StaticResource TextBtn}" Content="delete" Margin="0,0,16,0" Click="ThemeDelete_Click" ToolTip="Remove this theme (Phoenix goes back to its base, light or dark)"/>
-                        <Button Style="{StaticResource TextBtn}" Content="open themes folder" Click="ThemeFolder_Click" ToolTip="Your themes are small text files you can also edit by hand: Phoenix shows a change as soon as you save it"/>
-                    </StackPanel>
+                        <Button Style="{StaticResource TextBtn}" Content="open themes folder" Click="ThemeFolder_Click" ToolTip="Your themes are small text files you can also edit by hand: Phoenix shows a change as soon as you save it" Margin="0,0,10,8"/>
+                    </WrapPanel>
                     <Grid x:Name="SystemThemes" Margin="0,10,0,0" Visibility="Collapsed">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -178,10 +178,10 @@
                     </Grid>
                     <TextBlock x:Name="ThemeNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="BACKGROUND PICTURE" Margin="0,22,0,3"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="CHOOSE PICTURE" Click="BackPick_Click" ToolTip="A picture of your own behind Phoenix's window"/>
+                    <WrapPanel Margin="0,4,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="CHOOSE PICTURE" Click="BackPick_Click" ToolTip="A picture of your own behind Phoenix's window" Margin="0,0,10,8"/>
                         <Button x:Name="BackRemoveBtn" Style="{StaticResource TextBtn}" Content="remove" Click="BackRemove_Click" Margin="6,0,0,0"/>
-                    </StackPanel>
+                    </WrapPanel>
                     <StackPanel x:Name="BackStrengthRow" Orientation="Horizontal" Margin="0,10,0,0">
                         <TextBlock Text="how much it shows" Foreground="{DynamicResource FgDim}" VerticalAlignment="Center" Width="130"/>
                         <Slider x:Name="BackStrength" Width="220" Minimum="5" Maximum="90" SmallChange="5" LargeChange="10" VerticalAlignment="Center" ValueChanged="BackStrength_Changed"/>
@@ -283,10 +283,10 @@
                     </DockPanel>
                     <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0" Text="Each series gets its own folder there, with episodes named by date and title, so other players and devices can use them too. Changing the folder affects new downloads; episodes already downloaded stay where they are."/>
                     <TextBlock x:Name="PodcastUsage" Foreground="{DynamicResource FgDim}" Margin="0,10,0,0"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="OPEN FOLDER" Margin="0" Click="PodcastFolderOpen_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="REMOVE ALL DOWNLOADS" Margin="10,0,0,0" Click="PodcastRemoveAll_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="OPEN FOLDER" Margin="0,0,10,8" Click="PodcastFolderOpen_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="REMOVE ALL DOWNLOADS" Margin="0,0,10,8" Click="PodcastRemoveAll_Click"/>
+                    </WrapPanel>
                 </StackPanel>
 
                 <StackPanel x:Name="PanelTranslation" Visibility="Collapsed">
@@ -353,20 +353,20 @@
                     <TextBlock Style="{StaticResource Label}" Text="DATA FOLDER"/>
                     <TextBox x:Name="StorageBox" IsReadOnly="True"/>
                     <TextBlock x:Name="StorageUsage" Foreground="{DynamicResource FgDim}" Margin="0,8,0,0"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button x:Name="StorageChangeBtn" Style="{StaticResource PillBtn}" Content="MOVE TO ANOTHER FOLDER" Margin="0" Click="StorageChange_Click"/>
-                        <Button x:Name="StorageDefaultBtn" Style="{StaticResource PillBtn}" Content="BACK TO THE STANDARD FOLDER" Margin="10,0,0,0" Click="StorageDefault_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="OPEN" Margin="10,0,0,0" Click="StorageOpen_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button x:Name="StorageChangeBtn" Style="{StaticResource PillBtn}" Content="MOVE TO ANOTHER FOLDER" Margin="0,0,10,8" Click="StorageChange_Click"/>
+                        <Button x:Name="StorageDefaultBtn" Style="{StaticResource PillBtn}" Content="BACK TO THE STANDARD FOLDER" Margin="0,0,10,8" Click="StorageDefault_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="OPEN" Margin="0,0,10,8" Click="StorageOpen_Click"/>
+                    </WrapPanel>
                     <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0" Text="Moving copies everything to the new folder, restarts Phoenix from there and then removes the old copies. If the folder you pick already holds a Phoenix library, that library is used instead and nothing is copied."/>
                     <TextBlock x:Name="StorageStatus" Style="{StaticResource Status}"/>
                     <TextBlock Style="{StaticResource Label}" Text="BACKUP AND RESTORE" Margin="0,24,0,3"/>
                     <TextBlock Style="{StaticResource Note}" Text="A backup is one file holding your playlists, likes, play counts and the play log, bookmarks and reading progress, podcasts, pins, tags, imported lyrics and your settings. Your music, videos, pictures and books themselves are not in it. Sign-ins and keys in a backup only work again for the same Windows user."/>
                     <CheckBox x:Name="BackupCovers" Content="Include album covers (a much larger file)" Margin="0,2,0,0"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button Style="{StaticResource PillBtn}" Content="BACK UP NOW…" Margin="0" Click="Backup_Click"/>
-                        <Button Style="{StaticResource PillBtn}" Content="RESTORE FROM A BACKUP…" Margin="10,0,0,0" Click="Restore_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Style="{StaticResource PillBtn}" Content="BACK UP NOW…" Margin="0,0,10,8" Click="Backup_Click"/>
+                        <Button Style="{StaticResource PillBtn}" Content="RESTORE FROM A BACKUP…" Margin="0,0,10,8" Click="Restore_Click"/>
+                    </WrapPanel>
                     <TextBlock x:Name="BackupStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
 
@@ -399,10 +399,10 @@
                         <TextBlock Text="secret" Foreground="{DynamicResource FgFaint}" FontSize="12" VerticalAlignment="Center" Width="60"/>
                         <PasswordBox x:Name="LfmSecret" Width="300" LostFocus="ScrobbleKeys_Lost"/>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button x:Name="LfmConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT…" Margin="0" Click="LfmConnect_Click"/>
-                        <Button x:Name="LfmSignOutBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Margin="10,0,0,0" Click="LfmSignOut_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button x:Name="LfmConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT…" Margin="0,0,10,8" Click="LfmConnect_Click"/>
+                        <Button x:Name="LfmSignOutBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Margin="0,0,10,8" Click="LfmSignOut_Click"/>
+                    </WrapPanel>
                     <TextBlock x:Name="LfmStatus" Style="{StaticResource Status}"/>
                     <TextBlock x:Name="ScrobbleResult" Foreground="{DynamicResource FgDim}" Margin="0,14,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
@@ -415,12 +415,12 @@
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Asks GitHub for Phoenix's public list of releases. Nothing about you or your library is sent."/>
                     <CheckBox x:Name="AutoUpdateOn" Content="Update by itself" Margin="0,4,0,0" Click="UpdatesOn_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="On: a new version is downloaded when it is found and installed when you close Phoenix, without asking; the next start is the new version. Off: Phoenix only tells you, and you choose when to install."/>
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button x:Name="UpdateCheckBtn" Style="{StaticResource PillBtn}" Content="CHECK NOW" Margin="0" Click="UpdateCheck_Click"/>
-                        <Button x:Name="UpdateInstallBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD AND INSTALL" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateInstall_Click"/>
-                        <Button x:Name="UpdatePageBtn" Style="{StaticResource PillBtn}" Content="OPEN THE RELEASE PAGE" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdatePage_Click"/>
-                        <Button x:Name="UpdateSkipBtn" Style="{StaticResource PillBtn}" Content="SKIP THIS VERSION" Margin="10,0,0,0" Visibility="Collapsed" Click="UpdateSkip_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="UpdateCheckBtn" Style="{StaticResource PillBtn}" Content="CHECK NOW" Margin="0,0,10,8" Click="UpdateCheck_Click"/>
+                        <Button x:Name="UpdateInstallBtn" Style="{StaticResource PillBtn}" Content="DOWNLOAD AND INSTALL" Margin="0,0,10,8" Visibility="Collapsed" Click="UpdateInstall_Click"/>
+                        <Button x:Name="UpdatePageBtn" Style="{StaticResource PillBtn}" Content="OPEN THE RELEASE PAGE" Margin="0,0,10,8" Visibility="Collapsed" Click="UpdatePage_Click"/>
+                        <Button x:Name="UpdateSkipBtn" Style="{StaticResource PillBtn}" Content="SKIP THIS VERSION" Margin="0,0,10,8" Visibility="Collapsed" Click="UpdateSkip_Click"/>
+                    </WrapPanel>
                     <TextBlock x:Name="UpdateStatus" Style="{StaticResource Status}"/>
                     <TextBlock x:Name="UpdateNotes" Foreground="{DynamicResource FgDim}" TextWrapping="Wrap" Margin="0,12,0,0"/>
                     <TextBlock Style="{StaticResource Label}" Text="GOING BACK" Margin="0,22,0,3"/>
@@ -504,11 +504,11 @@
                             <PasswordBox x:Name="JfPassword"/>
                         </StackPanel>
                     </Grid>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button x:Name="JfConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="JfConnect_Click"/>
-                        <Button x:Name="JfSyncBtn" Style="{StaticResource PillBtn}" Content="SYNC NOW" Click="JfSync_Click"/>
-                        <Button x:Name="JfDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="JfDisconnect_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button x:Name="JfConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="JfConnect_Click" Margin="0,0,10,8"/>
+                        <Button x:Name="JfSyncBtn" Style="{StaticResource PillBtn}" Content="SYNC NOW" Click="JfSync_Click" Margin="0,0,10,8"/>
+                        <Button x:Name="JfDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="JfDisconnect_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
                     <TextBlock x:Name="JfStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
 
@@ -524,10 +524,10 @@
                     <TextBox x:Name="PlexUrl"/>
                     <TextBlock Style="{StaticResource Label}" Text="TOKEN"/>
                     <PasswordBox x:Name="PlexToken"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button x:Name="PlexConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="PlexConnect_Click"/>
-                        <Button x:Name="PlexDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="PlexDisconnect_Click"/>
-                    </StackPanel>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button x:Name="PlexConnectBtn" Style="{StaticResource PillBtn}" Content="CONNECT &amp; SYNC" Click="PlexConnect_Click" Margin="0,0,10,8"/>
+                        <Button x:Name="PlexDisconnectBtn" Style="{StaticResource PillBtn}" Content="DISCONNECT" Click="PlexDisconnect_Click" Margin="0,0,10,8"/>
+                    </WrapPanel>
                     <TextBlock x:Name="PlexStatus" Style="{StaticResource Status}"/>
                 </StackPanel>
             </Grid>

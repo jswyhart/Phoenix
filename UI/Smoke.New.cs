@@ -514,6 +514,21 @@ public static partial class Smoke
             && ((CheckBox)settings.FindName("UpdatesOn")).IsChecked == true && ((CheckBox)settings.FindName("AutoUpdateOn")).IsChecked == false && ((CheckBox)settings.FindName("KeepPreviousOn")).IsChecked == true
             && settings.FindName("RevertBtn") is Button);
         await Shot("37-settings-updates");
+        {
+            // with a new version found, all four buttons show: on a narrow window they wrap onto another line instead of running off the edge
+            var names = new[] { "UpdateCheckBtn", "UpdateInstallBtn", "UpdatePageBtn", "UpdateSkipBtn" };
+            var buttons = names.Select(n => (Button)settings.FindName(n)).ToList();
+            var was = buttons.Select(b => b.Visibility).ToList();
+            foreach (var b in buttons) b.Visibility = Visibility.Visible;
+            var row = buttons[0].Parent as WrapPanel;
+            settings.UpdateLayout();
+            row?.Measure(new Size(420, double.PositiveInfinity));
+            var tall = row?.DesiredSize.Height ?? 0;
+            Check("settings: the update buttons wrap onto another line on a narrow window", row != null && buttons.All(b => b.Parent == row) && tall > buttons[0].ActualHeight * 1.8, $"{tall:0} px tall at 420 px wide");
+            await Shot("37-settings-updates-buttons");
+            for (var i = 0; i < buttons.Count; i++) buttons[i].Visibility = was[i];
+            row?.InvalidateMeasure();
+        }
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);
         settings.ShowCategory("software");
