@@ -15,6 +15,7 @@ Changed
 - Windows: a portable copy (unpacked from the zip) updates itself as well: it fetches the new
   zip, puts its files in place while it runs and starts again. Updating by itself and going back
   one version work for portable copies too.
+- Mac/Linux and Android: no changes besides the version number (released together with Windows).
 
 
 1.0.2 — 2026-11-26
