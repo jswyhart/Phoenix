@@ -313,7 +313,8 @@ public static partial class Smoke
         var release = Updater.Parse(JsonDocument.Parse($$"""
             {"tag_name":"v9.4.1","name":"Phoenix 9.4.1","body":"Notes","html_url":"https://github.com/{{Updater.Repo}}/releases/tag/v9.4.1","draft":false,
              "assets":[{"name":"Phoenix-9.4.1-win-arm64-setup.exe","size":5,"browser_download_url":"https://github.com/{{Updater.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1-win-arm64-setup.exe"},
-                       {"name":"Phoenix-9.4.1-win-x64-setup.exe","size":123,"digest":"sha256:abcd","browser_download_url":"https://github.com/{{Updater.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1-win-x64-setup.exe"}]}
+                       {"name":"Phoenix-9.4.1-win-x64-setup.exe","size":123,"digest":"sha256:abcd","browser_download_url":"https://github.com/{{Updater.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1-win-x64-setup.exe"},
+                       {"name":"Phoenix-9.4.1-win-x64.zip","size":99,"digest":"sha256:ef01","browser_download_url":"https://github.com/{{Updater.Repo}}/releases/download/v9.4.1/Phoenix-9.4.1-win-x64.zip"}]}
             """).RootElement, "x64");
         var elsewhere = Updater.Parse(JsonDocument.Parse("""
             {"tag_name":"v9.9.9","assets":[{"name":"Phoenix-9.9.9-win-x64-setup.exe","size":1,"browser_download_url":"https://downloads.example/Phoenix-9.9.9-win-x64-setup.exe"}]}
@@ -322,6 +323,33 @@ public static partial class Smoke
         Check("a newer release on GitHub is recognised, with the installer for this kind of PC", release is { IsNewer: true, InstallerSize: 123, Sha256: "abcd" } && release.InstallerName.Contains("x64") && release.VersionText == "9.4.1"
             && current is { IsNewer: false } && Updater.ParseVersion("v1.2") == new Version(1, 2, 0), $"{release?.VersionText}: {release?.InstallerName}");
         Check("an installer that is not on Phoenix's own GitHub page is never offered", elsewhere is { InstallerUrl: "" });
+        Check("a portable copy is updated from the release's zip, an installed one from its installer", release != null && release.Package(false) is { Name: "Phoenix-9.4.1-win-x64.zip", Size: 99, Sha256: "ef01" }
+            && release.Package(true).Name.EndsWith("setup.exe") && release.CanUpdate(false) && elsewhere is { ZipUrl: "" } && !elsewhere.CanUpdate(false));
+        // a portable copy swapping in a new zip while its program is running: a running copy of a small program stands in for Phoenix.exe
+        try
+        {
+            var appDir = Path.Combine(work, "portable") + Path.DirectorySeparatorChar;
+            Directory.CreateDirectory(Path.Combine(appDir, "runtimes"));
+            File.Copy(Path.Combine(Environment.SystemDirectory, "PING.EXE"), Path.Combine(appDir, "Phoenix.exe"), true);
+            File.WriteAllText(Path.Combine(appDir, "runtimes", "lib.dll"), "old");
+            File.WriteAllText(Path.Combine(appDir, "mine.old"), "the user's own file");
+            var running = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.Combine(appDir, "Phoenix.exe"), "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!;
+            var zipDir = Path.Combine(work, "zipped", "Phoenix");
+            Directory.CreateDirectory(Path.Combine(zipDir, "runtimes"));
+            File.WriteAllText(Path.Combine(zipDir, "Phoenix.exe"), "new exe");
+            File.WriteAllText(Path.Combine(zipDir, "runtimes", "lib.dll"), "new");
+            File.WriteAllText(Path.Combine(zipDir, "added.txt"), "new");
+            var zipFile = Path.Combine(work, "update.zip");
+            System.IO.Compression.ZipFile.CreateFromDirectory(Path.Combine(work, "zipped"), zipFile);
+            Updater.SwapIn(zipFile, appDir);
+            var swapped = File.ReadAllText(Path.Combine(appDir, "Phoenix.exe")) == "new exe" && File.ReadAllText(Path.Combine(appDir, "runtimes", "lib.dll")) == "new"
+                && File.Exists(Path.Combine(appDir, "added.txt")) && File.Exists(Path.Combine(appDir, "Phoenix.exe.old")) && !Directory.Exists(Path.Combine(appDir, ".update"));
+            running.Kill(); running.WaitForExit();
+            Updater.ClearSwapped(appDir);
+            var cleared = !File.Exists(Path.Combine(appDir, "Phoenix.exe.old")) && !File.Exists(Path.Combine(appDir, "runtimes", "lib.dll.old")) && File.Exists(Path.Combine(appDir, "mine.old"));
+            Check("a portable copy swaps in the new zip while Phoenix is running, and clears away only the old files next time", swapped && cleared, $"swapped {swapped}, cleared {cleared}");
+        }
+        catch (Exception ex) { Check("a portable copy swaps in the new zip while Phoenix is running, and clears away only the old files next time", false, ex.Message); }
         string Rel(string v, bool pre = false) => "{\"tag_name\":\"v" + v + "\",\"prerelease\":" + (pre ? "true" : "false") + ",\"assets\":[{\"name\":\"Phoenix-" + v + "-win-x64-setup.exe\",\"size\":1,\"browser_download_url\":\"https://github.com/"
             + Updater.Repo + "/releases/download/v" + v + "/Phoenix-" + v + "-win-x64-setup.exe\"}]}";
         var published = Updater.ParseAll(JsonDocument.Parse($"[{Rel("2.1.0")},{Rel("2.3.0")},{Rel("2.2.5", pre: true)},{Rel("2.2.0")},{Rel("1.9.0")}]").RootElement, "x64");

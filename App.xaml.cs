@@ -107,6 +107,7 @@ public partial class App : Application
             _ = RefreshCollectionAsync();
             PodcastSync.Start();
             _ = Listening.FlushAsync();   // listens that could not be sent last time
+            Updater.ClearSwapped();   // what a portable copy's last update renamed out of the way
             _ = Updater.DailyAsync();
         }
     }

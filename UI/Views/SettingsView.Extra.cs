@@ -271,12 +271,11 @@ public partial class SettingsView
     void ShowRevert()
     {
         // updating by itself needs the daily look, and an installed copy to update
-        AutoUpdateOn.IsEnabled = S.CheckUpdates && Updater.IsInstalled;
-        RevertBtn.IsEnabled = Updater.IsInstalled;
+        AutoUpdateOn.IsEnabled = S.CheckUpdates;
+        RevertBtn.IsEnabled = true;
         var kept = Updater.Kept;
         RevertBtn.Content = kept != null ? $"GO BACK TO {kept.Value.Version}" : "GO BACK ONE VERSION";
-        RevertStatus.Text = !Updater.IsInstalled ? "This is a portable copy: to update or go back, unpack another version's zip over it."
-            : Updater.Waiting is { } w ? $"Phoenix {w.Version} is downloaded and will be installed when you close Phoenix."
+        RevertStatus.Text = Updater.Waiting is { } w ? $"Phoenix {w.Version} is downloaded and will be installed when you close Phoenix."
             : kept != null ? $"Phoenix {kept.Value.Version} is kept and can be put back without downloading."
             : S.UpdateSkipped != "" ? $"You went back from, or skipped, {S.UpdateSkipped}: it will not be installed by itself. CHECK NOW still offers it." : "";
     }
@@ -285,7 +284,7 @@ public partial class SettingsView
     {
         var to = Updater.Kept?.Version;
         var text = (to != null ? $"Go back to Phoenix {to}?" : "Go back to the version before this one? It is downloaded from Phoenix's releases on GitHub.")
-                   + $" Phoenix closes and the earlier version's installer runs. Your library and settings stay as they are. Phoenix {Updater.CurrentText} will not be installed again by itself.";
+                   + $" It is put in place by itself and Phoenix starts again. Your library and settings stay as they are. Phoenix {Updater.CurrentText} will not be installed again by itself.";
         if (MessageBox.Show(App.Win, text, "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         RevertBtn.IsEnabled = false;
         try { await Updater.RevertAsync(status => Dispatcher.BeginInvoke(() => RevertStatus.Text = status)); }
@@ -295,13 +294,13 @@ public partial class SettingsView
     void ShowUpdate(Updater.Release? release, bool checkedNow)
     {
         var newer = release is { IsNewer: true };
-        UpdateInstallBtn.Visibility = newer && Updater.IsInstalled && release!.InstallerUrl != "" ? Visibility.Visible : Visibility.Collapsed;
+        UpdateInstallBtn.Visibility = newer && release!.CanUpdate() ? Visibility.Visible : Visibility.Collapsed;
         UpdatePageBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
         UpdateSkipBtn.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
         UpdateNotes.Text = newer ? release!.Notes.Trim() : "";
         UpdateNotes.Visibility = UpdateNotes.Text == "" ? Visibility.Collapsed : Visibility.Visible;   // no empty gap when there is nothing to say
         if (newer)
-            UpdateStatus.Text = $"Phoenix {release!.VersionText} is available." + (Updater.IsInstalled ? "" : "  This is a portable copy: download the new zip from the release page and unpack it over this one.");
+            UpdateStatus.Text = $"Phoenix {release!.VersionText} is available." + (release.CanUpdate() ? "  INSTALL puts it in place by itself and starts Phoenix again." : "  This release has nothing for this kind of PC yet: see the release page.");
         else if (checkedNow) UpdateStatus.Text = release == null ? "No release has been published yet." : $"You have the newest version ({Updater.CurrentText}).";
         else UpdateStatus.Text = "";
     }
@@ -332,8 +331,7 @@ public partial class SettingsView
                 try { await Updater.KeepCurrentAsync(); } catch { }   // not being able to keep it does not stop the update
             }
             var file = await Updater.DownloadAsync(release, done => Dispatcher.BeginInvoke(() => UpdateStatus.Text = $"downloading Phoenix {release.VersionText}… {done:P0}"));
-            UpdateStatus.Text = "starting the installer…";
-            App.Settings.Save();
+            UpdateStatus.Text = Updater.IsInstalled ? "installing… Phoenix starts again when it's done" : "putting it in place…";
             Updater.Install(file);
         }
         catch (Exception ex) { UpdateStatus.Text = "couldn't update: " + ex.Message; UpdateInstallBtn.IsEnabled = true; }

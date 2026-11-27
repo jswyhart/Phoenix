@@ -5,6 +5,18 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
+1.0.3 — 2026-11-26
+------------------
+
+Changed
+- Windows: updates install by themselves. INSTALL (settings → updates) downloads the new version,
+  runs its installer with no wizard to click through and starts Phoenix again when it's done.
+  Going back one version works the same way.
+- Windows: a portable copy (unpacked from the zip) updates itself as well: it fetches the new
+  zip, puts its files in place while it runs and starts again. Updating by itself and going back
+  one version work for portable copies too.
+
+
 1.0.2 — 2026-11-26
 ------------------
 

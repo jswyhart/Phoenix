@@ -1,6 +1,6 @@
 ; Phoenix for Windows: setup wizard. Built by build.py (which passes Arch, Version and SourceDir).
 #ifndef Version
-  #define Version "1.0.2"
+  #define Version "1.0.3"
 #endif
 #ifndef Arch
   #define Arch "x64"
@@ -66,12 +66,22 @@ Name: "{autodesktop}\Phoenix"; Filename: "{app}\Phoenix.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Phoenix.exe"; Description: "Start Phoenix"; Flags: nowait postinstall skipifsilent
+; Phoenix updating itself runs this silently with /RELAUNCH: start the new version again (as the user, not as admin)
+Filename: "{app}\Phoenix.exe"; Flags: nowait runasoriginaluser; Check: Relaunch
 
 [UninstallDelete]
 ; the library, settings and covers in %LocalAppData%\Phoenix are the user's own and are kept on uninstall
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+function Relaunch: Boolean;
+var i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/RELAUNCH') = 0 then Result := True;
+end;
+
 // The ebook reader uses the Microsoft Edge WebView2 Runtime, which Windows 11 includes.
 function WebView2Installed: Boolean;
 var v: String;
