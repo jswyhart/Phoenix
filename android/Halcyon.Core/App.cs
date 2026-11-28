@@ -59,6 +59,40 @@ public static class App
         Player = new Player(engine);
     }
 
+    /// <summary>
+    /// Pick up where you left off: the songs in the queue, which one was playing and how far in are kept, to be put
+    /// back (paused) at the next start. Videos, podcasts, books and radio keep their own places.
+    /// </summary>
+    public static void RememberQueue()
+    {
+        var s = Settings;
+        var cur = Player?.Current;
+        if (s == null || cur == null) return;   // nothing playing now: what was kept before stays
+        if (!s.ResumeOnStart || cur.Track == null) { s.ResumeTracks = new(); return; }
+        var songs = Player!.Queue.Where(i => i.Track != null).ToList();
+        s.ResumeTracks = songs.Select(i => i.Track!.Id).Take(2000).ToList();
+        s.ResumeIndex = Math.Max(0, songs.IndexOf(cur));
+        s.ResumeMs = Player.PositionMs;
+    }
+
+    /// <summary>At start: puts the kept queue back, paused where it was. False when there was nothing to put back.</summary>
+    public static bool Resume()
+    {
+        var s = Settings;
+        if (!s.ResumeOnStart || s.ResumeTracks.Count == 0 || Player.Current != null) return false;
+        var items = new List<PlayItem>();
+        var index = 0;
+        for (var i = 0; i < s.ResumeTracks.Count; i++)
+        {
+            if (!Lib.ById.TryGetValue(s.ResumeTracks[i], out var t)) continue;   // a song gone since
+            if (i == s.ResumeIndex) index = items.Count;
+            items.Add(Player.From(t));
+        }
+        if (items.Count == 0) return false;
+        Player.Cue(items, index, s.ResumeIndex < s.ResumeTracks.Count && Lib.ById.ContainsKey(s.ResumeTracks[s.ResumeIndex]) ? s.ResumeMs : 0);
+        return true;
+    }
+
     /// <summary>Rescans the library folders, then refreshes connected servers.</summary>
     public static async Task RefreshCollectionAsync()
     {

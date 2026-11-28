@@ -29,6 +29,11 @@ public class Settings
     public int ReaderFontSize { get; set; } = 19;
     public string Theme { get; set; } = "light";
     public double Volume { get; set; } = 0.8;
+    /// <summary>Pick up where you left off: the queue, the song and the place in it are put back (paused) at start.</summary>
+    public bool ResumeOnStart { get; set; } = true;
+    public List<long> ResumeTracks { get; set; } = new();
+    public int ResumeIndex { get; set; }
+    public long ResumeMs { get; set; }
     /// <summary>Where the window was when Phoenix closed: "left,top,width,height,maximized" (device-independent pixels).</summary>
     public string WindowPlace { get; set; } = "";
     public bool Shuffle { get; set; }
@@ -67,6 +72,7 @@ public class Settings
     public List<Halcyon.Services.MetaSourceSetting> MetaSources { get; set; } = new();   // which metadata sources are on, and their weights
     public Dictionary<string, string> AlbumSources { get; set; } = new();                // album key -> source id it is tied to ("none" = never)
     public bool TranslateOn { get; set; }                 // show translated names beside the originals
+    public bool TranslateLyrics { get; set; }             // show a translation under each line the speech model writes
     public string TranslateTo { get; set; } = "en";
     public string TranslateProvider { get; set; } = "mymemory";   // mymemory | deepl | libre
     public bool TranslateLatin { get; set; }              // also send names written in Latin letters

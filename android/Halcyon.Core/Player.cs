@@ -208,9 +208,38 @@ public class Player
 
     void LeaveCurrent()
     {
+        if (_cued) return;   // put back at start and not played: nothing was heard
         if (Current is { Track: not null } c) Listening.Left(c, PositionMs, false);
     }
-    public long PositionMs => Current == null ? 0 : _onCast && Cast != null ? (long)(Cast.Position * 1000) : _offset + _me.PositionMs;
+
+    // ---------- picking up where you left off ----------
+
+    bool _cued;
+    long _cuedMs;
+
+    /// <summary>The queue was put back at start and nothing has played yet (play starts it where it was).</summary>
+    public bool IsCued => _cued;
+
+    /// <summary>Puts a queue back without playing it: the song is shown, paused at where it was, and play carries on from there.</summary>
+    public void Cue(IEnumerable<PlayItem> items, int index, long positionMs)
+    {
+        Queue.Clear();
+        Queue.AddRange(items);
+        if (Queue.Count == 0) return;
+        _index = Math.Clamp(index, 0, Queue.Count - 1);
+        Queue[_index].IsCurrent = true;
+        BuildOrder(_index);
+        _cued = true;
+        // a song that was all but finished starts again from the top
+        var length = Queue[_index].DurationMs;
+        _cuedMs = length > 0 && positionMs > length - 1500 ? 0 : Math.Max(0, positionMs);
+        IsPlaying = false;
+        QueueChanged?.Invoke();
+        CurrentChanged?.Invoke();
+        StateChanged?.Invoke();
+    }
+
+    public long PositionMs => Current == null ? 0 : _cued ? _cuedMs : _onCast && Cast != null ? (long)(Cast.Position * 1000) : _offset + _me.PositionMs;
 
     // A transcoded stream doesn't know its real length, so trust the library's duration for those.
     public long DurationMs => _onCast && Cast is { Duration: > 0 } cast ? (long)(cast.Duration * 1000)
@@ -222,6 +251,7 @@ public class Player
         var cur = Current;
         if (cur == null) return;
         if (ms < 0) ms = 0;
+        if (_cued) { _cuedMs = ms; StateChanged?.Invoke(); return; }
         if (_onCast) { _ = Quiet(Cast!.SeekAsync(ms / 1000.0)); return; }
         if (cur.SeekUrl == null) { _me.SeekTo(ms); StateChanged?.Invoke(); return; }
         // Not seekable in place: ask the server for a new stream that begins at the target time.
@@ -378,6 +408,7 @@ public class Player
     {
         if (index < 0 || index >= Queue.Count) return;
         LeaveCurrent();
+        _cued = false;
         SaveEpisodePosition();
         if (Current != null) Current.IsCurrent = false;
         _index = index;
@@ -437,6 +468,7 @@ public class Player
     public void Toggle()
     {
         if (Current == null) return;
+        if (_cued) { var at = _cuedMs; PlayAt(_index, at); return; }   // the queue put back at start: carry on where it was
         if (_onCast) _ = Quiet(IsPlaying ? Cast!.PauseAsync() : Cast!.PlayAsync());
         else if (IsPlaying) _me.Pause(); else _me.Play();
         IsPlaying = !IsPlaying;
@@ -475,6 +507,7 @@ public class Player
     {
         DjSeed = null;
         LeaveCurrent();
+        _cued = false;
         SaveEpisodePosition();
         _gen++;
         _me.Stop();

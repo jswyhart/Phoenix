@@ -243,6 +243,7 @@ public class MainActivity : Activity
         _resumed = false;
         HalcyonApp.Main.RemoveCallbacks(_tick);
         P.SaveEpisodePosition();
+        App.RememberQueue();   // Android may close Phoenix while it's away: the queue is kept to pick up again
         _reader.Pause();
         try { App.Settings.Save(); } catch { }
         base.OnPause();

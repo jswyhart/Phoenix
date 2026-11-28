@@ -613,6 +613,39 @@ public static partial class Smoke
             var repeatTip = ((System.Windows.Controls.Button)App.Win.FindName("RepeatBtn")).ToolTip as string ?? "";
             Check("the repeat and shuffle buttons say whether they are on", repeatTip.StartsWith("Repeat") && repeatTip.Contains("press") && App.Win.ShuffleTip.Contains("press"), $"{repeatTip} / {App.Win.ShuffleTip}");
         }
+        {
+            // picking up where you left off: the queue put back paused at 1.5 s; play carries on from there
+            var songs = lib.Albums[0].Tracks.Take(3).ToList();
+            P.Stop();
+            P.Cue(songs.Select(Player.From), 1, 1500);
+            var cued = P.Current?.Track == songs[1] && !P.IsPlaying && Math.Abs(P.Position.TotalMilliseconds - 1500) < 1 && App.Win.BarNowShown;
+            P.Toggle();
+            await Task.Delay(700);
+            var carriedOn = P.IsPlaying && !P.IsCued && P.Position.TotalMilliseconds >= 1400;
+            Check("a queue put back at start shows the song paused where it was, and play carries on from there", cued && carriedOn, $"{P.Position.TotalMilliseconds:0} ms, playing {P.IsPlaying}");
+            App.RememberQueue();
+            Check("the queue, the song and the place in it are remembered when Phoenix closes", S.ResumeTracks.Count == 3 && S.ResumeIndex == 1 && S.ResumeMs > 1000, $"{S.ResumeTracks.Count} songs, at {S.ResumeIndex}, {S.ResumeMs} ms");
+            P.Stop();
+            S.ResumeTracks = new();
+        }
+        {
+            // generated lyrics translated line by line: a translation already known shows under its line at once
+            var (wasOn, wasTo, wasProvider) = (S.TranslateLyrics, S.TranslateTo, S.TranslateProvider);
+            (S.TranslateLyrics, S.TranslateTo, S.TranslateProvider) = (true, "en", "mymemory");
+            lib.Db.SaveTranslation("en", "Hola mundo", "Hello world");
+            Halcyon.Services.Translator.Reset();
+            var sung = Lyrics.Parse("[00:01.00]Hola mundo\n[00:02.00]12 34\n[00:03.00]Adios", "test")!;
+            App.Win.Translate(sung);
+            await Task.Delay(200);
+            Check("generated lyrics show each line's translation under it (a line of no words is left alone)",
+                sung.Lines[0].Translation == "Hello world" && sung.Lines[0].HasTranslation && sung.Lines[1].Translation == "", string.Join(" | ", sung.Lines.Select(l => l.Translation)));
+            S.TranslateLyrics = false;
+            var off = Lyrics.Parse("[00:01.00]Hola mundo\n[00:02.00]Adios", "test")!;
+            App.Win.Translate(off);
+            Check("with translating lyrics off, no translation is shown", off.Lines[0].Translation == "");
+            (S.TranslateLyrics, S.TranslateTo, S.TranslateProvider) = (wasOn, wasTo, wasProvider);
+            Halcyon.Services.Translator.Reset();
+        }
         Check("F1 lists the keyboard shortcuts, volume and liking among them", MainWindow.Shortcuts.Contains("Ctrl + Up / Down") && MainWindow.Shortcuts.Contains("Ctrl + L") && MainWindow.Shortcuts.Contains("F1"));
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);

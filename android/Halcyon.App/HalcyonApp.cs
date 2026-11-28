@@ -27,6 +27,7 @@ public class HalcyonApp : Application
         App.SyncDir = System.IO.Path.Combine(Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryMusic!)!.AbsolutePath, "Halcyon");
         Engine = new ExoEngine(this);
         App.Init(FilesDir!.AbsolutePath, Engine, DefaultSettings);
+        App.Resume();   // pick up where you left off: the queue, paused where it was
         Engine.ApplyEqualizer();
         // the auto equalizer: songs are measured with the phone's own decoders, the first time they play if not before
         Halcyon.Services.AutoEq.Decode = AudioDecode.Mono;

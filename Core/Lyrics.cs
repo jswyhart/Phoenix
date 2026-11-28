@@ -9,6 +9,10 @@ public class LyricLine : Observable
     public string Text { get; init; } = "";
     bool _now;
     public bool IsNow { get => _now; set { if (Set(ref _now, value)) Raise(); } }
+    string _translation = "";
+    /// <summary>The line in the chosen language, shown under it ("" when there is none).</summary>
+    public string Translation { get => _translation; set { if (Set(ref _translation, value)) Raise(); } }
+    public bool HasTranslation => _translation != "";
     public double Opacity => IsNow ? 1.0 : 0.5;
 }
 

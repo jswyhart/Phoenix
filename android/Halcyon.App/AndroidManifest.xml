@@ -17,5 +17,8 @@
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
   <!-- Home media servers are usually plain http on the local network. -->
   <application android:label="Phoenix" android:icon="@drawable/ic_launcher" android:usesCleartextTraffic="true"
-               android:allowBackup="false" android:supportsRtl="true" android:enableOnBackInvokedCallback="true" />
+               android:allowBackup="false" android:supportsRtl="true" android:enableOnBackInvokedCallback="true">
+    <!-- Android Auto: Phoenix is a media app; its music is browsed and played through PlaybackService -->
+    <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
+  </application>
 </manifest>

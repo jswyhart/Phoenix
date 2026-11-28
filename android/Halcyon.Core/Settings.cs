@@ -78,6 +78,7 @@ public class Settings
     public Dictionary<string, string> AlbumSources { get; set; } = new();
     public string FpcalcPath { get; set; } = "";          // Chromaprint's fpcalc, for identifying songs by sound
     public bool TranslateOn { get; set; }                 // show translated names beside the originals
+    public bool TranslateLyrics { get; set; }             // show a translation under each line the speech model writes
     public string TranslateTo { get; set; } = "en";
     public string TranslateProvider { get; set; } = "mymemory";   // local | mymemory | deepl | libre
     public bool TranslateLatin { get; set; }              // also send names written in Latin letters
@@ -129,6 +130,11 @@ public class Settings
     public string JellyfinUser { get; set; } = "";
     public string JellyfinUserId { get; set; } = "";
     public string PlexUrl { get; set; } = "";
+    /// <summary>Pick up where you left off: the queue, the song and the place in it are put back (paused) at start.</summary>
+    public bool ResumeOnStart { get; set; } = true;
+    public List<long> ResumeTracks { get; set; } = new();
+    public int ResumeIndex { get; set; }
+    public long ResumeMs { get; set; }
     public string SyncHost { get; set; } = "";   // address of the Halcyon PC to copy music from, e.g. 192.168.1.20:47800
     public string SyncPcId { get; set; } = "";   // the paired PC's lasting id, to find it again when its address changes
     public string SyncPcName { get; set; } = "";

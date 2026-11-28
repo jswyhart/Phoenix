@@ -9,10 +9,23 @@ Next version
 ------------------
 
 New
+- Pick up where you left off (Windows, Mac/Linux and Android): the queue, the song that was
+  playing and the place in it are put back when Phoenix starts, paused; play carries on from
+  there. A song that was all but finished starts again. Settings → playback can switch it off.
+- Android Auto: Phoenix shows up in the car. Browse liked songs, playlists, artists, albums and
+  recently added albums on the car's screen (with "shuffle all" at the top of each list), and
+  ask by voice ("play … on Phoenix"): an artist, an album or a song's name.
+- Generated lyrics in your language: settings → translation and lyrics can translate what the
+  speech model writes, line by line as it writes it; each line's translation shows under it, by
+  the translation service chosen there.
 - The window opens where it was last time, as big as it was, and maximized if it was. A place
   that is no longer on any screen (a monitor unplugged since) is ignored.
 
 Changed
+- Now playing, no lyrics yet: the button that does something about it (LISTEN on the generated
+  tab, FIND ONLINE on the lyrics tab) is right under the message instead of only among the small
+  links at the bottom, far away on a large screen. Mac/Linux: the message is at the top of the
+  pane too, not in the note at the bottom.
 - Clearing the phone sync list or (Windows) the burn list asks first when it holds more than one
   song.
 - The shuffle and repeat buttons say whether they are on and what pressing them does; previous

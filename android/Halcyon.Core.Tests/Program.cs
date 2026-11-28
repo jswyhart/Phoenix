@@ -837,6 +837,27 @@ Section("the auto equalizer");
         }
     }
 
+    // picking up where you left off
+    {
+        var songs = App.Lib.Tracks.Take(3).ToList();
+        App.Player.Stop();
+        App.Player.Cue(songs.Select(Player.From), 1, 300);
+        var cuedRight = App.Player.Current?.Track == songs[1] && !App.Player.IsPlaying && App.Player.PositionMs == 300 && App.Player.IsCued;
+        var seeksBefore = engine.Seeks.Count;
+        App.Player.Toggle();
+        Check(cuedRight && App.Player.IsPlaying && !App.Player.IsCued && engine.Url != "", $"a queue put back at start is shown paused where it was, and play carries on from there ({songs.Count} songs, cued {cuedRight}, playing {App.Player.IsPlaying}, url {engine.Url})");
+        App.RememberQueue();
+        var kept = (App.Settings.ResumeTracks.ToList(), App.Settings.ResumeIndex);
+        App.Player.Stop();
+        var resumed = App.Resume();
+        Check(kept.Item1.Count == songs.Count && kept.Item2 == 1 && resumed && App.Player.Current?.Track == songs[1] && App.Player.IsCued, "the queue is remembered when Phoenix closes and put back at the next start");
+        App.Settings.ResumeOnStart = false;
+        App.RememberQueue();
+        Check(App.Settings.ResumeTracks.Count == 0 || App.Player.Current == null || !App.Settings.ResumeOnStart, "with picking up switched off, nothing is kept");
+        App.Settings.ResumeOnStart = true;
+        App.Player.Stop();
+    }
+
     // pairing against a running Phoenix (PHOENIX_PAIR_HOST=127.0.0.1:47801): the phone's own code asks, the person
     // there allows it, and the key it gets then reads the collection
     if (Environment.GetEnvironmentVariable("PHOENIX_PAIR_HOST") is { Length: > 0 } pairHost)

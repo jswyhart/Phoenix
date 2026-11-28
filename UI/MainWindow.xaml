@@ -131,11 +131,34 @@
                             <ListBox x:Name="LyricsList" MouseDoubleClick="Lyrics_DoubleClick" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Opacity="{Binding Opacity}" Margin="0,5,8,5" MinHeight="12"/>
+                                        <StackPanel Margin="0,5,8,5" Opacity="{Binding Opacity}">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" MinHeight="12"/>
+                                            <!-- the line in the chosen language, quieter, under it -->
+                                            <TextBlock x:Name="Tr" Text="{Binding Translation}" TextWrapping="Wrap" FontSize="13.5" FontStyle="Italic" Opacity="0.75" Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding HasTranslation}" Value="False"><Setter TargetName="Tr" Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                            <TextBlock x:Name="LyricsEmpty" TextWrapping="Wrap" Foreground="{DynamicResource FgDim}" Margin="8,8,16,0" VerticalAlignment="Top"/>
+                            <!-- no lyrics yet: what to do, and the button that does it, right under it (not only at the bottom of a tall screen) -->
+                            <StackPanel x:Name="LyricsEmptyPanel" Margin="8,8,16,0" VerticalAlignment="Top">
+                                <TextBlock x:Name="LyricsEmpty" TextWrapping="Wrap" Foreground="{DynamicResource FgDim}"/>
+                                <Button x:Name="LyricsActionBtn" HorizontalAlignment="Left" Margin="0,18,0,0" Cursor="Hand" Click="LyricsAction_Click" Visibility="Collapsed">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Bd" Background="{DynamicResource AccentGrad}" CornerRadius="18" Padding="22,9">
+                                                <TextBlock Text="{TemplateBinding Content}" Foreground="White" FontSize="14" FontWeight="SemiBold"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.85"/></Trigger>
+                                                <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bd" Property="Opacity" Value="0.4"/></Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </DockPanel>
                     <ListBox x:Name="QueueList" MouseDoubleClick="Queue_DoubleClick">

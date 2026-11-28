@@ -203,10 +203,16 @@ public partial class MainWindow : Window
         var listeningHere = _listening != null && _listeningTo == track && track != null;
         _lyrics = listeningHere && gen ? _heard : gen ? Lyrics.Generated(track) : Lyrics.For(track);
         LyricsList.ItemsSource = _lyrics?.Lines;
-        LyricsEmpty.Visibility = _lyrics == null ? Visibility.Visible : Visibility.Collapsed;
+        if (gen) Translate(_lyrics);
+        LyricsEmptyPanel.Visibility = _lyrics == null ? Visibility.Visible : Visibility.Collapsed;
         LyricsEmpty.Text = cur == null ? "" : track == null ? "Lyrics are shown for songs."
-            : gen ? "The speech model hasn't written lyrics for this song yet.\n\nChoose “listen” below and it writes down what is sung, line by line, as it hears it."
-            : "No lyrics for this song yet.\n\nUse “find online”, “import file” or “paste” below, put a .lrc or .txt file with the same name beside the song, or add lyrics to its tags.";
+            : gen ? (SpeechModel != null ? "The speech model hasn't written lyrics for this song yet. LISTEN and it writes down what is sung, line by line, as it hears it."
+                                         : "Choose a speech model in settings → translation and lyrics first, then LISTEN writes down what is sung.")
+            : "No lyrics for this song yet. FIND ONLINE looks it up on LRCLIB; you can also import a .lrc or .txt file, paste lyrics, put a file with the same name beside the song, or add lyrics to its tags.";
+        // the one thing to do here, as a button right under the words
+        LyricsActionBtn.Visibility = track != null && _lyrics == null && !listeningHere ? Visibility.Visible : Visibility.Collapsed;
+        LyricsActionBtn.Content = gen ? "LISTEN" : "FIND ONLINE";
+        LyricsActionBtn.IsEnabled = !gen || SpeechModel != null;
         LyricsNote.Text = listeningHere && gen ? "the speech model is listening…" : _lyrics == null ? "" : _lyrics.Synced ? _lyrics.Source + "   ·   double-click a line to jump to it" : _lyrics.Source;
         // each tab has its own buttons
         LyricsFindBtn.Visibility = LyricsImportBtn.Visibility = LyricsPasteBtn.Visibility = gen ? Visibility.Collapsed : Visibility.Visible;
@@ -259,7 +265,8 @@ public partial class MainWindow : Window
             _lyrics = _heard;
             _lyricLine = -1;
             LyricsList.ItemsSource = _heard.Lines;
-            LyricsEmpty.Visibility = Visibility.Collapsed;
+            Translate(_heard);   // each new line is translated as soon as it is heard
+            LyricsEmptyPanel.Visibility = Visibility.Collapsed;
         }
         if (ShowingGenerated) ReloadLyrics();
         try
@@ -286,6 +293,38 @@ public partial class MainWindow : Window
             _heard = null;
         }
     }
+
+    /// <summary>
+    /// Generated lyrics in the chosen language: each line gets its translation under it, from what is already known at
+    /// once, the rest asked for line by line (so lines heard while listening are translated as they come).
+    /// </summary>
+    public void Translate(Lyrics? lyrics)
+    {
+        if (lyrics == null) return;
+        foreach (var line in lyrics.Lines)
+        {
+            if (!App.Settings.TranslateLyrics) { line.Translation = ""; continue; }
+            if (line.Translation != "" || !Halcyon.Services.Translator.NeedsLine(line.Text)) continue;
+            var known = Halcyon.Services.Translator.Lookup(line.Text);
+            if (known != "") { line.Translation = known; continue; }
+            var l = line;
+            _ = Halcyon.Services.Translator.LineAsync(l.Text).ContinueWith(t => { if (t.Result != "") Dispatcher.BeginInvoke(() => l.Translation = t.Result); }, TaskContinuationOptions.OnlyOnRanToCompletion);
+        }
+    }
+
+    /// <summary>The translation setting changed: the lyrics on show follow it.</summary>
+    public void RefreshLyricsTranslation() { if (ShowingGenerated) Translate(_lyrics); }
+
+    /// <summary>The translations under the lines on show (for the self-test).</summary>
+    public IEnumerable<string> LyricsTranslations => _lyrics?.Lines.Select(l => l.Translation) ?? Enumerable.Empty<string>();
+
+    void LyricsAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShowingGenerated) LyricsListen_Click(sender, e); else LyricsFind_Click(sender, e);
+    }
+
+    /// <summary>The button under "no lyrics yet" (for the self-test): what it says, and whether it shows.</summary>
+    public string LyricsActionShown => LyricsActionBtn.IsVisible ? LyricsActionBtn.Content as string ?? "" : "";
 
     async void LyricsListen_Click(object sender, RoutedEventArgs e)
     {

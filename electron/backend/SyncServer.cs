@@ -59,12 +59,16 @@ public class SyncServer
             {
                 for (var attempt = 0; ; attempt++)
                 {
-                    _tcp = new TcpListener(address, port);
-                    _tcp.Start();
+                    // "any port" (the self-test): one from a range below the one the system hands out, where Windows
+                    // reserves whole blocks for its own use (Hyper-V), so the same number is free for TCP and UDP alike
+                    var want = port == 0 ? Random.Shared.Next(20000, 40000) : port;
+                    _tcp = new TcpListener(address, want);
+                    try { _tcp.Start(); }
+                    catch (SocketException) when (port == 0 && attempt < 60) { continue; }
                     Port = ((IPEndPoint)_tcp.LocalEndpoint).Port;
-                    // discovery listens on the same port (the self-test asks there too); a port Windows keeps back for UDP means another try
+                    // discovery listens on the same port (the self-test asks there too)
                     try { _udp = new UdpClient(new IPEndPoint(address, Port)); break; }
-                    catch (SocketException) when (port == 0 && attempt < 40) { tried.Add(_tcp); }
+                    catch (SocketException) when (port == 0 && attempt < 60) { tried.Add(_tcp); }
                 }
             }
             finally { foreach (var t in tried) t.Stop(); }

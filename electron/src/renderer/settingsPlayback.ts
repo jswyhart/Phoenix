@@ -4,7 +4,7 @@ import { h, pill } from "./ui";
 
 interface Playback {
   crossfade: number; eqEnabled: boolean; eqPreset: string; eqGains: number[]; presets: string[]; bands: number[];
-  levelling: boolean; levelByAlbum: boolean; levelMeasure: boolean;
+  levelling: boolean; levelByAlbum: boolean; levelMeasure: boolean; resumeOnStart: boolean;
   autoEq: AutoEqState;
 }
 interface AutoEqState {
@@ -27,6 +27,7 @@ export function playbackPanel() {
   const crossfadeText = h("span.dim", { style: { marginLeft: "14px" } });
   crossfade.oninput = () => { crossfadeText.textContent = fadeWords(Number(crossfade.value)); };
   crossfade.onchange = () => void set({ crossfade: Number(crossfade.value) });
+  const resume = check("Pick up where I left off: put the queue back, paused where it was, when Phoenix starts", "resumeOnStart");
   const level = check("Play every song at about the same loudness", "levelling");
   const byAlbum = check("Level whole albums (an album's quiet and loud songs stay as they are to each other)", "levelByAlbum", true);
   const measure = check("Even out songs that carry no ReplayGain tags as they play", "levelMeasure", true);
@@ -119,6 +120,7 @@ export function playbackPanel() {
     crossfade.value = String(p.crossfade);
     crossfadeText.textContent = fadeWords(p.crossfade);
     level.box.checked = p.levelling;
+    resume.box.checked = p.resumeOnStart;
     byAlbum.box.checked = p.levelByAlbum;
     measure.box.checked = p.levelMeasure;
     byAlbum.box.disabled = measure.box.disabled = !p.levelling;
@@ -132,6 +134,7 @@ export function playbackPanel() {
 
   const el = h("div", h("div.h2", "playback"),
     h("div.note", "Music plays through VLC's engine, so one song runs into the next with no gap, songs can blend into each other, and the equalizer can shape the sound. Videos, podcasts and audiobooks are not crossfaded."),
+    resume.el,
     h("div.label", "CROSSFADE"), h("div", { style: { display: "flex", alignItems: "center", marginTop: "4px" } }, crossfade, crossfadeText),
     h("div.label", { style: { margin: "22px 0 3px 0" } }, "VOLUME LEVELLING"), level.el, byAlbum.el, measure.el,
     h("div.note", { style: { margin: "8px 0 0 24px" } }, "Uses the ReplayGain tags in your files where they have them. Songs without them are evened out as they play when the second choice is on, or otherwise given an average level; your files are not changed."),

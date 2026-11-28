@@ -19,7 +19,7 @@ public static partial class Api
         model = S.LyricsModel,
         gpus = (_gpus ??= SpeechLyrics.Gpus()).Select(g => new { index = g.Index, name = g.Name, kind = g.Kind, memoryMb = g.MemoryMb }),
         gpu = S.LyricsGpu,
-        listen = S.LyricsListen,
+        listen = S.LyricsListen, translate = S.TranslateLyrics,
         ranOn = SpeechLyrics.RanOn,
         downloading = _speechDownload != null,
         writingAll = _speechAll != null,
@@ -41,9 +41,18 @@ public static partial class Api
             else if (p.Has("model") && SpeechLyrics.Find(p.Str("model")) is { } m && SpeechLyrics.Have(m)) S.LyricsModel = m.Id;
             if (p.Has("gpu")) { S.LyricsGpu = SpeechLyrics.GpuChoice = (int)p.Long("gpu"); SpeechLyrics.Unload(); }
             if (p.Has("listen")) S.LyricsListen = p.Bool("listen");
+            if (p.Has("translate")) S.TranslateLyrics = p.Bool("translate");
             Save();
             Rpc.Emit("speech", new { state = SpeechState(), error = (string?)null });
             return SpeechState();
+        });
+        // a line of generated lyrics in the chosen language ("" when there is nothing useful to show), asked for as it is written
+        Rpc.On("lyrics.translateLine", async p =>
+        {
+            var text = p.Str("text");
+            if (!S.TranslateLyrics || !Halcyon.Services.Translator.NeedsLine(text)) return "";
+            var known = Halcyon.Services.Translator.Lookup(text);
+            return known != "" ? known : await Halcyon.Services.Translator.LineAsync(text);
         });
         Rpc.On("speech.download", downloadParams =>
         {

@@ -156,13 +156,13 @@ export class NowPlaying {
       if (this.listening === id) { this.paintHeard(); return; }
       const g = await call<typeof this.lyrics>("lyrics.generated", { id });
       if (this.lyricsFor !== id || !this.showingGenerated()) return;
-      this.paintLyrics(g, g ? "" : "The speech model hasn't written lyrics for this song yet. Choose “listen” below and it writes down what is sung, line by line, as it hears it.");
+      this.paintLyrics(g, g ? "" : "The speech model hasn't written lyrics for this song yet. LISTEN and it writes down what is sung, line by line, as it hears it.", "LISTEN");
       this.listenBtn.textContent = g ? "listen again" : "listen";
       return;
     }
     const l = await call<typeof this.lyrics>("lyrics.get", { id, auto: true });
     if (this.lyricsFor !== id) return;
-    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. Find them on LRCLIB, or take them from a file or the clipboard.");
+    this.paintLyrics(l, l ? "" : "No lyrics for this song yet. FIND ONLINE looks it up on LRCLIB; you can also take them from a file or the clipboard.", "FIND ONLINE");
     if (!l && this.listening == null) {
       const sp = await call<{ listen: boolean; ready: boolean }>("speech.state");
       if (this.lyricsFor === id && sp.listen && sp.ready && !(await call("lyrics.generated", { id }))) void this.listen(true);
@@ -216,13 +216,45 @@ export class NowPlaying {
     } catch (e: any) { this.lyricsNote.textContent = String(e.message ?? e); }
   }
 
-  private paintLyrics(l: typeof this.lyrics, note: string) {
+  /**
+   * Shows lyrics, or, when there are none, what to do about it at the top of the pane with the button that does it
+   * right under the words (not only among the links at the bottom, far away on a tall screen).
+   */
+  private paintLyrics(l: typeof this.lyrics, note: string, action: "" | "LISTEN" | "FIND ONLINE" = "") {
     this.lyrics = l;
     this.lineNow = -1;
+    if (!l && note && action) {
+      const go = h("button.lyricaction", action) as HTMLButtonElement;
+      go.onclick = () => { if (action === "LISTEN") void this.listen(false); else void this.lyricsAction("lyrics.find", "looking on LRCLIB…"); };
+      this.lyricsLines.replaceChildren(h("div.lyricempty", note), go);
+      this.lyricsLines.classList.remove("synced");
+      this.lyricsNote.textContent = "";
+      return;
+    }
     this.lyricsLines.replaceChildren(...(l?.lines ?? []).map(x => h("div.lyricline", x.text || "\u00a0")));
+    if (this.showingGenerated()) this.translateLines(l?.lines ?? []);
     this.lyricsLines.classList.toggle("synced", !!l?.synced);
     this.lyricsNote.textContent = note || (l ? (l.synced ? "" : "") + l.source : "");
     this.follow(shell.player.pos);
+  }
+
+  /** Lines already translated, so a line heard again (or the pane redrawn) doesn't ask twice. */
+  private translated = new Map<string, string>();
+
+  /**
+   * Generated lyrics in the chosen language (settings → translation and lyrics): each line gets its translation under
+   * it as it arrives, so lines heard while listening are translated as they come.
+   */
+  private translateLines(lines: { text: string }[]) {
+    const rows = [...this.lyricsLines.children] as HTMLElement[];
+    lines.forEach((line, i) => {
+      const row = rows[i];
+      if (!row || !line.text.trim()) return;
+      const put = (t: string) => { if (t && row.isConnected && !row.querySelector(".lyrictr")) row.append(h("div.lyrictr", t)); };
+      const known = this.translated.get(line.text);
+      if (known !== undefined) { put(known); return; }
+      void call<string>("lyrics.translateLine", { text: line.text }).then(t => { this.translated.set(line.text, t ?? ""); put(t ?? ""); }).catch(() => {});
+    });
   }
 
   /** Timed lyrics follow the song: the line being sung is lit and kept in view. */

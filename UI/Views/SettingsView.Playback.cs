@@ -46,6 +46,7 @@ public partial class SettingsView
         BuildPlayback();
         _loadingPlayback = true;
         var s = App.Settings;
+        ResumeOn.IsChecked = s.ResumeOnStart;
         EngineOn.IsChecked = s.AudioEngine;
         CrossfadeSlider.Value = Math.Clamp(s.Crossfade, 0, 12);
         EqOn.IsChecked = s.EqEnabled;
@@ -79,6 +80,13 @@ public partial class SettingsView
             AutoEqStatus.Text = !s.AutoEq ? "" : AutoEq.GainsFor(now, s) is { } g
                 ? $"now playing{(s.AutoEqAi && AutoEqAi.Describe(AutoEq.StylesFor(now)) is { Length: > 0 } heard ? $" ({heard})" : "")}: {string.Join("  ", g.Select((x, i) => $"{(AutoEq.Bands[i] >= 1000 ? $"{AutoEq.Bands[i] / 1000:0.#}k" : $"{AutoEq.Bands[i]:0}")} {x:+0.#;-0.#;0}"))}"
                 : "the song playing hasn't been measured yet";
+    }
+
+    void ResumeOn_Click(object sender, RoutedEventArgs e)
+    {
+        S.ResumeOnStart = ResumeOn.IsChecked == true;
+        if (!S.ResumeOnStart) S.ResumeTracks = new();
+        Keep();
     }
 
     void Engine_Click(object sender, RoutedEventArgs e)

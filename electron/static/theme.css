@@ -332,3 +332,11 @@ body.minibody { -webkit-app-region: drag; background: var(--bg-alt); }
 .findrow:hover { color: var(--accent); }
 @keyframes flash { 0%, 100% { opacity: 1; } 25%, 75% { opacity: 0.25; } }
 .flash { animation: flash 0.9s ease-in-out 1; }
+
+/* now playing, no lyrics yet: what to do, and the button that does it */
+.lyricempty { opacity: 0.75; line-height: 1.5; max-width: 460px; }
+.lyricaction { margin-top: 18px; padding: 9px 22px; border: none; border-radius: 18px; background: var(--grad); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+.lyricaction:hover { opacity: 0.85; }
+
+/* generated lyrics: a line's translation, quieter, under it */
+.lyrictr { font-size: 0.85em; font-style: italic; opacity: 0.75; margin-top: 1px; }

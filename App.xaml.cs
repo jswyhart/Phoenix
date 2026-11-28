@@ -88,6 +88,7 @@ public partial class App : Application
         Win = new MainWindow();
         MainWindow = Win;
         Win.Show();
+        if (!SmokeMode) Resume();
 
         if (perf >= 0)
             Dispatcher.BeginInvoke(async () => await Smoke.RunAsync(e.Args[perf + 1], perf: true), DispatcherPriority.ApplicationIdle);
@@ -114,6 +115,38 @@ public partial class App : Application
             Updater.ClearSwapped();   // what a portable copy's last update renamed out of the way
             _ = Updater.DailyAsync();
         }
+    }
+
+    /// <summary>
+    /// Pick up where you left off: when Phoenix closes, the songs in the queue, which one was playing and how far in
+    /// are kept; at the next start they are put back, paused there. (Videos, podcasts, books and radio keep their own places.)
+    /// </summary>
+    public static void RememberQueue()
+    {
+        var s = Settings;
+        var cur = Player.Current;
+        if (!s.ResumeOnStart || cur?.Track == null) { s.ResumeTracks = new(); return; }
+        var songs = Player.Queue.Where(i => i.Track != null).ToList();
+        s.ResumeTracks = songs.Select(i => i.Track!.Id).Take(2000).ToList();
+        s.ResumeIndex = Math.Max(0, songs.IndexOf(cur));
+        s.ResumeMs = (long)Player.Position.TotalMilliseconds;
+    }
+
+    public static void Resume()
+    {
+        var s = Settings;
+        if (!s.ResumeOnStart || s.ResumeTracks.Count == 0 || Player.Current != null) return;
+        var items = new List<PlayItem>();
+        var index = 0;
+        for (var i = 0; i < s.ResumeTracks.Count; i++)
+        {
+            if (!Lib.ById.TryGetValue(s.ResumeTracks[i], out var t)) continue;   // a song gone since
+            if (i == s.ResumeIndex) index = items.Count;
+            items.Add(Player.From(t));
+        }
+        if (items.Count == 0) return;
+        Player.Cue(items, index, s.ResumeIndex < s.ResumeTracks.Count && Lib.ById.ContainsKey(s.ResumeTracks[s.ResumeIndex]) ? s.ResumeMs : 0);
+        Win.SetStatus($"ready to carry on with “{Player.Current?.Title}”: press play");
     }
 
     /// <summary>For the self-test: answers a phone's request to pair instead of asking.</summary>
@@ -144,7 +177,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Halcyon.UI.Tray.Dispose();
-        try { if (!SmokeMode) Settings.Save(); } catch { }
+        try { if (!SmokeMode) { RememberQueue(); Settings.Save(); } } catch { }
         if (!SmokeMode) Updater.InstallWaiting();   // an update fetched earlier goes in now that Phoenix is closing
         base.OnExit(e);
     }

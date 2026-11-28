@@ -223,6 +223,7 @@
                 <StackPanel x:Name="PanelPlayback" Visibility="Collapsed">
                     <TextBlock Text="playback" Style="{StaticResource Head}"/>
                     <TextBlock Style="{StaticResource Note}" Text="Music plays through a built-in audio engine, so one song runs into the next with no gap, songs can blend into each other, and the equalizer can shape the sound. Videos, podcasts and audiobooks are not affected."/>
+                    <CheckBox x:Name="ResumeOn" Content="Pick up where I left off: put the queue back, paused where it was, when Phoenix starts" Margin="0,0,0,8" Click="ResumeOn_Click"/>
                     <CheckBox x:Name="EngineOn" Content="Use the built-in audio engine for music" Margin="0,8,0,4" Click="Engine_Click"/>
                     <TextBlock Style="{StaticResource Label}" Text="CROSSFADE"/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
@@ -348,6 +349,8 @@
                     </StackPanel>
                     <CheckBox x:Name="LyricsListenBox" Content="Write lyrics with the speech model as songs play, for songs that have no lyrics" Margin="0,10,0,0" Click="LyricsListen_Click"/>
                     <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="What the model writes is shown on a tab of its own in now playing, “generated”, next to lyrics. The tab is there while a model is downloaded and chosen."/>
+                    <CheckBox x:Name="TranslateLyricsBox" Content="Translate what the speech model writes, line by line as it writes it" Margin="0,10,0,0" Click="TranslateLyrics_Click"/>
+                    <TextBlock Style="{StaticResource Note}" Margin="24,2,0,0" Text="Each line of the “generated” tab gets its translation under it, into the language chosen under translation above, by the service chosen there (on this PC, MyMemory, DeepL or LibreTranslate). Lines already in that language are left as they are. Lyrics are many words: MyMemory's free daily allowance runs out after a few songs."/>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                         <Button x:Name="SpeechAllBtn" Style="{StaticResource PillBtn}" Content="WRITE LYRICS FOR SONGS THAT HAVE NONE" Click="SpeechAll_Click"/>
                     </StackPanel>

@@ -82,6 +82,7 @@ public static partial class Api
         crossfade = S.Crossfade, eqEnabled = S.EqEnabled, eqPreset = S.EqPreset, eqGains = S.EqGains,
         presets = EqPresets.Select(x => x.Name).Append("custom"), bands = Bands,
         levelling = S.Levelling, levelByAlbum = S.LevelByAlbum, levelMeasure = S.LevelMeasure,
+        resumeOnStart = S.ResumeOnStart,
         autoEq = AutoEqState()
     };
 
@@ -195,6 +196,7 @@ public static partial class Api
                 S.EqPreset = "custom";
             }
             if (p.Has("levelling")) S.Levelling = p.Bool("levelling");
+            if (p.Has("resumeOnStart")) { S.ResumeOnStart = p.Bool("resumeOnStart"); if (!S.ResumeOnStart) S.ResumeTracks = new(); }
             if (p.Has("levelByAlbum")) S.LevelByAlbum = p.Bool("levelByAlbum");
             if (p.Has("levelMeasure")) S.LevelMeasure = p.Bool("levelMeasure");
             if (p.Has("autoEq")) { S.AutoEq = p.Bool("autoEq"); AutoEq.EnsureMeasured(S, P.Current?.Track); }

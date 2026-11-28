@@ -256,6 +256,12 @@ public static class SettingsScreen
             if (category == "playback")
             {
             var engine = HalcyonApp.Engine;
+            rows.Add(new Row
+            {
+                Title = "pick up where I left off", Trail = S.ResumeOnStart ? "on" : "off",
+                Sub = "when Phoenix starts again, the queue is put back, paused where it was",
+                Click = () => { S.ResumeOnStart = !S.ResumeOnStart; if (!S.ResumeOnStart) S.ResumeTracks = new(); S.Save(); page.Reload(); }
+            });
             rows.Add(Row.Caption("EQUALIZER"));
             rows.Add(new Row { Title = "equalizer", Trail = S.EqEnabled ? "on" : "off", Sub = engine.EqTrouble, Click = () => { S.EqEnabled = !S.EqEnabled; S.Save(); engine.ApplyEqualizer(); page.Reload(); } });
             if (S.EqEnabled)

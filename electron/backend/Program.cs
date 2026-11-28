@@ -197,6 +197,7 @@ static class Program
             PictureFolders = Existing(Environment.SpecialFolder.MyPictures)
         });
         Api.Register();
+        if (!SmokeMode) App.Resume();   // pick up where you left off: the queue, paused where it was
         Rpc.Start();
         Rpc.Emit("ready");
     }
@@ -214,6 +215,7 @@ static class Program
         try
         {
             App.Player.SaveEpisodePosition();
+            App.RememberQueue();
             App.Settings.Shuffle = App.Player.Shuffle;
             App.Settings.Repeat = App.Player.Repeat;
             if (!SmokeMode) App.Settings.Save();

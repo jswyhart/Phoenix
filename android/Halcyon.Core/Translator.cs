@@ -66,18 +66,35 @@ public static class Translator
         return true;
     }
 
+    /// <summary>
+    /// Whether a line of lyrics the speech model wrote is worth translating (settings → translation and lyrics):
+    /// unlike a name, a line in Latin letters can be in another language too, so it goes unless it is plainly in the
+    /// language it would be translated into.
+    /// </summary>
+    public static bool NeedsLine(string text)
+    {
+        if (!App.Settings.TranslateLyrics || string.IsNullOrWhiteSpace(text) || text.Length > 300) return false;
+        if (text.Count(char.IsLetter) < 2) return false;
+        if (App.Settings.TranslateProvider == "local") return Detect(text) != App.Settings.TranslateTo;
+        return true;
+    }
+
+    /// <summary>A line of lyrics in the chosen language ("" when there is nothing useful to show), asked for as it is written.</summary>
+    public static Task<string> LineAsync(string text) => NeedsLine(text) ? Ask(text) : Task.FromResult("");
+
     /// <summary>The translation if it is already known ("" when there is none or it is not known yet).</summary>
     public static string Lookup(string text)
     {
-        if (!On) return "";
+        if (!On && !App.Settings.TranslateLyrics) return "";
         EnsureLoaded();
         lock (Known) return Known.GetValueOrDefault(text, "");
     }
 
     /// <summary>The translation of a name, asking the service if it is not known yet. "" when there is nothing useful to show.</summary>
-    public static Task<string> GetAsync(string text)
+    public static Task<string> GetAsync(string text) => Needs(text) ? Ask(text) : Task.FromResult("");
+
+    static Task<string> Ask(string text)
     {
-        if (!Needs(text)) return Task.FromResult("");
         EnsureLoaded();
         lock (Known)
         {

@@ -28,6 +28,7 @@ public partial class SettingsView
         SpeechGpuBox.Items.Add(new ComboBoxItem { Content = "the processor only", Tag = -1 });
         SpeechGpuBox.SelectedItem = SpeechGpuBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == s.LyricsGpu) ?? SpeechGpuBox.Items[0];
         LyricsListenBox.IsChecked = s.LyricsListen;
+        TranslateLyricsBox.IsChecked = s.TranslateLyrics;
         _loadingSpeech = false;
         ShowSpeechState();
     }
@@ -64,6 +65,13 @@ public partial class SettingsView
         if (!App.SmokeMode) App.Settings.Save();
         SpeechLyrics.Unload();
         LoadSpeech();   // the recommended model depends on where it runs
+    }
+
+    void TranslateLyrics_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.TranslateLyrics = TranslateLyricsBox.IsChecked == true;
+        if (!App.SmokeMode) App.Settings.Save();
+        App.Win.RefreshLyricsTranslation();
     }
 
     void LyricsListen_Click(object sender, RoutedEventArgs e)

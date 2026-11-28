@@ -42,7 +42,7 @@ export function photosSection() {
 
 export interface SpeechState {
   models: { id: string; name: string; mb: number; note: string; have: boolean }[]; model: string; recommended: string; ready: boolean;
-  gpus: { index: number; name: string; kind: string; memoryMb: number }[]; gpu: number; listen: boolean; ranOn: string;
+  gpus: { index: number; name: string; kind: string; memoryMb: number }[]; gpu: number; listen: boolean; translate: boolean; ranOn: string;
   downloading: boolean; writingAll: boolean; allStatus: string; listeningTo: number;
 }
 
@@ -60,6 +60,7 @@ export function lyricsSection() {
     if (m && (await confirm(`Delete the ${m.name} speech model (${m.mb >= 1000 ? `${(m.mb / 1024).toFixed(1)} GB` : `${m.mb} MB`})? Lyrics it already wrote are kept.`, "delete"))) paint(await call<SpeechState>("speech.delete", { id: m.id }));
   } }, "delete");
   const listen = check("Write lyrics with the speech model as songs play, for songs that have no lyrics", on => void call<SpeechState>("speech.set", { listen: on }).then(paint));
+  const translateLines = check("Translate what the speech model writes, line by line as it writes it", on => void call<SpeechState>("speech.set", { translate: on }).then(paint));
   const all = h("button.pill", { onclick: async () => paint(await call<SpeechState>("speech.writeAll")) }, "WRITE LYRICS FOR SONGS THAT HAVE NONE");
   modelBox.onchange = async () => { const m = picked(); if (m?.have) paint(await call<SpeechState>("speech.set", { model: m.id })); else paint(st!); };
   gpuBox.onchange = async () => paint(await call<SpeechState>("speech.set", { gpu: Number(gpuBox.value) }));
@@ -79,6 +80,7 @@ export function lyricsSection() {
     download.style.display = m?.have && !s.downloading ? "none" : "";
     del.style.display = m?.have ? "" : "none";
     listen.box.checked = s.listen;
+    translateLines.box.checked = s.translate;
     listen.box.disabled = !m?.have;
     all.textContent = s.writingAll ? "STOP" : "WRITE LYRICS FOR SONGS THAT HAVE NONE";
     (all as HTMLButtonElement).disabled = !m?.have && !s.writingAll;
@@ -97,6 +99,8 @@ export function lyricsSection() {
     row("model", modelBox, download, del),
     host.platform === "mac" ? h("div") : row("runs on", gpuBox),
     h("div", { style: { marginTop: "6px" } }, listen.el),
+    h("div", { style: { marginTop: "6px" } }, translateLines.el),
+    h("div.note", { style: { margin: "2px 0 0 24px" } }, "Each line of the “generated” tab gets its translation under it, into the language chosen under translation, by the service chosen there. Lines already in that language are left as they are. Lyrics are many words: MyMemory's free daily allowance runs out after a few songs."),
     h("div.note", { style: { margin: "2px 0 0 24px" } }, "What the model writes is shown on a tab of its own in now playing, “generated”, next to lyrics. The tab is there while a model is downloaded and chosen."),
     h("div", { style: { marginTop: "10px" } }, all),
     status);

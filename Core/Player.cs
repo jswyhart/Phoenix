@@ -392,7 +392,36 @@ public class Player
 
     void LeaveCurrent()
     {
+        if (_cued) return;   // put back at start and not played: nothing was heard
         if (Current is { Track: not null } c) Listening.Left(c, (long)Position.TotalMilliseconds, false);
+    }
+
+    // ---------- picking up where you left off ----------
+
+    bool _cued;
+    long _cuedMs;
+
+    /// <summary>The queue was put back at start and nothing has played yet (play starts it where it was).</summary>
+    public bool IsCued => _cued;
+
+    /// <summary>
+    /// Puts a queue back without playing it: the song is shown, paused at where it was, and play carries on from there.
+    /// </summary>
+    public void Cue(IEnumerable<PlayItem> items, int index, long positionMs)
+    {
+        Queue.Clear();
+        foreach (var i in items) Queue.Add(i);
+        if (Queue.Count == 0) return;
+        _index = Math.Clamp(index, 0, Queue.Count - 1);
+        Queue[_index].IsCurrent = true;
+        BuildOrder(_index);
+        _cued = true;
+        // a song that was all but finished starts again from the top
+        var length = Queue[_index].DurationMs;
+        _cuedMs = length > 0 && positionMs > length - 1500 ? 0 : Math.Max(0, positionMs);
+        IsPlaying = false;
+        CurrentChanged?.Invoke();
+        StateChanged?.Invoke();
     }
 
     public bool Muted
@@ -401,7 +430,7 @@ public class Player
         set { _me.IsMuted = value; if (_engine != null) _engine.Muted = value; StateChanged?.Invoke(); }
     }
 
-    public TimeSpan Position => Current == null ? TimeSpan.Zero : _onCast && Cast != null ? TimeSpan.FromSeconds(Cast.Position)
+    public TimeSpan Position => Current == null ? TimeSpan.Zero : _cued ? TimeSpan.FromMilliseconds(_cuedMs) : _onCast && Cast != null ? TimeSpan.FromSeconds(Cast.Position)
         : _onEngine ? _engine!.Position : _offset + _me.Position;
 
     // A transcoded stream doesn't know its real length, so trust the library's duration for those.
@@ -415,6 +444,7 @@ public class Player
         var cur = Current;
         if (cur == null) return;
         if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+        if (_cued) { _cuedMs = (long)t.TotalMilliseconds; StateChanged?.Invoke(); return; }
         if (_onCast) { _ = Quiet(Cast!.SeekAsync(t.TotalSeconds)); return; }
         if (_onEngine) { _engine!.Seek(t); return; }
         if (cur.SeekUrl == null) { _me.Position = t; return; }
@@ -460,6 +490,7 @@ public class Player
     {
         if (index < 0 || index >= Queue.Count) return;
         LeaveCurrent();
+        _cued = false;
         SaveEpisodePosition();
         if (Current != null) Current.IsCurrent = false;
         _index = index;
@@ -551,6 +582,7 @@ public class Player
     {
         if (RemoteActive) { Remote!.Toggle(); return; }
         if (Current == null) return;
+        if (_cued) { var at = _cuedMs; PlayAt(_index, at); return; }   // the queue put back at start: carry on where it was
         if (_onCast) _ = Quiet(IsPlaying ? Cast!.PauseAsync() : Cast!.PlayAsync());
         else if (_onEngine) _engine!.Paused = IsPlaying;
         else if (IsPlaying) _me.Pause(); else _me.Play();
@@ -590,6 +622,7 @@ public class Player
     public void Stop()
     {
         LeaveCurrent();
+        _cued = false;
         SaveEpisodePosition();
         if (_onCast) { _ = Quiet(Cast?.StopAsync() ?? Task.CompletedTask); _onCast = false; }
         _me.Stop();
