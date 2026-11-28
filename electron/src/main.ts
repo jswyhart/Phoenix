@@ -1,7 +1,7 @@
 // Phoenix for macOS and Linux: the Electron main process. It opens the window, starts the .NET helper that owns the
 // library and the VLC engine, passes the page's requests to it over stdin/stdout, and serves the page and its pictures
 // through the private phoenix:// scheme. The page itself has no Node access (see preload.ts).
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, session, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, screen, session, shell, Tray } from "electron";
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
@@ -298,9 +298,31 @@ function handle(channel: string, fn: (...args: any[]) => unknown) {
   });
 }
 
+// where the window was when Phoenix closed, put back next time if enough of it is still on a screen
+const placeFile = () => path.join(app.getPath("userData"), "window-place.json");
+interface Place { x: number; y: number; width: number; height: number; maximized: boolean }
+function loadPlace(): Place | null {
+  if (smokeDir) return null;
+  try {
+    const p = JSON.parse(fs.readFileSync(placeFile(), "utf8")) as Place;
+    if (![p.x, p.y, p.width, p.height].every(n => Number.isFinite(n))) return null;
+    const area = screen.getDisplayMatching({ x: p.x, y: p.y, width: p.width, height: p.height }).workArea;
+    const seenW = Math.min(p.x + p.width, area.x + area.width) - Math.max(p.x, area.x);
+    const seenH = Math.min(p.y + p.height, area.y + area.height) - Math.max(p.y, area.y);
+    return seenW >= 200 && seenH >= 120 ? p : null;
+  } catch { return null; }
+}
+function savePlace() {
+  if (!win || smokeDir) return;
+  const b = win.isMaximized() || win.isFullScreen() ? win.getNormalBounds() : win.getBounds();
+  try { fs.writeFileSync(placeFile(), JSON.stringify({ x: b.x, y: b.y, width: b.width, height: b.height, maximized: win.isMaximized() })); } catch { /* next time */ }
+}
+
 function createWindow() {
+  const place = loadPlace();
   win = new BrowserWindow({
-    width: 1320, height: smokeDir ? 820 : 840, minWidth: 1080, minHeight: 620,
+    width: place?.width ?? 1320, height: place?.height ?? (smokeDir ? 820 : 840), minWidth: 1080, minHeight: 620,
+    ...(place ? { x: place.x, y: place.y } : {}),
     useContentSize: !!smokeDir,
     title: "Phoenix",
     backgroundColor: "#ffffff",
@@ -321,10 +343,11 @@ function createWindow() {
   // the page never leaves itself: no navigation, no new windows
   win.webContents.on("will-navigate", e => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  win.once("ready-to-show", () => win?.show());
+  win.once("ready-to-show", () => { if (place?.maximized) win?.maximize(); win?.show(); });
   win.on("closed", () => { win = null; });
   // with "keep running in the tray" on, closing only hides the window
   win.on("close", e => {
+    savePlace();
     if (!trayOn || quitting || smokeDir) return;
     e.preventDefault();
     win?.hide();

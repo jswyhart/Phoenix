@@ -239,8 +239,8 @@ async function start() {
   volume.set(init.player.volume, 1);
   volume.onInput = v => { if (usingRemote()) R().volume(v); else void call("player.volume", { value: v }); };
   volume.onCommit = volume.onInput;
-  const prevBtn = iconBtn("prev", "Previous", () => { if (usingRemote()) R().previous(); else void call("player.prev"); }, "filled");
-  const nextBtn = iconBtn("next", "Next", () => { if (usingRemote()) R().next(); else void call("player.next"); }, "filled");
+  const prevBtn = iconBtn("prev", `Previous (${isMac ? "⌘" : "Ctrl"} + Left)`, () => { if (usingRemote()) R().previous(); else void call("player.prev"); }, "filled");
+  const nextBtn = iconBtn("next", `Next (${isMac ? "⌘" : "Ctrl"} + Right)`, () => { if (usingRemote()) R().next(); else void call("player.next"); }, "filled");
   const transport = h("div.transport",
     h("div.left",
       h("button.dropbtn", { title: "Phone. Click to see what syncs with your phone.", onclick: () => navigate("phone"), tabIndex: -1 }, icon("phone", 22, 28)),
@@ -300,8 +300,10 @@ async function start() {
     bookmarkBtn.classList.toggle("hidden", !cur?.isBook);
     setIcon(playBtn, s.playing ? "pause" : "play");
     shuffleBtn.classList.toggle("on", s.shuffle);
+    shuffleBtn.title = s.shuffle ? "Shuffle is on (press to turn it off)" : "Shuffle is off (press to turn it on)";
     setIcon(repeatBtn, s.repeat === 2 ? "repeatOne" : "repeat");
     repeatBtn.classList.toggle("on", s.repeat > 0);
+    repeatBtn.title = s.repeat === 2 ? "Repeating this song (press to stop repeating)" : s.repeat === 1 ? "Repeating all (press to repeat this song only)" : "Repeat is off (press to repeat all)";
     setIcon(muteBtn, s.muted ? "mute" : "volume");
     paintMore(s.sleep);
     // liked: a filled pink heart; disliked: a faded one; otherwise an outline

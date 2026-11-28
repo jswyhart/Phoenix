@@ -29,6 +29,8 @@ public class Settings
     public int ReaderFontSize { get; set; } = 19;
     public string Theme { get; set; } = "light";
     public double Volume { get; set; } = 0.8;
+    /// <summary>Where the window was when Phoenix closed: "left,top,width,height,maximized" (device-independent pixels).</summary>
+    public string WindowPlace { get; set; } = "";
     public bool Shuffle { get; set; }
     public int Repeat { get; set; }
     public bool WriteTagsToFiles { get; set; } = true;

@@ -5,6 +5,20 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
+Next version
+------------------
+
+New
+- The window opens where it was last time, as big as it was, and maximized if it was. A place
+  that is no longer on any screen (a monitor unplugged since) is ignored.
+
+Changed
+- Clearing the phone sync list or (Windows) the burn list asks first when it holds more than one
+  song.
+- The shuffle and repeat buttons say whether they are on and what pressing them does; previous
+  and next mention their keyboard shortcuts.
+
+
 1.0.7 — 2026-11-27
 ------------------
 

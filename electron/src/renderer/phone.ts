@@ -64,7 +64,10 @@ export function phonePage(): Page {
   const right = h("div.pane", listCap, header.el, h("div", { style: { flex: "1 1 0", minHeight: "0", position: "relative" } }, list.el, empty),
     h("div", { style: { marginTop: "10px", flex: "none" } },
       pill("REMOVE", async () => { const ids = list.selected().map(s => s.id); if (ids.length) await call("phone.remove", { ids }); }),
-      pill("CLEAR", () => call("phone.clear"))));
+      pill("CLEAR", async () => {
+        if (songs.length > 1 && !await confirm(`Take all ${songs.length} songs off the phone sync list? The phone removes its copies the next time it syncs (unless it chose them itself).`, "clear")) return;
+        await call("phone.clear");
+      })));
   const el = h("div", { style: { height: "100%", display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", padding: "8px 28px 10px 28px" } }, left, right);
 
   async function load(keep: boolean) {

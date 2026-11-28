@@ -606,6 +606,13 @@ public static partial class Smoke
                 Check("choosing a found setting opens its page", ((FrameworkElement)settingsPage.FindName("PanelPlayback")).Visibility == Visibility.Visible);
             }
         }
+        {
+            var place = App.Win.PlaceText().Split(',');
+            Check("the window's place is noted to come back to, and a place no longer on any screen is ignored",
+                place.Length == 5 && !App.Win.RestorePlace("-90000,-90000,1320,820,0") && !App.Win.RestorePlace("not a place"), string.Join(",", place));
+            var repeatTip = ((System.Windows.Controls.Button)App.Win.FindName("RepeatBtn")).ToolTip as string ?? "";
+            Check("the repeat and shuffle buttons say whether they are on", repeatTip.StartsWith("Repeat") && repeatTip.Contains("press") && App.Win.ShuffleTip.Contains("press"), $"{repeatTip} / {App.Win.ShuffleTip}");
+        }
         Check("F1 lists the keyboard shortcuts, volume and liking among them", MainWindow.Shortcuts.Contains("Ctrl + Up / Down") && MainWindow.Shortcuts.Contains("Ctrl + L") && MainWindow.Shortcuts.Contains("F1"));
         settings.ShowCategory("software", "Storage");
         Check("settings: Storage offers backup and restore", Shown("PanelStorage") && settings.FindName("BackupCovers") is CheckBox);

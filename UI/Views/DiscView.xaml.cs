@@ -251,7 +251,11 @@ public partial class DiscView : UserControl
         foreach (var t in BurnList.SelectedItems.Cast<Track>().ToList()) App.BurnList.Remove(t);
     }
 
-    void BurnClear_Click(object sender, RoutedEventArgs e) => App.BurnList.Clear();
+    void BurnClear_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.BurnList.Count > 1 && Halcyon.UI.MessageBox.Show(App.Win, $"Take all {App.BurnList.Count} songs off the burn list?", "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        App.BurnList.Clear();
+    }
     void BurnUp_Click(object sender, RoutedEventArgs e) => MoveBurn(-1);
     void BurnDown_Click(object sender, RoutedEventArgs e) => MoveBurn(1);
 

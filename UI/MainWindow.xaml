@@ -268,9 +268,9 @@
                 <!-- right: transport -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,22,0">
                     <Button x:Name="ShuffleBtn" Style="{StaticResource IconBtn}" Content="&#xE8B1;" FontSize="14" Click="Shuffle_Click" ToolTip="Shuffle"/>
-                    <Button Style="{StaticResource IconBtn}" Content="&#xE892;" Click="Prev_Click" ToolTip="Previous"/>
+                    <Button Style="{StaticResource IconBtn}" Content="&#xE892;" Click="Prev_Click" ToolTip="Previous (Ctrl + Left)"/>
                     <Button x:Name="PlayBtn" Style="{StaticResource IconBtn}" Content="&#xE768;" FontSize="22" Width="48" Click="Play_Click" ToolTip="Play / pause (Space)"/>
-                    <Button Style="{StaticResource IconBtn}" Content="&#xE893;" Click="Next_Click" ToolTip="Next"/>
+                    <Button Style="{StaticResource IconBtn}" Content="&#xE893;" Click="Next_Click" ToolTip="Next (Ctrl + Right)"/>
                     <Button x:Name="RepeatBtn" Style="{StaticResource IconBtn}" Content="&#xE8EE;" FontSize="14" Click="Repeat_Click" ToolTip="Repeat"/>
                     <Button x:Name="MoreBtn" Style="{StaticResource IconBtn}" Content="&#xE712;" FontSize="15" Click="More_Click" ToolTip="Sleep timer, playback speed, play on another device"/>
                     <Button x:Name="MuteBtn" Style="{StaticResource IconBtn}" Content="&#xE767;" Click="Mute_Click" ToolTip="Mute" Margin="2,0,0,0"/>

@@ -102,6 +102,8 @@ public partial class PhoneView : UserControl
     void Clear_Click(object sender, RoutedEventArgs e)
     {
         if (List is not { } p || p.TrackIds.Count == 0) return;
+        if (p.TrackIds.Count > 1 && Halcyon.UI.MessageBox.Show(App.Win, $"Take all {p.TrackIds.Count} songs off the phone sync list? The phone removes its copies the next time it syncs (unless it chose them itself).",
+                "Phoenix", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         p.TrackIds = new List<long>();
         App.Lib.SavePlaylist(p);
     }

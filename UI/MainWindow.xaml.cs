@@ -65,8 +65,10 @@ public partial class MainWindow : Window
             MaxBtn.Content = WindowState == WindowState.Maximized ? "" : "";
         };
         SourceInitialized += (_, _) => _smtc.Init(new WindowInteropHelper(this).Handle);
+        if (!App.SmokeMode) RestorePlace(App.Settings.WindowPlace);
         Closing += (_, e) =>
         {
+            App.Settings.WindowPlace = PlaceText();
             // run on in the notification area, if that is switched on: the window only hides
             if (Tray.HideInstead()) { e.Cancel = true; return; }
             Tray.Dispose();
@@ -523,6 +525,34 @@ public partial class MainWindow : Window
     void Back_Click(object sender, RoutedEventArgs e)
     {
         if (_back.Count > 0) Navigate(_back.Pop(), push: false);
+    }
+
+    /// <summary>Where the window is now, to be put back there next time ("left,top,width,height,maximized").</summary>
+    public string PlaceText()
+    {
+        var r = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        if (r.IsEmpty || r.Width < 200 || r.Height < 200) return App.Settings.WindowPlace;
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        return string.Join(",", ((int)r.Left).ToString(c), ((int)r.Top).ToString(c), ((int)r.Width).ToString(c), ((int)r.Height).ToString(c), WindowState == WindowState.Maximized ? "1" : "0");
+    }
+
+    /// <summary>
+    /// Puts the window back where it was, as big as it was (and maximized if it was), as long as enough of that place
+    /// is still on a screen: a monitor that has since been unplugged doesn't leave the window out of sight.
+    /// </summary>
+    public bool RestorePlace(string place)
+    {
+        var p = place.Split(',');
+        if (p.Length != 5 || !p.Take(4).All(x => int.TryParse(x, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))) return false;
+        var n = p.Take(4).Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        var rect = new Rect(n[0], n[1], Math.Max(MinWidth, n[2]), Math.Max(MinHeight, n[3]));
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var seen = Rect.Intersect(rect, screen);
+        if (seen.IsEmpty || seen.Width < 200 || seen.Height < 120) return false;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        (Left, Top, Width, Height) = (rect.Left, rect.Top, rect.Width, rect.Height);
+        if (p[4] == "1") WindowState = WindowState.Maximized;
+        return true;
     }
 
     /// <summary>
@@ -1089,11 +1119,12 @@ public partial class MainWindow : Window
         // Spotify's third shuffle setting, smart shuffle, shows the arrows with a star beside them
         ShuffleBtn.Content = smart ? "\uE8B1\uE735" : "\uE8B1";
         ShuffleBtn.FontSize = smart ? 11 : 14;
-        ShuffleBtn.ToolTip = remote == null ? "Shuffle" : smart ? "Smart shuffle (press for shuffle off)" : shuffle ? "Shuffle (press for smart shuffle)" : "Shuffle off (press for shuffle)";
+        ShuffleBtn.ToolTip = remote == null ? (shuffle ? "Shuffle is on (press to turn it off)" : "Shuffle is off (press to turn it on)") : smart ? "Smart shuffle (press for shuffle off)" : shuffle ? "Shuffle (press for smart shuffle)" : "Shuffle off (press for shuffle)";
         ShuffleBtn.Opacity = shuffle ? 1 : 0.35;
         ShuffleBtn.SetResourceReference(ForegroundProperty, shuffle ? "Accent" : "Fg");
         RepeatBtn.Content = repeat == 2 ? "" : "";
         RepeatBtn.Opacity = repeat > 0 ? 1 : 0.35;
+        RepeatBtn.ToolTip = repeat == 2 ? "Repeating this song (press to stop repeating)" : repeat == 1 ? "Repeating all (press to repeat this song only)" : "Repeat is off (press to repeat all)";
         RepeatBtn.SetResourceReference(ForegroundProperty, repeat > 0 ? "Accent" : "Fg");
         MuteBtn.Content = P.Muted ? "" : "";
         if (remote != null)
