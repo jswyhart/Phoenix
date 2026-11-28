@@ -19,7 +19,7 @@ import io, os, shutil, struct, subprocess, sys, tarfile, time, zlib
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(here)
 out = os.path.join(root, "dist")
-version = "1.0.7"
+version = "1.0.8"
 
 TARGETS = {
     # Apple Silicon: VideoLAN's own arm64 engine is bundled from ..endor (fetch_vlc.py gets it)

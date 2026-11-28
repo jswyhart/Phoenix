@@ -1,7 +1,7 @@
 {
   "name": "phoenix",
   "productName": "Phoenix",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Phoenix media player for macOS and Linux (Electron window over the .NET helper)",
   "main": "build/main.js",
   "private": true,

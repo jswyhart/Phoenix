@@ -5,7 +5,7 @@ Newest first. "Windows" is the Windows app, "Mac/Linux" the Electron app for mac
 "Android" the phone app. Where a line doesn't name one, it applies to Windows and Mac/Linux.
 
 
-Next version
+1.0.8 — 2026-11-27
 ------------------
 
 New
